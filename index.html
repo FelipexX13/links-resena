@@ -1,0 +1,295 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generador de links de reseña · Google Maps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+
+<style>
+  :root{
+    --paper:#dde3de;
+    --paper-2:#eef1ed;
+    --ink:#14201b;
+    --ink-soft:#5d6f66;
+    --rule:#b9c4bd;
+    --teal:#2f6b5e;
+    --teal-dark:#1f4c42;
+    --amber:#e8a317;
+    --alert:#a33a2a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+    font-size:15px;
+    line-height:1.5;
+    padding:28px 18px 80px;
+  }
+  .wrap{max-width:760px;margin:0 auto}
+
+  header{border-bottom:2px solid var(--ink);padding-bottom:14px;margin-bottom:26px}
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--ink-soft);margin:0 0 6px
+  }
+  h1{
+    font-family:"Bricolage Grotesque","IBM Plex Sans",sans-serif;
+    font-weight:800;font-size:clamp(28px,6vw,44px);line-height:1.02;
+    margin:0;letter-spacing:-.02em
+  }
+  header p{margin:10px 0 0;max-width:52ch;color:var(--ink-soft);font-size:14px}
+
+  label.field{display:block;font-weight:600;font-size:13px;margin-bottom:8px}
+  label.field span{font-weight:400;color:var(--ink-soft)}
+  textarea{
+    width:100%;min-height:120px;resize:vertical;
+    background:var(--paper-2);color:var(--ink);
+    border:1.5px solid var(--rule);border-radius:3px;
+    padding:12px 13px;
+    font-family:"IBM Plex Mono",monospace;font-size:12.5px;line-height:1.55;
+  }
+  textarea:focus,button:focus-visible,input:focus{outline:2.5px solid var(--amber);outline-offset:2px}
+  textarea::placeholder{color:#9aa8a1}
+
+  .actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+  button{
+    font-family:"IBM Plex Sans",sans-serif;font-weight:600;font-size:14px;
+    border:none;border-radius:3px;padding:11px 18px;cursor:pointer;
+    background:var(--teal);color:#f2f6f3;transition:background .15s
+  }
+  button:hover{background:var(--teal-dark)}
+  button.ghost{background:transparent;color:var(--ink-soft);border:1.5px solid var(--rule);padding:10px 14px}
+  button.ghost:hover{background:var(--paper-2);color:var(--ink)}
+
+  /* ---- receipt ---- */
+  .receipt{
+    position:relative;background:var(--paper-2);margin-top:22px;
+    padding:20px 20px 26px;
+    box-shadow:0 1px 0 var(--rule), 0 10px 22px -18px rgba(20,32,27,.55);
+  }
+  .receipt::after{
+    content:"";position:absolute;left:0;right:0;bottom:-9px;height:10px;
+    background:radial-gradient(circle at 5px -1px, transparent 5.5px, var(--paper-2) 6px);
+    background-size:10px 10px;background-repeat:repeat-x;
+  }
+  .r-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;
+    border-bottom:1px dashed var(--rule);padding-bottom:12px;margin-bottom:14px}
+  .r-name{font-family:"Bricolage Grotesque",sans-serif;font-weight:600;font-size:19px;line-height:1.15;margin:0}
+  .stars{font-size:15px;letter-spacing:2px;color:var(--amber);white-space:nowrap;margin-top:3px}
+
+  .row{margin-bottom:15px}
+  .row-label{
+    font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.13em;
+    text-transform:uppercase;color:var(--ink-soft);margin-bottom:5px
+  }
+  .row-label b{color:var(--teal);font-weight:500}
+  .link-box{display:flex;gap:8px;align-items:stretch}
+  .link-box input{
+    flex:1;min-width:0;background:transparent;border:1px solid var(--rule);border-radius:3px;
+    padding:9px 10px;font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink)
+  }
+  .copy{padding:9px 14px;font-size:12.5px;flex-shrink:0}
+  .copy.done{background:var(--amber);color:var(--ink)}
+
+  .qr{margin-top:14px;display:none;text-align:center;padding:16px 0 4px;border-top:1px dashed var(--rule)}
+  .qr img{width:170px;height:170px;image-rendering:pixelated}
+  .qr p{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--ink-soft);margin:8px 0 0}
+
+  .meta{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink-soft);
+    border-top:1px dashed var(--rule);padding-top:10px;margin-top:4px;word-break:break-all}
+
+  .bad{border-left:4px solid var(--alert)}
+  .bad .r-name{color:var(--alert)}
+  .bad p{font-size:13.5px;margin:0;color:var(--ink)}
+
+  footer{margin-top:44px;border-top:1px solid var(--rule);padding-top:16px;
+    font-size:12.5px;color:var(--ink-soft);max-width:60ch}
+  footer b{color:var(--ink)}
+  code{font-family:"IBM Plex Mono",monospace;font-size:11.5px;background:var(--paper-2);padding:1px 4px;border-radius:2px}
+
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Google Maps → reseña</p>
+    <h1>Generador de<br>links de reseña</h1>
+    <p>Pega la URL de Google Maps de un negocio y te devuelve el link que abre directo el cuadro para calificar. Uno por línea si son varios.</p>
+  </header>
+
+  <label class="field" for="input">URLs de Google Maps <span>— una por línea</span></label>
+  <textarea id="input" spellcheck="false" placeholder="https://www.google.com/maps/place/Mercacentro+No.+4+Av.+Guabinal/@4.4416918,-75.2070794,16z/data=!4m8!3m7!1s0x8e38c4e367381849:0xcd5773e59e8813ef!8m2!3d4.4404293!4d-75.2058732"></textarea>
+
+  <div class="actions">
+    <button id="go">Generar links</button>
+    <button class="ghost" id="demo">Usar el ejemplo</button>
+    <button class="ghost" id="clear">Limpiar</button>
+    <button class="ghost" id="csv" style="display:none">Descargar CSV</button>
+  </div>
+
+  <div id="out"></div>
+
+  <footer>
+    <p><b>Sobre las 5 estrellas precargadas:</b> Google quitó esa función hace años. Este link deja al cliente en el cuadro de calificación: toca la quinta estrella y publica. Dos toques.</p>
+    <p><b>Si el link es corto</b> (<code>maps.app.goo.gl</code>), ábrelo primero en el navegador y copia la URL larga de la barra de direcciones. Los links cortos no traen el identificador.</p>
+  </footer>
+</div>
+
+<script>
+const EXAMPLE = "https://www.google.com/maps/place/Mercacentro+No.+4+Av.+Guabinal/@4.4416918,-75.2070794,16z/data=!4m8!3m7!1s0x8e38c4e367381849:0xcd5773e59e8813ef!8m2!3d4.4404293!4d-75.2058732!9m1!1b1!16s%2Fg%2F1thk9svr";
+
+const $ = s => document.querySelector(s);
+const out = $("#out");
+let rows = [];
+
+/* ---------- parseo ---------- */
+function parse(raw){
+  const url = raw.trim();
+  if(!url) return null;
+
+  if(/maps\.app\.goo\.gl|goo\.gl\/maps/i.test(url))
+    return {error:"Link corto", msg:"Ábrelo en el navegador, espera a que cargue el mapa y copia la URL larga de la barra de direcciones."};
+
+  // nombre del negocio
+  let name = "Negocio sin nombre en la URL";
+  const nm = url.match(/\/maps\/place\/([^/@?]+)/);
+  if(nm && nm[1]){
+    try{ name = decodeURIComponent(nm[1].replace(/\+/g," ")).trim() || name; }catch(e){}
+  }
+
+  // identificador hexadecimal:  !1s0xAAAA:0xBBBB   o   ftid=0xAAAA:0xBBBB
+  const ft = url.match(/(?:!1s|ftid=)(0x[0-9a-f]+:0x[0-9a-f]+)/i);
+  if(ft){
+    const ftid = ft[1].toLowerCase();
+    const low = ftid.split(":")[1];
+    let cid = "";
+    try{ cid = BigInt(low).toString(); }catch(e){}
+    return {
+      name, ftid, cid,
+      review: "https://www.google.com/maps/place//data=!4m3!3m2!1s" + ftid + "!12e1",
+      listing: cid ? "https://maps.google.com/?cid=" + cid : ""
+    };
+  }
+
+  // solo CID (cid= o ludocid=)
+  const cd = url.match(/(?:[?&](?:lu)?cid=)(\d{5,})/i);
+  if(cd){
+    return {
+      name, ftid:"", cid:cd[1], review:"",
+      listing:"https://maps.google.com/?cid=" + cd[1],
+      warn:"Esta URL solo trae el CID, no el identificador completo. Abre el link de la ficha, y cuando cargue copia la URL larga que aparece en la barra de direcciones."
+    };
+  }
+
+  // Place ID tipo ChIJ...
+  const pid = url.match(/\b(ChI[0-9A-Za-z_-]{10,})\b/);
+  if(pid){
+    return {
+      name, ftid:"", cid:"",
+      review:"https://search.google.com/local/writereview?placeid=" + pid[1],
+      listing:"https://www.google.com/maps/place/?q=place_id:" + pid[1]
+    };
+  }
+
+  return {error:"No se encontró el identificador", msg:"Esa URL no trae el ID del negocio. Abre la ficha en Google Maps (clic en el nombre del lugar) y copia la URL completa desde la barra de direcciones."};
+}
+
+/* ---------- render ---------- */
+function card(r, i){
+  if(r.error){
+    return `<div class="receipt bad">
+      <div class="r-head"><h2 class="r-name">${esc(r.error)}</h2></div>
+      <p>${esc(r.msg)}</p></div>`;
+  }
+  let html = `<div class="receipt">
+    <div class="r-head">
+      <h2 class="r-name">${esc(r.name)}</h2>
+      <div class="stars">★★★★★</div>
+    </div>`;
+
+  if(r.warn) html += `<div class="row"><p style="margin:0;font-size:13.5px;color:var(--alert)">${esc(r.warn)}</p></div>`;
+
+  if(r.review) html += linkRow("Link de reseña <b>← este es el que compartes</b>", r.review, i, "rev");
+  if(r.listing) html += linkRow("Ficha del negocio", r.listing, i, "fic");
+
+  if(r.review){
+    html += `<div class="actions" style="margin-top:4px">
+      <button class="ghost" data-qr="${i}">Ver código QR</button>
+    </div>
+    <div class="qr" id="qr-${i}"></div>`;
+  }
+
+  const bits = [];
+  if(r.ftid) bits.push("ID: " + r.ftid);
+  if(r.cid) bits.push("CID: " + r.cid);
+  if(bits.length) html += `<div class="meta">${esc(bits.join("  ·  "))}</div>`;
+
+  return html + `</div>`;
+}
+
+function linkRow(label, url, i, k){
+  return `<div class="row">
+    <div class="row-label">${label}</div>
+    <div class="link-box">
+      <input readonly value="${esc(url)}" id="in-${k}-${i}">
+      <button class="copy" data-copy="in-${k}-${i}">Copiar</button>
+    </div>
+  </div>`;
+}
+
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+
+function run(){
+  rows = $("#input").value.split(/\r?\n/).map(parse).filter(Boolean);
+  out.innerHTML = rows.length ? rows.map(card).join("") :
+    `<div class="receipt bad"><div class="r-head"><h2 class="r-name">Sin URLs</h2></div><p>Pega al menos un link de Google Maps arriba.</p></div>`;
+  $("#csv").style.display = rows.some(r=>r.review) ? "" : "none";
+}
+
+/* ---------- eventos ---------- */
+$("#go").onclick = run;
+$("#demo").onclick = () => { $("#input").value = EXAMPLE; run(); };
+$("#clear").onclick = () => { $("#input").value=""; out.innerHTML=""; $("#csv").style.display="none"; };
+
+out.addEventListener("click", e => {
+  const c = e.target.closest("[data-copy]");
+  if(c){
+    const f = document.getElementById(c.dataset.copy);
+    f.select(); f.setSelectionRange(0, 99999);
+    const done = () => { c.textContent="Copiado"; c.classList.add("done");
+      setTimeout(()=>{c.textContent="Copiar";c.classList.remove("done")},1600); };
+    if(navigator.clipboard) navigator.clipboard.writeText(f.value).then(done, ()=>{document.execCommand("copy");done()});
+    else { document.execCommand("copy"); done(); }
+    return;
+  }
+  const q = e.target.closest("[data-qr]");
+  if(q){
+    const i = +q.dataset.qr, box = document.getElementById("qr-"+i);
+    if(box.style.display === "block"){ box.style.display="none"; q.textContent="Ver código QR"; return; }
+    if(!box.innerHTML){
+      if(typeof qrcode === "undefined"){
+        box.innerHTML = `<p>No se pudo cargar el generador de QR. Copia el link y usa cualquier generador de QR en línea.</p>`;
+      } else {
+        const t = qrcode(0,"M"); t.addData(rows[i].review); t.make();
+        box.innerHTML = t.createImgTag(6,8) + `<p>Imprímelo para el mostrador</p>`;
+      }
+    }
+    box.style.display = "block"; q.textContent = "Ocultar QR";
+  }
+});
+
+$("#csv").onclick = () => {
+  const lines = [["negocio","link_resena","ficha","cid"].join(",")];
+  rows.filter(r=>!r.error).forEach(r=>{
+    lines.push([r.name, r.review, r.listing, r.cid].map(v=>`"${String(v||"").replace(/"/g,'""')}"`).join(","));
+  });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["\ufeff"+lines.join("\n")], {type:"text/csv;charset=utf-8"}));
+  a.download = "links-resena.csv"; a.click(); URL.revokeObjectURL(a.href);
+};
+
+$("#input").addEventListener("keydown", e => { if(e.key==="Enter" && (e.metaKey||e.ctrlKey)) run(); });
+</script>
