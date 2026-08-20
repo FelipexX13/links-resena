@@ -1,0 +1,12 @@
+name = "resenas-redirector"
+main = "src/index.js"
+compatibility_date = "2026-06-01"
+
+# Crea el namespace con:  npx wrangler kv namespace create TARJETAS
+# y pega aquí el id que te devuelve.
+[[kv_namespaces]]
+binding = "TARJETAS"
+id = "PEGA_AQUI_EL_ID_DEL_NAMESPACE"
+
+# El token del panel NO va aquí. Se guarda cifrado con:
+#   npx wrangler secret put ADMIN_TOKEN
