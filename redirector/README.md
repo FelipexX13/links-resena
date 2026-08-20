@@ -42,18 +42,22 @@ El Worker se llama `r` porque **su nombre es el subdominio**, y cada carácter d
 más engorda el QR impreso. La otra mitad es el subdominio de la cuenta, ya fijado
 en `grve`. Los dos se eligieron cortos a propósito, y no es cosmético:
 
+Medido con la librería que usa el panel, corrección de errores M:
+
 | URL de la tarjeta | Versión del QR | Módulo a 25 mm |
 |---|---|---|
-| `HTTPS://R.GRVE.WORKERS.DEV/A7K2` ← el nuestro | 29×29 | 0,68 mm |
-| `HTTPS://R.MINEGOCIODEQR.WORKERS.DEV/A7K2` | 33×33 | 0,61 mm |
+| `HTTPS://R.GRVE.WORKERS.DEV/A7K2` ← el nuestro | 25×25 | **0,76 mm** |
+| el mismo en minúsculas (fuerza modo byte) | 29×29 | 0,68 mm |
+| `HTTPS://R.MINEGOCIODEQR.WORKERS.DEV/A7K2` | 29×29 | 0,68 mm |
 
 El subdominio de la cuenta **se elige una sola vez**: cambiarlo rompe todas las
 tarjetas ya impresas, así que se queda como está.
 
-Dos reglas más al generar el QR de la tarjeta:
+De esas tres filas salen las dos reglas que el panel ya aplica solo:
 
-- **Escribe la URL en MAYÚSCULAS.** Activa el modo alfanumérico del estándar QR y
-  ahorra una versión entera. Da igual para el servidor: el host es insensible a
+- **La URL va en MAYÚSCULAS.** Eso permite usar el modo alfanumérico del estándar
+  QR en vez del modo byte, y se ahorra una versión entera — la segunda fila de la
+  tabla es exactamente ese costo. Al servidor le da igual: el host es insensible a
   mayúsculas y los códigos se normalizan.
 - **Tiene que ser `https://`.** El TLD `.dev` está en la lista HSTS precargada de
   los navegadores, así que `http://` no es una opción para ahorrar un carácter.
@@ -88,9 +92,20 @@ crea el namespace KV en **Storage & Databases → KV**, enlázalo en
 
 ## Activar una tarjeta
 
+El panel lleva incorporado el generador de links de reseña, así que no hay que
+saltar a otra herramienta:
+
 1. Entra a `https://r.grve.workers.dev/admin` e inicia sesión.
-2. Código impreso + nombre del negocio + el link de reseña que sale del generador.
-3. **Guardar tarjeta**. Queda activa de inmediato.
+2. Escribe el **código impreso** en la tarjeta.
+3. Pega la **URL de Google Maps** del negocio y dale a **Leer la URL**. De ahí sale
+   el identificador del local y el link que abre el cuadro de calificación. También
+   acepta un link de reseña ya generado.
+4. **Guardar tarjeta**. Queda activa de inmediato y aparece el **QR para imprimir**.
+
+Ese QR codifica `HTTPS://R.GRVE.WORKERS.DEV/CODIGO`, **no** el link de Google: es
+lo que hace que la tarjeta se pueda reasignar después. Sale en dos versiones PNG
+con fondo transparente — negra para fondos claros, blanca para fondos oscuros — y
+el botón **QR** de cada fila de la tabla lo vuelve a mostrar cuando quieras.
 
 Borrar una tarjeta no la rompe: vuelve a mostrar la página de "todavía no está
 activada", así que puedes reasignarla a otro negocio cuando quieras.
