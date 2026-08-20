@@ -1,7 +1,7 @@
 # Redireccionador de tarjetas de reseña
 
 Worker de Cloudflare que convierte un código impreso en la tarjeta
-(`https://r.TU-SUBDOMINIO.workers.dev/A7K2`) en el link de reseña de Google del negocio que la tiene.
+(`https://r.grve.workers.dev/A7K2`) en el link de reseña de Google del negocio que la tiene.
 
 El plástico se imprime una sola vez. El destino vive en Cloudflare KV y se cambia
 cuando quieras, sin reimprimir nada.
@@ -34,19 +34,21 @@ npx wrangler secret put ADMIN_PASSWORD
 npx wrangler deploy
 ```
 
-Queda publicado en `https://r.TU-SUBDOMINIO.workers.dev`, sin dominio propio ni costo.
+Queda publicado en `https://r.grve.workers.dev`, sin dominio propio ni costo.
 
 ### Que la URL salga lo más corta posible
 
 El Worker se llama `r` porque **su nombre es el subdominio**, y cada carácter de
-más engorda el QR impreso. La otra mitad de la URL es el subdominio de tu cuenta,
-que se elige una sola vez en **Workers & Pages → Subdomain**: si todavía no lo has
-fijado, **escoge el más corto que puedas**. No es cosmético:
+más engorda el QR impreso. La otra mitad es el subdominio de la cuenta, ya fijado
+en `grve`. Los dos se eligieron cortos a propósito, y no es cosmético:
 
 | URL de la tarjeta | Versión del QR | Módulo a 25 mm |
 |---|---|---|
-| `HTTPS://R.RVW.WORKERS.DEV/A7K2` | 29×29 | 0,68 mm |
+| `HTTPS://R.GRVE.WORKERS.DEV/A7K2` ← el nuestro | 29×29 | 0,68 mm |
 | `HTTPS://R.MINEGOCIODEQR.WORKERS.DEV/A7K2` | 33×33 | 0,61 mm |
+
+El subdominio de la cuenta **se elige una sola vez**: cambiarlo rompe todas las
+tarjetas ya impresas, así que se queda como está.
 
 Dos reglas más al generar el QR de la tarjeta:
 
@@ -86,7 +88,7 @@ crea el namespace KV en **Storage & Databases → KV**, enlázalo en
 
 ## Activar una tarjeta
 
-1. Entra a `https://r.TU-SUBDOMINIO.workers.dev/admin` e inicia sesión.
+1. Entra a `https://r.grve.workers.dev/admin` e inicia sesión.
 2. Código impreso + nombre del negocio + el link de reseña que sale del generador.
 3. **Guardar tarjeta**. Queda activa de inmediato.
 

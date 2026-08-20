@@ -35,7 +35,7 @@ export default {
     if (ruta === "") return html(vistaInicio(url.host));
     if (ruta === "admin") return html(vistaAdmin(url.host));
     if (ruta.startsWith("api/")) return api(request, env, ruta.slice(4), url);
-    if (RESERVADAS.has(ruta)) return new Response(null, { status: 404 });
+    if (RESERVADAS.has(ruta.toLowerCase())) return new Response(null, { status: 404 });
 
     const codigo = normalizar(ruta);
     if (!codigo) return html(vistaSinConfigurar(ruta), 404);
@@ -84,6 +84,10 @@ async function api(request, env, accion, url) {
     const cuerpo = await request.json().catch(() => ({}));
     const codigo = normalizar(cuerpo.codigo);
     if (!codigo) return json({ error: "Código inválido: 3 a 12 letras o números" }, 400);
+    // si no, quedaría una tarjeta impresa que nunca puede resolverse
+    if (RESERVADAS.has(codigo.toLowerCase())) {
+      return json({ error: "Ese código está reservado por el sistema" }, 400);
+    }
 
     let destino;
     try {

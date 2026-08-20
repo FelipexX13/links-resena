@@ -9,7 +9,7 @@ workers_dev = true
 # y pega aquí el id que te devuelve.
 [[kv_namespaces]]
 binding = "TARJETAS"
-id = "PEGA_AQUI_EL_ID_DEL_NAMESPACE"
+id = "824b8c967f2c4b7fb50d09519a524f3b"
 
 # La contraseña del panel NO va aquí. Se guarda cifrada con:
 #   npx wrangler secret put ADMIN_PASSWORD
