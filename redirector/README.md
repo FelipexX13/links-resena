@@ -1,7 +1,7 @@
 # Redireccionador de tarjetas de reseña
 
 Worker de Cloudflare que convierte un código impreso en la tarjeta
-(`https://TUDOMINIO/A7K2`) en el link de reseña de Google del negocio que la tiene.
+(`https://r.TU-SUBDOMINIO.workers.dev/A7K2`) en el link de reseña de Google del negocio que la tiene.
 
 El plástico se imprime una sola vez. El destino vive en Cloudflare KV y se cambia
 cuando quieras, sin reimprimir nada.
@@ -34,7 +34,31 @@ npx wrangler secret put ADMIN_PASSWORD
 npx wrangler deploy
 ```
 
-Falta agregar tu dominio corto en **Settings → Domains & Routes** del Worker.
+Queda publicado en `https://r.TU-SUBDOMINIO.workers.dev`, sin dominio propio ni costo.
+
+### Que la URL salga lo más corta posible
+
+El Worker se llama `r` porque **su nombre es el subdominio**, y cada carácter de
+más engorda el QR impreso. La otra mitad de la URL es el subdominio de tu cuenta,
+que se elige una sola vez en **Workers & Pages → Subdomain**: si todavía no lo has
+fijado, **escoge el más corto que puedas**. No es cosmético:
+
+| URL de la tarjeta | Versión del QR | Módulo a 25 mm |
+|---|---|---|
+| `HTTPS://R.RVW.WORKERS.DEV/A7K2` | 29×29 | 0,68 mm |
+| `HTTPS://R.MINEGOCIODEQR.WORKERS.DEV/A7K2` | 33×33 | 0,61 mm |
+
+Dos reglas más al generar el QR de la tarjeta:
+
+- **Escribe la URL en MAYÚSCULAS.** Activa el modo alfanumérico del estándar QR y
+  ahorra una versión entera. Da igual para el servidor: el host es insensible a
+  mayúsculas y los códigos se normalizan.
+- **Tiene que ser `https://`.** El TLD `.dev` está en la lista HSTS precargada de
+  los navegadores, así que `http://` no es una opción para ahorrar un carácter.
+
+Si algún día quieres pasarte a un dominio propio, agrégalo en
+**Settings → Domains & Routes**. Ojo: las tarjetas ya impresas seguirán apuntando
+a `workers.dev`, así que ese Worker no se puede apagar nunca.
 
 ### Probarlo en local
 
@@ -62,7 +86,7 @@ crea el namespace KV en **Storage & Databases → KV**, enlázalo en
 
 ## Activar una tarjeta
 
-1. Entra a `https://TUDOMINIO/admin` e inicia sesión.
+1. Entra a `https://r.TU-SUBDOMINIO.workers.dev/admin` e inicia sesión.
 2. Código impreso + nombre del negocio + el link de reseña que sale del generador.
 3. **Guardar tarjeta**. Queda activa de inmediato.
 

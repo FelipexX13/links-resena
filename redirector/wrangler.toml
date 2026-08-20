@@ -1,6 +1,9 @@
-name = "resenas-redirector"
+# El nombre del Worker ES el subdominio: <name>.<tu-subdominio>.workers.dev
+# Se llama "r" a propósito: cada carácter de más en la URL hace el QR más denso.
+name = "r"
 main = "src/index.js"
 compatibility_date = "2026-06-01"
+workers_dev = true
 
 # Crea el namespace con:  npx wrangler kv namespace create TARJETAS
 # y pega aquí el id que te devuelve.
@@ -8,5 +11,5 @@ compatibility_date = "2026-06-01"
 binding = "TARJETAS"
 id = "PEGA_AQUI_EL_ID_DEL_NAMESPACE"
 
-# El token del panel NO va aquí. Se guarda cifrado con:
-#   npx wrangler secret put ADMIN_TOKEN
+# La contraseña del panel NO va aquí. Se guarda cifrada con:
+#   npx wrangler secret put ADMIN_PASSWORD
