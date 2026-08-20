@@ -55,6 +55,10 @@ const ESTILOS = `
   .ficha b{display:block;font-size:15px;margin-bottom:6px}
   .ficha .meta{font-family:ui-monospace,monospace;font-size:11px;color:#66718a;
     margin-top:8px;word-break:break-all}
+  .opcion{display:flex;gap:9px;align-items:flex-start;font-weight:400;font-size:12.5px;
+    color:#66718a;margin:0 0 8px;cursor:pointer}
+  .opcion input{width:auto;margin-top:3px;flex:0 0 auto}
+  .opcion b{display:inline;font-size:12.5px;color:#1b2333}
 
   /* ---- ventana del QR ---- */
   .modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;
@@ -118,6 +122,14 @@ const SCRIPT_PANEL = String.raw`
 const $ = (id) => document.getElementById(id);
 let TARJETAS = [];
 let focoPrevio = null;
+let URL_WEB = "";
+let URL_APP = "";
+
+function aplicarFormato() {
+  const usarApp = document.querySelector("input[name=formato]:checked").value === "app";
+  $("fichaReview").value = usarApp && URL_APP ? URL_APP : URL_WEB;
+  $("ficha").hidden = false;
+}
 
 function escHtml(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
@@ -173,6 +185,26 @@ $("salir").onclick = async () => {
 
 /* ---------- lectura de la URL de Google Maps ---------- */
 
+// El Place ID de Google es un protobuf corto en base64url:
+//   0A 12 09 <cell id little endian> 11 <feature id little endian>
+// El prefijo "ChIJ" que todos reconocen es la codificación de esos tres bytes.
+// Derivarlo del hexadecimal nos deja armar el link de reseña que funciona en la
+// web, sin depender de que el celular le pase el link a la app de Maps.
+function ftidAPlaceId(ftid) {
+  const partes = ftid.split(":");
+  const bytes = [0x0a, 0x12, 0x09];
+  const meter = (hex) => {
+    let v = BigInt(hex);
+    for (let i = 0; i < 8; i++) { bytes.push(Number(v & 255n)); v >>= 8n; }
+  };
+  meter(partes[0]);
+  bytes.push(0x11);
+  meter(partes[1]);
+  let s = "";
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 function analizarMaps(crudo) {
   const url = String(crudo || "").trim();
   if (!url) return { error: "Pega la URL de Google Maps del negocio." };
@@ -193,11 +225,22 @@ function analizarMaps(crudo) {
     const ftid = ft[1].toLowerCase();
     let cid = "";
     try { cid = BigInt(ftid.split(":")[1]).toString(); } catch (e) {}
+    let placeId = "";
+    try { placeId = ftidAPlaceId(ftid); } catch (e) {}
+    if (!placeId) {
+      return { error: "No se pudo derivar el Place ID de esa URL. Prueba con otra URL del mismo negocio." };
+    }
     return {
       negocio: negocio,
       ftid: ftid,
       cid: cid,
-      review: "https://www.google.com/maps/place//data=!4m3!3m2!1s" + ftid + "!12e1",
+      placeId: placeId,
+      // web pura: no necesita la app, pero pide sesión de Google en ese navegador
+      review: "https://search.google.com/local/writereview?placeid=" + placeId,
+      // abre el cuadro de calificación dentro de la app de Maps, que ya tiene sesión.
+      // iOS solo le pasa el link a la app si el usuario lo toca: en una redirección
+      // de servidor no dispara el Universal Link y se queda en la web móvil.
+      reviewApp: "https://www.google.com/maps/place//data=!4m3!3m2!1s" + ftid + "!12e1",
     };
   }
 
@@ -226,8 +269,12 @@ $("analizar").onclick = () => {
   }
   limpiarAviso("aviso");
   $("fichaNombre").textContent = r.negocio || "Negocio sin nombre en la URL";
-  $("fichaReview").value = r.review;
+  URL_WEB = r.review;
+  URL_APP = r.reviewApp || "";
+  $("elegirFormato").hidden = !URL_APP;
+  aplicarFormato();
   const bits = [];
+  if (r.placeId) bits.push("Place ID: " + r.placeId);
   if (r.ftid) bits.push("ID: " + r.ftid);
   if (r.cid) bits.push("CID: " + r.cid);
   $("fichaMeta").textContent = bits.join("  ·  ");
@@ -300,10 +347,15 @@ function pintarTabla() {
   let filas = "";
   lista.forEach((t) => {
     const c = escHtml(t.codigo);
+    // el formato viejo depende de que el celular le pase el link a la app de Maps
+    const viejo = /\/maps\/place\/\/data=/.test(t.destino || "");
+    const marca = viejo
+      ? "<br><span style='color:#a8261b;font-size:10.5px'>formato app · en iPhone puede quedarse en la ficha</span>"
+      : "";
     filas +=
       "<tr><td class='mono'><b>" + c + "</b><br><span style='color:#66718a'>" +
       escHtml(HOST) + "/" + c + "</span></td><td>" + (escHtml(t.negocio) || "—") +
-      "</td><td class='mono' style='font-size:11px'>" + escHtml(t.destino) +
+      "</td><td class='mono' style='font-size:11px'>" + escHtml(t.destino) + marca +
       "</td><td><button class='gris' data-qr='" + c + "'>QR</button>" +
       "<button class='gris' data-borrar='" + c + "'>Borrar</button></td></tr>";
   });
@@ -314,6 +366,10 @@ function pintarTabla() {
     ? lista.length + " de " + TARJETAS.length
     : TARJETAS.length + (TARJETAS.length === 1 ? " tarjeta" : " tarjetas");
 }
+
+document.querySelectorAll("input[name=formato]").forEach((r) => {
+  r.addEventListener("change", aplicarFormato);
+});
 
 $("buscar").addEventListener("input", pintarTabla);
 $("limpiarBusca").onclick = () => { $("buscar").value = ""; pintarTabla(); $("buscar").focus(); };
@@ -449,6 +505,18 @@ export function vistaAdmin(origen) {
 
     <div class="ficha" id="ficha" hidden>
       <b id="fichaNombre"></b>
+
+      <div id="elegirFormato" hidden>
+        <label style="margin-top:4px">A dónde manda la tarjeta</label>
+        <label class="opcion"><input type="radio" name="formato" value="web" checked>
+          <span><b>Web de Google.</b> No necesita la app instalada, pero pide sesión
+          de Google en ese navegador.</span></label>
+        <label class="opcion"><input type="radio" name="formato" value="app">
+          <span><b>App de Google Maps.</b> Más directo si la app está instalada y ya
+          tiene sesión. En iPhone puede quedarse en la web, porque iOS no le pasa a
+          la app los links a los que llega por redirección.</span></label>
+      </div>
+
       <label for="fichaReview">Link de reseña que va a quedar en la tarjeta</label>
       <input id="fichaReview" readonly>
       <div class="meta" id="fichaMeta"></div>
