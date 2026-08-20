@@ -154,9 +154,26 @@
   .copy.done:hover{background:#2d9247}
 
   .qr{margin-top:16px;display:none;text-align:center;padding:20px 0 4px;border-top:1px solid var(--line)}
-  .qr img{width:170px;height:170px;image-rendering:pixelated;background:#fff;
-    border:1px solid var(--line);border-radius:14px;padding:10px}
-  .qr p{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--ink-soft);margin:10px 0 0}
+  .qr-pair{display:flex;gap:18px;flex-wrap:wrap;justify-content:center}
+  .qr-tile{margin:0;flex:0 0 auto}
+  /* el damero de fondo indica que el PNG es transparente */
+  .qr-art{display:inline-block;line-height:0;
+    border:1px solid var(--line);border-radius:14px;padding:10px;
+    background-color:#fff;
+    background-image:linear-gradient(45deg,#eaeef6 25%,transparent 25%,transparent 75%,#eaeef6 75%),
+                     linear-gradient(45deg,#eaeef6 25%,transparent 25%,transparent 75%,#eaeef6 75%);
+    background-size:16px 16px;background-position:0 0,8px 8px}
+  .qr-tile.inv .qr-art{border-color:#2b3140;background-color:#151922;
+    background-image:linear-gradient(45deg,#222834 25%,transparent 25%,transparent 75%,#222834 75%),
+                     linear-gradient(45deg,#222834 25%,transparent 25%,transparent 75%,#222834 75%)}
+  .qr img{width:150px;height:150px;display:block}
+  .qr-tile figcaption{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--ink-soft);margin-top:9px}
+  .qr-dl{display:inline-block;margin-top:8px;font-family:"IBM Plex Mono",monospace;font-size:10px;
+    letter-spacing:.06em;text-transform:uppercase;color:var(--g-blue);text-decoration:none;
+    border:1.5px solid var(--line);border-radius:999px;padding:5px 13px;transition:border-color .15s, background .15s}
+  .qr-dl:hover{border-color:var(--g-blue);background:#f1f6ff}
+  .qr p{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--ink-soft);margin:14px 0 0}
 
   .meta{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink-soft);
     background:var(--field);border-radius:12px;padding:11px 13px;margin-top:6px;word-break:break-all}
@@ -333,6 +350,33 @@ function linkRow(label, url, i, k){
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 
+/* ---------- QR: PNG con fondo transparente ---------- */
+function qrPng(text, color, cell, quiet){
+  cell = cell || 10; quiet = quiet == null ? 4 : quiet;
+  const t = qrcode(0,"M"); t.addData(text); t.make();
+  const n = t.getModuleCount();
+  const c = document.createElement("canvas");
+  c.width = c.height = (n + quiet*2) * cell;      // el canvas nace transparente
+  const x = c.getContext("2d");
+  x.fillStyle = color;                            // solo se pintan los módulos
+  for(let r=0;r<n;r++) for(let k=0;k<n;k++)
+    if(t.isDark(r,k)) x.fillRect((k+quiet)*cell, (r+quiet)*cell, cell, cell);
+  return c.toDataURL("image/png");
+}
+
+function qrTile(mod, src, caption, file){
+  return `<figure class="qr-tile ${mod}">
+      <div class="qr-art"><img src="${src}" alt="${esc(caption)}"></div>
+      <figcaption>${esc(caption)}</figcaption>
+      <a class="qr-dl" href="${src}" download="${esc(file)}">Descargar PNG</a>
+    </figure>`;
+}
+
+function slugify(s){
+  return (String(s||"negocio").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,40)) || "negocio";
+}
+
 function run(){
   rows = $("#input").value.split(/\r?\n/).map(parse).filter(Boolean);
   out.innerHTML = rows.length ? rows.map(card).join("") :
@@ -364,8 +408,12 @@ out.addEventListener("click", e => {
       if(typeof qrcode === "undefined"){
         box.innerHTML = `<p>No se pudo cargar el generador de QR. Copia el link y usa cualquier generador de QR en línea.</p>`;
       } else {
-        const t = qrcode(0,"M"); t.addData(rows[i].review); t.make();
-        box.innerHTML = t.createImgTag(6,8) + `<p>Imprímelo para el mostrador</p>`;
+        const url = rows[i].review, slug = slugify(rows[i].name);
+        box.innerHTML = `<div class="qr-pair">
+            ${qrTile("",    qrPng(url,"#000000"), "Negro · PNG transparente",  slug+"-qr-negro.png")}
+            ${qrTile("inv", qrPng(url,"#ffffff"), "Blanco · PNG transparente", slug+"-qr-blanco.png")}
+          </div>
+          <p>Imprímelo para el mostrador</p>`;
       }
     }
     box.style.display = "block"; q.textContent = "Ocultar QR";
