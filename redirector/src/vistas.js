@@ -3,7 +3,7 @@
  *
  * Nota sobre el script del panel: va en un String.raw porque lleva expresiones
  * regulares. En un template literal normal, JavaScript se come las barras
- * invertidas (\d pasaría a ser d) y las romperia todas en silencio.
+ * invertidas (\d pasaría a ser d) y las rompería todas en silencio.
  * Por lo mismo, dentro de ese bloque no puede haber acentos graves ni ${...}.
  */
 
@@ -19,10 +19,10 @@ const ESTILOS = `
     border-radius:20px;padding:28px;box-shadow:0 14px 34px -14px rgba(20,30,60,.22);
     position:relative;overflow:hidden}
   .caja.angosta{max-width:420px}
-  .caja::before{content:"";position:absolute;top:0;left:0;right:0;height:5px;
+  .franja::before,.caja::before{content:"";position:absolute;top:0;left:0;right:0;height:5px;
     background:linear-gradient(90deg,#4285F4 0 25%,#EA4335 25% 50%,#FBBC05 50% 75%,#34A853 75% 100%)}
   h1{font-size:26px;margin:6px 0 10px;letter-spacing:-.02em}
-  h2{font-size:16px;margin:0 0 4px;letter-spacing:-.01em}
+  h2{font-size:16px;margin:0;letter-spacing:-.01em}
   p{color:#66718a;margin:0 0 14px}
   code,.mono{font-family:ui-monospace,"IBM Plex Mono",monospace}
   .codigo{display:inline-block;background:#f7f9fd;border:1px solid #e5e9f2;border-radius:10px;
@@ -40,13 +40,13 @@ const ESTILOS = `
   button.gris:hover{background:#fafbff;color:#1b2333}
   .barra{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
   .fila{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
-  .sep{border:none;border-top:1px solid #e5e9f2;margin:24px 0}
-  table{width:100%;border-collapse:collapse;margin-top:20px;font-size:13px}
+  table{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px}
   th{text-align:left;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
     color:#66718a;border-bottom:1px solid #e5e9f2;padding:8px 6px}
   td{padding:10px 6px;border-bottom:1px solid #f0f3f9;vertical-align:top;word-break:break-all}
   td:last-child{width:1%;white-space:nowrap}
   td button{padding:7px 12px;font-size:12.5px;margin-left:4px}
+  .contador{font-family:ui-monospace,monospace;font-size:11px;color:#66718a;margin-top:10px}
   .aviso{margin-top:14px;padding:11px 13px;border-radius:12px;font-size:13px;display:none}
   .aviso.ok{display:block;background:#e9f7ee;color:#1c6b34}
   .aviso.mal{display:block;background:#fdecea;color:#a8261b}
@@ -55,6 +55,18 @@ const ESTILOS = `
   .ficha b{display:block;font-size:15px;margin-bottom:6px}
   .ficha .meta{font-family:ui-monospace,monospace;font-size:11px;color:#66718a;
     margin-top:8px;word-break:break-all}
+
+  /* ---- ventana del QR ---- */
+  .modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;
+    justify-content:center;padding:20px}
+  .modal-fondo{position:absolute;inset:0;background:rgba(15,22,40,.55)}
+  .modal-caja{position:relative;background:#fff;border-radius:20px;width:100%;max-width:540px;
+    max-height:88vh;overflow:auto;padding:28px;
+    box-shadow:0 30px 70px -20px rgba(15,22,40,.55)}
+  .modal-cerrar{position:absolute;top:16px;right:16px;padding:0;width:32px;height:32px;
+    border-radius:50%;background:#f0f3f9;color:#66718a;font-size:15px;line-height:1}
+  .modal-cerrar:hover{background:#e2e7f2;color:#1b2333}
+
   /* el damero indica que el PNG es transparente */
   .qr-pair{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;margin-top:18px}
   .qr-tile{margin:0;flex:0 0 auto;text-align:center}
@@ -75,7 +87,7 @@ const ESTILOS = `
   .qr-dl:hover{border-color:#4285F4;background:#f1f6ff}
   .qr-url{text-align:center;font-family:ui-monospace,monospace;font-size:12px;
     color:#1b2333;background:#f7f9fd;border:1px solid #e5e9f2;border-radius:10px;
-    padding:8px 12px;display:inline-block;margin-top:4px;word-break:break-all}
+    padding:8px 12px;display:inline-block;word-break:break-all}
   [hidden]{display:none !important}
 `;
 
@@ -104,7 +116,13 @@ export function vistaSinConfigurar(codigo) {
 
 const SCRIPT_PANEL = String.raw`
 const $ = (id) => document.getElementById(id);
-let ultimoAnalisis = null;
+let TARJETAS = [];
+let focoPrevio = null;
+
+function escHtml(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
 
 function avisar(caja, texto, ok) {
   const a = $(caja);
@@ -129,7 +147,7 @@ async function llamar(ruta, opciones) {
 function mostrar(dentro) {
   $("pantallaPanel").hidden = !dentro;
   $("pantallaLogin").hidden = dentro;
-  if (dentro) listar(); else $("clave").focus();
+  if (dentro) listar(); else { cerrarQR(); $("clave").focus(); }
 }
 
 $("formLogin").onsubmit = async (e) => {
@@ -201,13 +219,11 @@ function analizarMaps(crudo) {
 
 $("analizar").onclick = () => {
   const r = analizarMaps($("maps").value);
-  ultimoAnalisis = null;
   if (r.error) {
     $("ficha").hidden = true;
     avisar("aviso", r.error, false);
     return;
   }
-  ultimoAnalisis = r;
   limpiarAviso("aviso");
   $("fichaNombre").textContent = r.negocio || "Negocio sin nombre en la URL";
   $("fichaReview").value = r.review;
@@ -238,45 +254,74 @@ $("guardar").onclick = async () => {
       }),
     });
     avisar("aviso", "Tarjeta " + datos.codigo + " activada", true);
-    pintarQR(datos.codigo);
     $("codigo").value = $("negocio").value = $("maps").value = "";
     $("ficha").hidden = true;
-    ultimoAnalisis = null;
-    listar();
+    await listar();
+    abrirQR(datos.codigo);
   } catch (e) {
     avisar("aviso", e.message, false);
   }
 };
 
+/* ---------- listado y buscador ---------- */
+
+function sinTildes(s) {
+  return String(s == null ? "" : s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
 async function listar() {
   try {
     const datos = await llamar("lista");
-    if (!datos.tarjetas.length) {
-      $("tabla").innerHTML = "<p style='margin-top:20px'>Todavía no hay tarjetas activadas.</p>";
-      return;
-    }
-    let filas = "";
-    datos.tarjetas.forEach((t) => {
-      filas +=
-        "<tr><td class='mono'><b>" + t.codigo + "</b><br><span style='color:#66718a'>" +
-        HOST + "/" + t.codigo + "</span></td><td>" + (t.negocio || "—") +
-        "</td><td class='mono' style='font-size:11px'>" + (t.destino || "") +
-        "</td><td><button class='gris' data-qr='" + t.codigo + "'>QR</button>" +
-        "<button class='gris' data-borrar='" + t.codigo + "'>Borrar</button></td></tr>";
-    });
-    $("tabla").innerHTML =
-      "<table><thead><tr><th>Código</th><th>Negocio</th><th>Destino</th><th></th></tr></thead><tbody>" +
-      filas + "</tbody></table>";
+    TARJETAS = datos.tarjetas;
+    pintarTabla();
   } catch (e) {
     avisar("aviso", e.message, false);
   }
 }
 
+function pintarTabla() {
+  const busca = sinTildes($("buscar").value.trim());
+  const lista = busca
+    ? TARJETAS.filter((t) => sinTildes(t.codigo).includes(busca) || sinTildes(t.negocio).includes(busca))
+    : TARJETAS;
+
+  if (!TARJETAS.length) {
+    $("tabla").innerHTML = "<p style='margin-top:18px'>Todavía no hay tarjetas activadas.</p>";
+    $("contador").textContent = "";
+    return;
+  }
+
+  if (!lista.length) {
+    $("tabla").innerHTML = "<p style='margin-top:18px'>Ninguna tarjeta coincide con esa búsqueda.</p>";
+    $("contador").textContent = "0 de " + TARJETAS.length;
+    return;
+  }
+
+  let filas = "";
+  lista.forEach((t) => {
+    const c = escHtml(t.codigo);
+    filas +=
+      "<tr><td class='mono'><b>" + c + "</b><br><span style='color:#66718a'>" +
+      escHtml(HOST) + "/" + c + "</span></td><td>" + (escHtml(t.negocio) || "—") +
+      "</td><td class='mono' style='font-size:11px'>" + escHtml(t.destino) +
+      "</td><td><button class='gris' data-qr='" + c + "'>QR</button>" +
+      "<button class='gris' data-borrar='" + c + "'>Borrar</button></td></tr>";
+  });
+  $("tabla").innerHTML =
+    "<table><thead><tr><th>Código</th><th>Negocio</th><th>Destino</th><th></th></tr></thead><tbody>" +
+    filas + "</tbody></table>";
+  $("contador").textContent = busca
+    ? lista.length + " de " + TARJETAS.length
+    : TARJETAS.length + (TARJETAS.length === 1 ? " tarjeta" : " tarjetas");
+}
+
+$("buscar").addEventListener("input", pintarTabla);
+$("limpiarBusca").onclick = () => { $("buscar").value = ""; pintarTabla(); $("buscar").focus(); };
 $("recargar").onclick = () => listar();
 
 $("tabla").addEventListener("click", async (e) => {
   const q = e.target.closest("[data-qr]");
-  if (q) { pintarQR(q.dataset.qr); return; }
+  if (q) { abrirQR(q.dataset.qr); return; }
 
   const b = e.target.closest("[data-borrar]");
   if (!b) return;
@@ -288,7 +333,7 @@ $("tabla").addEventListener("click", async (e) => {
       body: JSON.stringify({ codigo: b.dataset.borrar }),
     });
     avisar("aviso", "Tarjeta " + b.dataset.borrar + " borrada", true);
-    $("qrCaja").hidden = true;
+    cerrarQR();
     listar();
   } catch (err) {
     avisar("aviso", err.message, false);
@@ -317,29 +362,6 @@ function qrPng(texto, color, cell, quiet) {
   return { src: c.toDataURL("image/png"), modulos: n, modo: modo };
 }
 
-function pintarQR(codigo) {
-  const caja = $("qrCaja");
-  const url = (ORIGEN + "/" + codigo).toUpperCase();
-  $("qrUrl").textContent = url;
-  caja.hidden = false;
-
-  if (typeof qrcode === "undefined") {
-    $("qrPar").innerHTML = "<p>No se pudo cargar el generador de QR. Revisa tu conexión y recarga.</p>";
-    $("qrDato").textContent = "";
-    return;
-  }
-
-  const negro = qrPng(url, "#000000", 10, 4);
-  const blanco = qrPng(url, "#ffffff", 10, 4);
-  $("qrPar").innerHTML =
-    tile("", negro.src, "Negro · PNG transparente", codigo + "-qr-negro.png") +
-    tile("inv", blanco.src, "Blanco · PNG transparente", codigo + "-qr-blanco.png");
-  $("qrDato").textContent =
-    negro.modulos + "×" + negro.modulos + " módulos · modo " + negro.modo +
-    " · corrección M";
-  caja.scrollIntoView({ behavior: "smooth", block: "nearest" });
-}
-
 function tile(mod, src, pie, archivo) {
   return "<figure class='qr-tile " + mod + "'>" +
     "<div class='qr-art'><img src='" + src + "' alt='" + pie + "'></div>" +
@@ -347,6 +369,46 @@ function tile(mod, src, pie, archivo) {
     "<a class='qr-dl' href='" + src + "' download='" + archivo + "'>Descargar PNG</a>" +
     "</figure>";
 }
+
+function abrirQR(codigo) {
+  const url = (ORIGEN + "/" + codigo).toUpperCase();
+  $("qrTitulo").textContent = "QR de la tarjeta " + codigo;
+  $("qrUrl").textContent = url;
+
+  if (typeof qrcode === "undefined") {
+    $("qrPar").innerHTML = "<p>No se pudo cargar el generador de QR. Revisa tu conexión y recarga la página.</p>";
+    $("qrDato").textContent = "";
+  } else {
+    const negro = qrPng(url, "#000000", 10, 4);
+    const blanco = qrPng(url, "#ffffff", 10, 4);
+    $("qrPar").innerHTML =
+      tile("", negro.src, "Negro · PNG transparente", codigo + "-qr-negro.png") +
+      tile("inv", blanco.src, "Blanco · PNG transparente", codigo + "-qr-blanco.png");
+    $("qrDato").textContent =
+      negro.modulos + "×" + negro.modulos + " módulos · modo " + negro.modo + " · corrección M";
+  }
+
+  focoPrevio = document.activeElement;
+  $("modalQR").hidden = false;
+  document.body.style.overflow = "hidden";
+  $("cerrarQR").focus();
+}
+
+function cerrarQR() {
+  if ($("modalQR").hidden) return;
+  $("modalQR").hidden = true;
+  document.body.style.overflow = "";
+  if (focoPrevio && focoPrevio.focus) focoPrevio.focus();
+  focoPrevio = null;
+}
+
+$("cerrarQR").onclick = cerrarQR;
+$("modalQR").addEventListener("click", (e) => {
+  if (e.target.hasAttribute("data-cerrar")) cerrarQR();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") cerrarQR();
+});
 
 llamar("sesion").then((s) => mostrar(s.activa)).catch(() => mostrar(false));
 `;
@@ -395,25 +457,37 @@ export function vistaAdmin(origen) {
     <label for="negocio">Negocio <span>— solo para tu referencia</span></label>
     <input id="negocio" placeholder="Mercacentro Av. Guabinal" autocomplete="off">
 
-    <div class="fila">
-      <button id="guardar">Guardar tarjeta</button>
-      <button class="gris" id="recargar">Refrescar lista</button>
-    </div>
+    <div class="fila"><button id="guardar">Guardar tarjeta</button></div>
 
     <div class="aviso" id="aviso"></div>
   </div>
 
-  <div class="caja" id="qrCaja" hidden>
-    <h1 style="margin:0 0 4px">QR de la tarjeta</h1>
-    <p style="margin:0">Esto es lo que va impreso en el plástico, no el link de Google.</p>
+  <div class="caja">
+    <div class="barra">
+      <h2>Tarjetas activadas</h2>
+      <button class="gris" id="recargar">Refrescar</button>
+    </div>
+
+    <label for="buscar">Buscar <span>— por código o por negocio</span></label>
+    <div style="display:flex;gap:10px">
+      <input id="buscar" placeholder="A7K2, panadería…" autocomplete="off">
+      <button class="gris" id="limpiarBusca">Limpiar</button>
+    </div>
+
+    <div id="tabla"></div>
+    <div class="contador" id="contador"></div>
+  </div>
+</div>
+
+<div class="modal" id="modalQR" hidden>
+  <div class="modal-fondo" data-cerrar></div>
+  <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="qrTitulo">
+    <button class="modal-cerrar" id="cerrarQR" aria-label="Cerrar">✕</button>
+    <h1 id="qrTitulo" style="margin:6px 0 6px;font-size:22px">QR de la tarjeta</h1>
+    <p style="margin:0 0 14px">Esto es lo que va impreso en el plástico, no el link de Google.</p>
     <div style="text-align:center"><span class="qr-url" id="qrUrl"></span></div>
     <div class="qr-pair" id="qrPar"></div>
     <p class="mono" style="text-align:center;font-size:11px;margin:16px 0 0" id="qrDato"></p>
-  </div>
-
-  <div class="caja">
-    <h2>Tarjetas activadas</h2>
-    <div id="tabla"></div>
   </div>
 </div>
 
