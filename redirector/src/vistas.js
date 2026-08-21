@@ -118,6 +118,53 @@ export function vistaSinConfigurar(codigo) {
 </div>`;
 }
 
+/**
+ * Pantalla puente para iOS.
+ *
+ * iOS solo le entrega el link a la app de Google Maps si la persona lo TOCA:
+ * en una redirección de servidor no dispara el Universal Link. Este botón existe
+ * para dar ese toque. No se intenta navegar por JavaScript porque tampoco cuenta
+ * como gesto y volveríamos al mismo problema.
+ */
+export function vistaPuente(tarjeta, codigo) {
+  const negocio = tarjeta.negocio ? esc(tarjeta.negocio) : "";
+  const alterno = tarjeta.alterno
+    ? `<a class="otra" href="${esc(tarjeta.alterno)}">¿No se abrió la app? Califica desde el navegador</a>`
+    : "";
+  return `<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#EA4335">
+<title>Califícanos en Google</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%}
+  body{background:linear-gradient(150deg,#FBBC05 0%,#F79B1E 20%,#EA4335 52%,#A93BC0 76%,#4285F4 100%);
+    color:#fff;font-family:"Inter",system-ui,-apple-system,sans-serif;
+    display:flex;align-items:center;justify-content:center;padding:28px;text-align:center;
+    -webkit-font-smoothing:antialiased}
+  .tarjeta{background:#fff;color:#1b2333;border-radius:26px;padding:34px 26px 28px;
+    max-width:380px;width:100%;box-shadow:0 30px 60px -25px rgba(15,22,40,.6)}
+  .estrellas{font-size:30px;letter-spacing:6px;color:#FFC400;line-height:1;margin-bottom:18px}
+  h1{font-size:23px;line-height:1.2;margin:0 0 8px;letter-spacing:-.02em}
+  .negocio{font-size:15px;color:#66718a;margin:0 0 24px}
+  .boton{display:block;background:linear-gradient(95deg,#F79B1E 0%,#EA4335 62%,#D93025 100%);
+    color:#fff;text-decoration:none;font-weight:700;font-size:17px;padding:16px 22px;
+    border-radius:999px;box-shadow:0 12px 22px -12px rgba(234,67,53,.9)}
+  .boton:active{transform:translateY(1px)}
+  .otra{display:block;margin-top:16px;font-size:12.5px;color:#66718a;text-decoration:underline}
+  .pie{margin-top:20px;font-size:10.5px;color:#9aa6bd;font-family:ui-monospace,monospace;
+    letter-spacing:.1em}
+</style>
+<div class="tarjeta">
+  <div class="estrellas">★★★★★</div>
+  <h1>¿Nos dejas tu calificación?</h1>
+  <p class="negocio">${negocio || "Toca el botón y califícanos en Google"}</p>
+  <a class="boton" href="${esc(tarjeta.destino)}">Calificar en Google</a>
+  ${alterno}
+  <div class="pie">${esc(codigo)}</div>
+</div>`;
+}
+
 const SCRIPT_PANEL = String.raw`
 const $ = (id) => document.getElementById(id);
 let TARJETAS = [];
@@ -298,6 +345,8 @@ $("guardar").onclick = async () => {
         codigo: $("codigo").value,
         negocio: $("negocio").value,
         destino: destino,
+        // el otro formato, que la pantalla de iPhone ofrece como salida alterna
+        alterno: destino === URL_WEB ? URL_APP : URL_WEB,
       }),
     });
     avisar("aviso", "Tarjeta " + datos.codigo + " activada", true);

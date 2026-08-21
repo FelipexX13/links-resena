@@ -9,7 +9,7 @@ cuando quieras, sin reimprimir nada.
 | Ruta | Qué hace | Acceso |
 |---|---|---|
 | `/` | Página informativa | público |
-| `/A7K2` | Redirige 307 al link de reseña de esa tarjeta | público |
+| `/A7K2` | Redirige 307 al link de reseña — en iPhone, pantalla con botón | público |
 | `/admin` | Login y panel de tarjetas | público, pero sin datos hasta iniciar sesión |
 | `/api/login`, `/api/salir`, `/api/sesion` | Manejo de la sesión | público |
 | `/api/lista`, `/api/guardar`, `/api/borrar` | Leer y modificar tarjetas | **requiere sesión** |
@@ -164,6 +164,16 @@ ella, **todas las sesiones abiertas quedan invalidadas al instante**.
   resolver.
 
   Las tarjetas guardadas con el formato de app salen marcadas en la tabla.
+- **En iPhone se sirve una pantalla con un botón en vez de redirigir.** No es
+  capricho: iOS solo le entrega el link a la app de Google Maps si la persona lo
+  **toca**, y una redirección de servidor no cuenta como gesto. Sin ese toque,
+  Safari se queda en la web móvil y el `!12e1` se ignora — comprobado: el mismo
+  link abierto directo sí abre la app. Android no lo necesita porque su App Link
+  sí se dispara con la redirección, así que allá sigue el 307 instantáneo.
+
+  La pantalla muestra el nombre del negocio, un botón grande al destino de la
+  tarjeta y, debajo, el otro formato como salida por si la app no está instalada.
+
 - **El destino se valida**: solo se aceptan URLs `http:` o `https:`, para que el
   panel no pueda convertirse en un trampolín hacia `javascript:` u otros esquemas.
 - **Los códigos se normalizan** a mayúsculas y solo admiten `A-Z0-9`, de 3 a 12

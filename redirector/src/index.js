@@ -20,7 +20,7 @@
  *   "intentos:<ip>" contador de logins fallidos, expira solo a los 15 minutos
  */
 
-import { vistaInicio, vistaSinConfigurar, vistaAdmin } from "./vistas.js";
+import { vistaInicio, vistaSinConfigurar, vistaAdmin, vistaPuente } from "./vistas.js";
 
 const RESERVADAS = new Set(["admin", "api", "favicon.ico", "robots.txt"]);
 const FORMATO_CODIGO = /^[A-Z0-9]{3,12}$/;
@@ -44,6 +44,15 @@ export default {
 
     const tarjeta = await env.TARJETAS.get("c:" + codigo, "json");
     if (!tarjeta || !tarjeta.destino) return html(vistaSinConfigurar(codigo), 404);
+
+    // En iOS, los Universal Links solo se disparan si la persona TOCA el enlace:
+    // una redirección de servidor no cuenta, así que Safari se queda en la web
+    // móvil de Maps y el !12e1 se ignora. Por eso al iPhone se le sirve una
+    // pantalla con un botón — ese toque sí abre la app. Android no lo necesita:
+    // su App Link sí se dispara con la redirección.
+    if (esIOS(request.headers.get("user-agent"))) {
+      return html(vistaPuente(tarjeta, codigo));
+    }
 
     // 307 (temporal) a propósito: un 301 se cachea en el navegador casi para
     // siempre y dejaría la tarjeta clavada en el destino viejo si la repunteas.
@@ -101,8 +110,15 @@ async function api(request, env, accion, url) {
       return json({ error: "El destino debe empezar por http:// o https://" }, 400);
     }
 
+    let alterno = "";
+    try {
+      const u = new URL(String(cuerpo.alterno || "").trim());
+      if (u.protocol === "https:" || u.protocol === "http:") alterno = u.href;
+    } catch (e) {}
+
     const registro = {
       destino: destino.href,
+      alterno: alterno,
       negocio: String(cuerpo.negocio || "").slice(0, 120),
       actualizado: new Date().toISOString(),
     };
@@ -204,6 +220,12 @@ function leerCookie(request, nombre) {
 }
 
 /* ---------- utilidades ---------- */
+
+// iPadOS 13+ se anuncia como Macintosh, pero para un QR de mostrador el caso
+// que importa es el iPhone.
+function esIOS(ua) {
+  return /iPhone|iPad|iPod/i.test(String(ua || ""));
+}
 
 function normalizar(s) {
   const c = String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
