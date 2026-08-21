@@ -20,7 +20,8 @@
  *   "intentos:<ip>" contador de logins fallidos, expira solo a los 15 minutos
  */
 
-import { vistaInicio, vistaSinConfigurar, vistaAdmin, vistaPuente } from "./vistas.js";
+import { vistaInicio, vistaSinConfigurar, vistaAdmin } from "./vistas.js";
+import { vistaPuente, estiloValido } from "./puente.js";
 
 const RESERVADAS = new Set(["admin", "api", "favicon.ico", "robots.txt"]);
 const FORMATO_CODIGO = /^[A-Z0-9]{3,12}$/;
@@ -50,7 +51,7 @@ export default {
     // móvil de Maps y el !12e1 se ignora. Por eso al iPhone se le sirve una
     // pantalla con un botón — ese toque sí abre la app. Android no lo necesita:
     // su App Link sí se dispara con la redirección.
-    if (esIOS(request.headers.get("user-agent"))) {
+    if (esIOS(request.headers.get("user-agent")) || url.searchParams.has("ver")) {
       return html(vistaPuente(tarjeta, codigo));
     }
 
@@ -119,6 +120,7 @@ async function api(request, env, accion, url) {
     const registro = {
       destino: destino.href,
       alterno: alterno,
+      estilo: estiloValido(cuerpo.estilo),
       negocio: String(cuerpo.negocio || "").slice(0, 120),
       actualizado: new Date().toISOString(),
     };

@@ -43,7 +43,7 @@ const ESTILOS = `
   table{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px}
   th{text-align:left;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
     color:#66718a;border-bottom:1px solid #e5e9f2;padding:8px 6px}
-  td{padding:10px 6px;border-bottom:1px solid #f0f3f9;vertical-align:top;word-break:break-all}
+  td{padding:10px 6px;border-bottom:1px solid #f0f3f9;vertical-align:top;overflow-wrap:anywhere}
   td:last-child{width:1%;white-space:nowrap}
   td button{padding:7px 12px;font-size:12.5px;margin-left:4px}
   .contador{font-family:ui-monospace,monospace;font-size:11px;color:#66718a;margin-top:10px}
@@ -59,6 +59,33 @@ const ESTILOS = `
     color:#66718a;margin:0 0 8px;cursor:pointer}
   .opcion input{width:auto;margin-top:3px;flex:0 0 auto}
   .opcion b{display:inline;font-size:12.5px;color:#1b2333}
+
+  /* ---- selector de estilo de tarjeta ---- */
+  .estilos{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:2px}
+  .estilo{border:2px solid #e5e9f2;border-radius:14px;padding:7px;cursor:pointer;
+    background:#fff;text-align:center;transition:border-color .15s,box-shadow .15s,transform .12s}
+  .estilo:hover{transform:translateY(-1px);border-color:#cfd8ea}
+  .estilo.sel{border-color:#1a73e8;box-shadow:0 0 0 3px rgba(26,115,232,.15)}
+  .estilo b{display:block;font-size:11.5px;margin-top:7px;color:#1b2333}
+  .estilo i{display:block;font-size:9.5px;font-style:normal;color:#66718a;line-height:1.25}
+  .mini{height:58px;border-radius:9px;overflow:hidden;position:relative;
+    display:flex;align-items:center;justify-content:center}
+  .mini span{position:relative;z-index:2;font-size:8.5px;letter-spacing:.5px;color:#FFC400}
+  .mini1{background:linear-gradient(100deg,#FBBC05,#F0592B 40%,#A93BC0 72%,#4285F4)}
+  .mini1::after{content:"";position:absolute;left:-12%;right:-12%;bottom:-15px;height:28px;
+    background:#fff;border-radius:50%}
+  .mini2{background:linear-gradient(140deg,#F6C3AD,#F4B3C4 30%,#C7D6F2 62%,#BCE2D6)}
+  .mini2::after{content:"";position:absolute;inset:7px;background:rgba(255,255,255,.92);
+    border-radius:8px}
+  .mini3{background:#fff;box-shadow:inset 0 0 0 1px #eef1f7}
+  .mini3::after{content:"";position:absolute;width:48px;height:48px;border-radius:50%;
+    left:50%;top:50%;transform:translate(-50%,-50%);
+    background:conic-gradient(from 210deg,#FBBC05,#F79B1E,#EA4335,#A93BC0,#4285F4,#34A853,#FBBC05);
+    -webkit-mask:radial-gradient(circle,transparent 57%,#000 59%);
+    mask:radial-gradient(circle,transparent 57%,#000 59%)}
+  .mini4{background:#000;box-shadow:inset 0 0 0 2px #FFC400}
+  .etiqueta{display:inline-block;margin-top:5px;font-size:10px;letter-spacing:.06em;
+    text-transform:uppercase;color:#66718a;background:#f0f3f9;border-radius:999px;padding:2px 8px}
 
   /* ---- ventana del QR ---- */
   .modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;
@@ -171,6 +198,8 @@ let TARJETAS = [];
 let focoPrevio = null;
 let URL_WEB = "";
 let URL_APP = "";
+let ESTILO = 1;
+const NOMBRE_ESTILO = { 1: "Ola", 2: "Pastel", 3: "Círculo", 4: "Oscuro" };
 
 function aplicarFormato() {
   const usarApp = document.querySelector("input[name=formato]:checked").value === "app";
@@ -347,6 +376,7 @@ $("guardar").onclick = async () => {
         destino: destino,
         // el otro formato, que la pantalla de iPhone ofrece como salida alterna
         alterno: destino === URL_WEB ? URL_APP : URL_WEB,
+        estilo: ESTILO,
       }),
     });
     avisar("aviso", "Tarjeta " + datos.codigo + " activada", true);
@@ -404,8 +434,10 @@ function pintarTabla() {
     filas +=
       "<tr><td class='mono'><b>" + c + "</b><br><span style='color:#66718a'>" +
       escHtml(HOST) + "/" + c + "</span></td><td>" + (escHtml(t.negocio) || "—") +
+      "<br><span class='etiqueta'>" + (NOMBRE_ESTILO[t.estilo] || "Ola") + "</span>" +
       "</td><td class='mono' style='font-size:11px'>" + escHtml(t.destino) + marca +
-      "</td><td><button class='gris' data-qr='" + c + "'>QR</button>" +
+      "</td><td><button class='gris' data-ver='" + c + "'>Ver</button>" +
+      "<button class='gris' data-qr='" + c + "'>QR</button>" +
       "<button class='gris' data-borrar='" + c + "'>Borrar</button></td></tr>";
   });
   $("tabla").innerHTML =
@@ -420,11 +452,23 @@ document.querySelectorAll("input[name=formato]").forEach((r) => {
   r.addEventListener("change", aplicarFormato);
 });
 
+$("estilos").addEventListener("click", (e) => {
+  const caja = e.target.closest("[data-estilo]");
+  if (!caja) return;
+  ESTILO = parseInt(caja.dataset.estilo, 10);
+  document.querySelectorAll("#estilos .estilo").forEach((d) => {
+    d.classList.toggle("sel", d === caja);
+  });
+});
+
 $("buscar").addEventListener("input", pintarTabla);
 $("limpiarBusca").onclick = () => { $("buscar").value = ""; pintarTabla(); $("buscar").focus(); };
 $("recargar").onclick = () => listar();
 
 $("tabla").addEventListener("click", async (e) => {
+  const v = e.target.closest("[data-ver]");
+  if (v) { window.open("/" + v.dataset.ver + "?ver=1", "_blank", "noopener"); return; }
+
   const q = e.target.closest("[data-qr]");
   if (q) { abrirQR(q.dataset.qr); return; }
 
@@ -573,6 +617,18 @@ export function vistaAdmin(origen) {
 
     <label for="negocio">Negocio <span>— solo para tu referencia</span></label>
     <input id="negocio" placeholder="Mercacentro Av. Guabinal" autocomplete="off">
+
+    <label>Estilo de la tarjeta <span>— es lo que ve el cliente al escanear</span></label>
+    <div class="estilos" id="estilos">
+      <div class="estilo sel" data-estilo="1"><div class="mini mini1"><span>★★★★★</span></div>
+        <b>Ola</b><i>Degradado con onda</i></div>
+      <div class="estilo" data-estilo="2"><div class="mini mini2"><span>★★★★★</span></div>
+        <b>Pastel</b><i>Marco suave</i></div>
+      <div class="estilo" data-estilo="3"><div class="mini mini3"><span>★★★★★</span></div>
+        <b>Círculo</b><i>Aro de colores</i></div>
+      <div class="estilo" data-estilo="4"><div class="mini mini4"><span>★★★★★</span></div>
+        <b>Oscuro</b><i>Negro y dorado</i></div>
+    </div>
 
     <div class="fila"><button id="guardar">Guardar tarjeta</button></div>
 
