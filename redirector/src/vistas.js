@@ -84,6 +84,10 @@ const ESTILOS = `
     -webkit-mask:radial-gradient(circle,transparent 57%,#000 59%);
     mask:radial-gradient(circle,transparent 57%,#000 59%)}
   .mini4{background:#000;box-shadow:inset 0 0 0 2px #FFC400}
+  .editando{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    margin-top:14px;padding:10px 12px 10px 15px;border-radius:12px;font-size:12.5px;
+    background:#fff7e0;color:#7a5a00;border:1px solid #f5e2ab}
+  .editando button{padding:6px 14px;font-size:12px}
   .etiqueta{display:inline-block;margin-top:5px;font-size:10px;letter-spacing:.06em;
     text-transform:uppercase;color:#66718a;background:#f0f3f9;border-radius:999px;padding:2px 8px}
 
@@ -379,15 +383,58 @@ $("guardar").onclick = async () => {
         estilo: ESTILO,
       }),
     });
-    avisar("aviso", "Tarjeta " + datos.codigo + " activada", true);
-    $("codigo").value = $("negocio").value = $("maps").value = "";
-    $("ficha").hidden = true;
+    const editaba = !$("editando").hidden;
+    avisar("aviso", "Tarjeta " + datos.codigo + (editaba ? " actualizada" : " activada"), true);
+    salirDeEdicion();
     await listar();
     abrirQR(datos.codigo);
   } catch (e) {
     avisar("aviso", e.message, false);
   }
 };
+
+/* ---------- edición de una tarjeta existente ---------- */
+
+function editar(codigo) {
+  const t = TARJETAS.filter((x) => x.codigo === codigo)[0];
+  if (!t) return;
+
+  // el destino guardado puede ser cualquiera de los dos formatos
+  const esWeb = /writereview/.test(t.destino || "");
+  URL_WEB = esWeb ? t.destino : (t.alterno || "");
+  URL_APP = esWeb ? (t.alterno || "") : t.destino;
+
+  $("codigo").value = t.codigo;
+  $("negocio").value = t.negocio || "";
+  $("maps").value = "";
+  $("fichaNombre").textContent = t.negocio || t.codigo;
+  $("fichaMeta").textContent = "";
+  $("elegirFormato").hidden = !(URL_WEB && URL_APP);
+  document.querySelector("input[name=formato][value=" + (esWeb ? "web" : "app") + "]").checked = true;
+  aplicarFormato();
+  if (!$("fichaReview").value) $("fichaReview").value = t.destino;
+
+  ESTILO = parseInt(t.estilo, 10) || 1;
+  document.querySelectorAll("#estilos .estilo").forEach((d) => {
+    d.classList.toggle("sel", parseInt(d.dataset.estilo, 10) === ESTILO);
+  });
+
+  $("editandoTxt").textContent = "Editando " + t.codigo + " · el link no cambia";
+  $("editando").hidden = false;
+  limpiarAviso("aviso");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  $("codigo").focus();
+}
+
+function salirDeEdicion() {
+  $("editando").hidden = true;
+  $("codigo").value = $("negocio").value = $("maps").value = "";
+  $("ficha").hidden = true;
+  $("fichaReview").value = "";
+  URL_WEB = URL_APP = "";
+}
+
+$("cancelarEd").onclick = () => { salirDeEdicion(); limpiarAviso("aviso"); };
 
 /* ---------- listado y buscador ---------- */
 
@@ -436,7 +483,8 @@ function pintarTabla() {
       escHtml(HOST) + "/" + c + "</span></td><td>" + (escHtml(t.negocio) || "—") +
       "<br><span class='etiqueta'>" + (NOMBRE_ESTILO[t.estilo] || "Ola") + "</span>" +
       "</td><td class='mono' style='font-size:11px'>" + escHtml(t.destino) + marca +
-      "</td><td><button class='gris' data-ver='" + c + "'>Ver</button>" +
+      "</td><td><button class='gris' data-editar='" + c + "'>Editar</button>" +
+      "<button class='gris' data-ver='" + c + "'>Ver</button>" +
       "<button class='gris' data-qr='" + c + "'>QR</button>" +
       "<button class='gris' data-borrar='" + c + "'>Borrar</button></td></tr>";
   });
@@ -466,6 +514,9 @@ $("limpiarBusca").onclick = () => { $("buscar").value = ""; pintarTabla(); $("bu
 $("recargar").onclick = () => listar();
 
 $("tabla").addEventListener("click", async (e) => {
+  const ed = e.target.closest("[data-editar]");
+  if (ed) { editar(ed.dataset.editar); return; }
+
   const v = e.target.closest("[data-ver]");
   if (v) { window.open("/" + v.dataset.ver + "?ver=1", "_blank", "noopener"); return; }
 
@@ -585,6 +636,11 @@ export function vistaAdmin(origen) {
     <div class="barra">
       <h1 style="margin:0">Activar una tarjeta</h1>
       <button class="gris" id="salir">Cerrar sesión</button>
+    </div>
+
+    <div class="editando" id="editando" hidden>
+      <span id="editandoTxt"></span>
+      <button class="gris" id="cancelarEd">Cancelar</button>
     </div>
 
     <label for="codigo">Código impreso en la tarjeta</label>

@@ -37,8 +37,8 @@ const ESTRELLAS = `<div class="estrellas" role="img" aria-label="Cinco estrellas
 // la palabra Google con sus colores, como en las tarjetas
 const GOOGLE_COLOR = `<span class="wm"><i style="color:#4285F4">G</i><i style="color:#EA4335">o</i><i style="color:#FBBC05">o</i><i style="color:#4285F4">g</i><i style="color:#34A853">l</i><i style="color:#EA4335">e</i></span>`;
 
-const OLA = `<svg class="ola" viewBox="0 0 1440 80" preserveAspectRatio="none" aria-hidden="true">
-  <path d="M0,26 C210,84 420,80 660,52 C880,26 1100,-8 1290,6 C1360,11 1405,20 1440,30 L1440,80 L0,80 Z"/>
+const OLA = `<svg class="ola" viewBox="0 0 1440 100" preserveAspectRatio="none" aria-hidden="true">
+  <path d="M0,44 C150,14 330,4 520,26 C700,47 880,88 1080,78 C1230,70 1350,46 1440,24 L1440,100 L0,100 Z"/>
 </svg>`;
 
 const BASE = `
@@ -69,16 +69,16 @@ const BASE = `
 const E1 = `
   body{background:#fff;color:#1b2333;align-items:stretch;padding:0}
   .lienzo{width:100%;display:flex;flex-direction:column;justify-content:flex-start}
-  .cabecera{position:relative;padding:52px 26px 74px;color:#fff;
+  .cabecera{position:relative;padding:52px 26px 92px;color:#fff;
     background:linear-gradient(100deg,#FBBC05 0%,#F79B1E 17%,#F0592B 35%,#EA4335 52%,#A93BC0 75%,#4285F4 100%)}
   .cabecera::after{content:"";position:absolute;inset:0;pointer-events:none;
     background:radial-gradient(120% 80% at 50% -12%,rgba(255,255,255,.22),transparent 62%)}
   .cabecera > *{position:relative;z-index:1}
   .cabecera h1{text-transform:uppercase;font-size:25px;letter-spacing:.005em;
     text-shadow:0 2px 12px rgba(0,0,0,.16);max-width:16ch;margin:0 auto}
-  .ola{position:absolute;left:0;right:0;bottom:-1px;width:100%;height:66px;z-index:2}
+  .ola{position:absolute;left:0;right:0;bottom:-1px;width:100%;height:82px;z-index:2}
   .ola path{fill:#fff}
-  .cuerpo{padding:0 26px 44px;margin-top:-14px}
+  .cuerpo{position:relative;z-index:3;padding:14px 26px 44px}
   .g{width:78px;height:78px}
   .boton{background:linear-gradient(95deg,#F79B1E 0%,#EA4335 62%,#D93025 100%);color:#fff;
     box-shadow:0 14px 26px -14px rgba(234,67,53,.95);max-width:340px;margin-inline:auto}
