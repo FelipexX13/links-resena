@@ -59,7 +59,6 @@ const BASE = `
     font-weight:700;font-size:16.5px;text-decoration:none;letter-spacing:.01em;
     transition:transform .12s ease}
   .boton:active{transform:scale(.985)}
-  .otra{display:block;margin-top:15px;font-size:12px;text-decoration:underline;opacity:.55}
   .pie{margin-top:20px;font-size:9.5px;letter-spacing:.16em;opacity:.32;
     font-family:ui-monospace,"SF Mono",monospace}
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -82,7 +81,6 @@ const E1 = `
   .g{width:78px;height:78px}
   .boton{background:linear-gradient(95deg,#F79B1E 0%,#EA4335 62%,#D93025 100%);color:#fff;
     box-shadow:0 14px 26px -14px rgba(234,67,53,.95);max-width:340px;margin-inline:auto}
-  .otra{color:#66718a}
   .pie{color:#1b2333}
 `;
 
@@ -94,7 +92,6 @@ const E2 = `
     max-width:390px;width:100%;box-shadow:0 26px 60px -26px rgba(30,40,70,.45)}
   h1{font-size:24px}
   .boton{background:#1a73e8;color:#fff;box-shadow:0 12px 24px -14px rgba(26,115,232,.9)}
-  .otra{color:#66718a}
 `;
 
 /* ---------- 3 · círculo ---------- */
@@ -112,7 +109,6 @@ const E3 = `
   .negocio{margin-top:8px;font-size:13px}
   .boton{margin-top:16px;padding:13px 22px;font-size:15px;background:#1a73e8;color:#fff;
     box-shadow:0 10px 20px -12px rgba(26,115,232,.9);width:100%}
-  .otra{margin-top:11px;font-size:10.5px;color:#66718a;max-width:88%;margin-inline:auto}
   .pie{margin-top:12px}
   @media (max-height:640px){
     .aro{width:min(86vw,350px);padding:9px}
@@ -132,7 +128,6 @@ const E4 = `
   h1{text-transform:uppercase;font-size:22px;line-height:1.24}
   .negocio{opacity:.62}
   .boton{background:#FFC400;color:#12100a;box-shadow:0 14px 28px -16px rgba(255,196,0,.85)}
-  .otra{color:#cfd3dc;opacity:.6}
   .pie{color:#fff}
 `;
 
@@ -142,9 +137,6 @@ export function vistaPuente(tarjeta, codigo) {
   const estilo = estiloValido(tarjeta.estilo);
   const negocio = tarjeta.negocio
     ? `<p class="negocio">${esc(tarjeta.negocio)}</p>`
-    : "";
-  const alterno = tarjeta.alterno
-    ? `<a class="otra" href="${esc(tarjeta.alterno)}">¿No se abrió la app? Califica en el navegador</a>`
     : "";
   const boton = `<a class="boton" href="${esc(tarjeta.destino)}">Calificar en Google</a>`;
   const pie = `<div class="pie">${esc(codigo)}</div>`;
@@ -165,7 +157,6 @@ export function vistaPuente(tarjeta, codigo) {
     ${LOGO_G}
     ${negocio}
     ${boton}
-    ${alterno}
     ${pie}
   </div>
 </div>`;
@@ -176,7 +167,6 @@ export function vistaPuente(tarjeta, codigo) {
     <h1>${titulo}</h1>
     ${negocio}
     ${boton}
-    ${alterno}
   </div></div>`;
   } else {
     cuerpo = `<div class="tarjeta">
@@ -185,7 +175,6 @@ export function vistaPuente(tarjeta, codigo) {
     <h1>${titulo}</h1>
     ${negocio}
     ${boton}
-    ${alterno}
     ${pie}
   </div>`;
   }

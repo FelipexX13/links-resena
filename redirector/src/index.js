@@ -111,15 +111,8 @@ async function api(request, env, accion, url) {
       return json({ error: "El destino debe empezar por http:// o https://" }, 400);
     }
 
-    let alterno = "";
-    try {
-      const u = new URL(String(cuerpo.alterno || "").trim());
-      if (u.protocol === "https:" || u.protocol === "http:") alterno = u.href;
-    } catch (e) {}
-
     const registro = {
       destino: destino.href,
-      alterno: alterno,
       estilo: estiloValido(cuerpo.estilo),
       negocio: String(cuerpo.negocio || "").slice(0, 120),
       actualizado: new Date().toISOString(),

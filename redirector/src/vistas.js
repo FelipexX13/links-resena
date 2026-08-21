@@ -55,10 +55,6 @@ const ESTILOS = `
   .ficha b{display:block;font-size:15px;margin-bottom:6px}
   .ficha .meta{font-family:ui-monospace,monospace;font-size:11px;color:#66718a;
     margin-top:8px;word-break:break-all}
-  .opcion{display:flex;gap:9px;align-items:flex-start;font-weight:400;font-size:12.5px;
-    color:#66718a;margin:0 0 8px;cursor:pointer}
-  .opcion input{width:auto;margin-top:3px;flex:0 0 auto}
-  .opcion b{display:inline;font-size:12.5px;color:#1b2333}
 
   /* ---- selector de estilo de tarjeta ---- */
   .estilos{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:2px}
@@ -149,67 +145,12 @@ export function vistaSinConfigurar(codigo) {
 </div>`;
 }
 
-/**
- * Pantalla puente para iOS.
- *
- * iOS solo le entrega el link a la app de Google Maps si la persona lo TOCA:
- * en una redirección de servidor no dispara el Universal Link. Este botón existe
- * para dar ese toque. No se intenta navegar por JavaScript porque tampoco cuenta
- * como gesto y volveríamos al mismo problema.
- */
-export function vistaPuente(tarjeta, codigo) {
-  const negocio = tarjeta.negocio ? esc(tarjeta.negocio) : "";
-  const alterno = tarjeta.alterno
-    ? `<a class="otra" href="${esc(tarjeta.alterno)}">¿No se abrió la app? Califica desde el navegador</a>`
-    : "";
-  return `<!doctype html><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#EA4335">
-<title>Califícanos en Google</title>
-<style>
-  *{box-sizing:border-box}
-  html,body{margin:0;padding:0;height:100%}
-  body{background:linear-gradient(150deg,#FBBC05 0%,#F79B1E 20%,#EA4335 52%,#A93BC0 76%,#4285F4 100%);
-    color:#fff;font-family:"Inter",system-ui,-apple-system,sans-serif;
-    display:flex;align-items:center;justify-content:center;padding:28px;text-align:center;
-    -webkit-font-smoothing:antialiased}
-  .tarjeta{background:#fff;color:#1b2333;border-radius:26px;padding:34px 26px 28px;
-    max-width:380px;width:100%;box-shadow:0 30px 60px -25px rgba(15,22,40,.6)}
-  .estrellas{font-size:30px;letter-spacing:6px;color:#FFC400;line-height:1;margin-bottom:18px}
-  h1{font-size:23px;line-height:1.2;margin:0 0 8px;letter-spacing:-.02em}
-  .negocio{font-size:15px;color:#66718a;margin:0 0 24px}
-  .boton{display:block;background:linear-gradient(95deg,#F79B1E 0%,#EA4335 62%,#D93025 100%);
-    color:#fff;text-decoration:none;font-weight:700;font-size:17px;padding:16px 22px;
-    border-radius:999px;box-shadow:0 12px 22px -12px rgba(234,67,53,.9)}
-  .boton:active{transform:translateY(1px)}
-  .otra{display:block;margin-top:16px;font-size:12.5px;color:#66718a;text-decoration:underline}
-  .pie{margin-top:20px;font-size:10.5px;color:#9aa6bd;font-family:ui-monospace,monospace;
-    letter-spacing:.1em}
-</style>
-<div class="tarjeta">
-  <div class="estrellas">★★★★★</div>
-  <h1>¿Nos dejas tu calificación?</h1>
-  <p class="negocio">${negocio || "Toca el botón y califícanos en Google"}</p>
-  <a class="boton" href="${esc(tarjeta.destino)}">Calificar en Google</a>
-  ${alterno}
-  <div class="pie">${esc(codigo)}</div>
-</div>`;
-}
-
 const SCRIPT_PANEL = String.raw`
 const $ = (id) => document.getElementById(id);
 let TARJETAS = [];
 let focoPrevio = null;
-let URL_WEB = "";
-let URL_APP = "";
 let ESTILO = 1;
 const NOMBRE_ESTILO = { 1: "Ola", 2: "Pastel", 3: "Círculo", 4: "Oscuro" };
-
-function aplicarFormato() {
-  const usarApp = document.querySelector("input[name=formato]:checked").value === "app";
-  $("fichaReview").value = usarApp && URL_APP ? URL_APP : URL_WEB;
-  $("ficha").hidden = false;
-}
 
 function escHtml(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
@@ -265,26 +206,6 @@ $("salir").onclick = async () => {
 
 /* ---------- lectura de la URL de Google Maps ---------- */
 
-// El Place ID de Google es un protobuf corto en base64url:
-//   0A 12 09 <cell id little endian> 11 <feature id little endian>
-// El prefijo "ChIJ" que todos reconocen es la codificación de esos tres bytes.
-// Derivarlo del hexadecimal nos deja armar el link de reseña que funciona en la
-// web, sin depender de que el celular le pase el link a la app de Maps.
-function ftidAPlaceId(ftid) {
-  const partes = ftid.split(":");
-  const bytes = [0x0a, 0x12, 0x09];
-  const meter = (hex) => {
-    let v = BigInt(hex);
-    for (let i = 0; i < 8; i++) { bytes.push(Number(v & 255n)); v >>= 8n; }
-  };
-  meter(partes[0]);
-  bytes.push(0x11);
-  meter(partes[1]);
-  let s = "";
-  for (const b of bytes) s += String.fromCharCode(b);
-  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
 function analizarMaps(crudo) {
   const url = String(crudo || "").trim();
   if (!url) return { error: "Pega la URL de Google Maps del negocio." };
@@ -305,36 +226,18 @@ function analizarMaps(crudo) {
     const ftid = ft[1].toLowerCase();
     let cid = "";
     try { cid = BigInt(ftid.split(":")[1]).toString(); } catch (e) {}
-    let placeId = "";
-    try { placeId = ftidAPlaceId(ftid); } catch (e) {}
-    if (!placeId) {
-      return { error: "No se pudo derivar el Place ID de esa URL. Prueba con otra URL del mismo negocio." };
-    }
     return {
       negocio: negocio,
       ftid: ftid,
       cid: cid,
-      placeId: placeId,
-      // web pura: no necesita la app, pero pide sesión de Google en ese navegador
-      review: "https://search.google.com/local/writereview?placeid=" + placeId,
-      // abre el cuadro de calificación dentro de la app de Maps, que ya tiene sesión.
-      // iOS solo le pasa el link a la app si el usuario lo toca: en una redirección
-      // de servidor no dispara el Universal Link y se queda en la web móvil.
-      reviewApp: "https://www.google.com/maps/place//data=!4m3!3m2!1s" + ftid + "!12e1",
+      // abre el cuadro de calificación dentro de la app de Maps, que ya tiene sesión
+      review: "https://www.google.com/maps/place//data=!4m3!3m2!1s" + ftid + "!12e1",
     };
   }
 
   const cd = url.match(/(?:[?&](?:lu)?cid=)(\d{5,})/i);
   if (cd) {
     return { error: "Esa URL solo trae el CID, no el identificador completo. Abre la ficha del negocio en Google Maps y copia la URL larga de la barra de direcciones." };
-  }
-
-  const pid = url.match(/\b(ChI[0-9A-Za-z_-]{10,})\b/);
-  if (pid) {
-    return {
-      negocio: negocio,
-      review: "https://search.google.com/local/writereview?placeid=" + pid[1],
-    };
   }
 
   return { error: "No se encontró el identificador del negocio en esa URL. Abre su ficha en Google Maps (clic en el nombre del lugar) y copia la URL completa." };
@@ -349,12 +252,9 @@ $("analizar").onclick = () => {
   }
   limpiarAviso("aviso");
   $("fichaNombre").textContent = r.negocio || "Negocio sin nombre en la URL";
-  URL_WEB = r.review;
-  URL_APP = r.reviewApp || "";
-  $("elegirFormato").hidden = !URL_APP;
-  aplicarFormato();
+  $("fichaReview").value = r.review;
+  $("ficha").hidden = false;
   const bits = [];
-  if (r.placeId) bits.push("Place ID: " + r.placeId);
   if (r.ftid) bits.push("ID: " + r.ftid);
   if (r.cid) bits.push("CID: " + r.cid);
   $("fichaMeta").textContent = bits.join("  ·  ");
@@ -378,8 +278,6 @@ $("guardar").onclick = async () => {
         codigo: $("codigo").value,
         negocio: $("negocio").value,
         destino: destino,
-        // el otro formato, que la pantalla de iPhone ofrece como salida alterna
-        alterno: destino === URL_WEB ? URL_APP : URL_WEB,
         estilo: ESTILO,
       }),
     });
@@ -399,20 +297,13 @@ function editar(codigo) {
   const t = TARJETAS.filter((x) => x.codigo === codigo)[0];
   if (!t) return;
 
-  // el destino guardado puede ser cualquiera de los dos formatos
-  const esWeb = /writereview/.test(t.destino || "");
-  URL_WEB = esWeb ? t.destino : (t.alterno || "");
-  URL_APP = esWeb ? (t.alterno || "") : t.destino;
-
   $("codigo").value = t.codigo;
   $("negocio").value = t.negocio || "";
   $("maps").value = "";
   $("fichaNombre").textContent = t.negocio || t.codigo;
   $("fichaMeta").textContent = "";
-  $("elegirFormato").hidden = !(URL_WEB && URL_APP);
-  document.querySelector("input[name=formato][value=" + (esWeb ? "web" : "app") + "]").checked = true;
-  aplicarFormato();
-  if (!$("fichaReview").value) $("fichaReview").value = t.destino;
+  $("fichaReview").value = t.destino;
+  $("ficha").hidden = false;
 
   ESTILO = parseInt(t.estilo, 10) || 1;
   document.querySelectorAll("#estilos .estilo").forEach((d) => {
@@ -431,7 +322,6 @@ function salirDeEdicion() {
   $("codigo").value = $("negocio").value = $("maps").value = "";
   $("ficha").hidden = true;
   $("fichaReview").value = "";
-  URL_WEB = URL_APP = "";
 }
 
 $("cancelarEd").onclick = () => { salirDeEdicion(); limpiarAviso("aviso"); };
@@ -473,16 +363,11 @@ function pintarTabla() {
   let filas = "";
   lista.forEach((t) => {
     const c = escHtml(t.codigo);
-    // el formato viejo depende de que el celular le pase el link a la app de Maps
-    const viejo = /\/maps\/place\/\/data=/.test(t.destino || "");
-    const marca = viejo
-      ? "<br><span style='color:#a8261b;font-size:10.5px'>formato app · en iPhone puede quedarse en la ficha</span>"
-      : "";
     filas +=
       "<tr><td class='mono'><b>" + c + "</b><br><span style='color:#66718a'>" +
       escHtml(HOST) + "/" + c + "</span></td><td>" + (escHtml(t.negocio) || "—") +
       "<br><span class='etiqueta'>" + (NOMBRE_ESTILO[t.estilo] || "Ola") + "</span>" +
-      "</td><td class='mono' style='font-size:11px'>" + escHtml(t.destino) + marca +
+      "</td><td class='mono' style='font-size:11px'>" + escHtml(t.destino) +
       "</td><td><button class='gris' data-editar='" + c + "'>Editar</button>" +
       "<button class='gris' data-ver='" + c + "'>Ver</button>" +
       "<button class='gris' data-qr='" + c + "'>QR</button>" +
@@ -495,10 +380,6 @@ function pintarTabla() {
     ? lista.length + " de " + TARJETAS.length
     : TARJETAS.length + (TARJETAS.length === 1 ? " tarjeta" : " tarjetas");
 }
-
-document.querySelectorAll("input[name=formato]").forEach((r) => {
-  r.addEventListener("change", aplicarFormato);
-});
 
 $("estilos").addEventListener("click", (e) => {
   const caja = e.target.closest("[data-estilo]");
@@ -654,17 +535,6 @@ export function vistaAdmin(origen) {
 
     <div class="ficha" id="ficha" hidden>
       <b id="fichaNombre"></b>
-
-      <div id="elegirFormato" hidden>
-        <label style="margin-top:4px">A dónde manda la tarjeta</label>
-        <label class="opcion"><input type="radio" name="formato" value="web" checked>
-          <span><b>Web de Google.</b> No necesita la app instalada, pero pide sesión
-          de Google en ese navegador.</span></label>
-        <label class="opcion"><input type="radio" name="formato" value="app">
-          <span><b>App de Google Maps.</b> Más directo si la app está instalada y ya
-          tiene sesión. En iPhone puede quedarse en la web, porque iOS no le pasa a
-          la app los links a los que llega por redirección.</span></label>
-      </div>
 
       <label for="fichaReview">Link de reseña que va a quedar en la tarjeta</label>
       <input id="fichaReview" readonly>

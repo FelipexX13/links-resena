@@ -143,27 +143,16 @@ ella, **todas las sesiones abiertas quedan invalidadas al instante**.
   siempre: si algún día repunteas una tarjeta, los celulares que ya la escanearon
   seguirían yendo al destino viejo y no habría forma de arreglarlo desde el servidor.
   Por lo mismo va `Cache-Control: no-store`.
-- **Hay dos formatos de destino y el panel deja elegir.** No son equivalentes:
+- **El destino siempre es `google.com/maps/place//data=…!12e1`.** Ese link abre el
+  cuadro de calificación dentro de la app de Google Maps, donde la persona ya
+  tiene sesión iniciada: es el camino más corto a la reseña.
 
-  | Formato | Cómo abre la reseña | Dónde falla |
-  |---|---|---|
-  | `search.google.com/local/writereview?placeid=…` | web pura, sin app | pide sesión de Google si ese navegador no la tiene |
-  | `google.com/maps/place//data=…!12e1` | dentro de la app de Maps, que ya tiene sesión | en iPhone puede quedarse en la web y mostrar solo la ficha |
+  Hubo una versión que además ofrecía `search.google.com/local/writereview`, para
+  esquivar el problema de iOS. Dejó de hacer falta cuando apareció la pantalla con
+  botón: el toque abre la app igual. Si alguna vez se necesita, está en el
+  historial de git — incluida la derivación del Place ID a partir del
+  identificador hexadecimal.
 
-  La causa de lo segundo no es el link: abierto directo en iOS funciona. Es que
-  **iOS no le pasa a la app un link al que llegó por una redirección de servidor**
-  — los Universal Links de Apple necesitan que el usuario toque el enlace. Como
-  la tarjeta siempre llega por un 307 desde este Worker, en iPhone se queda en la
-  web móvil, que ignora el `!12e1`. En Android el App Link sí se dispara.
-
-  Para el formato web, el panel **deriva el Place ID** del identificador
-  hexadecimal de la URL de Maps: es un protobuf corto en base64url,
-  `0A 12 09 <cell id LE> 11 <feature id LE>`, y el prefijo `ChIJ` no es más que la
-  codificación de esos tres primeros bytes. Verificado contra Google Maps: el ID
-  derivado resuelve al negocio correcto, y cambiándole un carácter deja de
-  resolver.
-
-  Las tarjetas guardadas con el formato de app salen marcadas en la tabla.
 - **En iPhone se sirve una pantalla con un botón en vez de redirigir.** No es
   capricho: iOS solo le entrega el link a la app de Google Maps si la persona lo
   **toca**, y una redirección de servidor no cuenta como gesto. Sin ese toque,
@@ -171,8 +160,8 @@ ella, **todas las sesiones abiertas quedan invalidadas al instante**.
   link abierto directo sí abre la app. Android no lo necesita porque su App Link
   sí se dispara con la redirección, así que allá sigue el 307 instantáneo.
 
-  La pantalla muestra el nombre del negocio, un botón grande al destino de la
-  tarjeta y, debajo, el otro formato como salida por si la app no está instalada.
+  La pantalla muestra el nombre del negocio y un botón grande al destino, en el
+  estilo de tarjeta que el local tenga elegido.
 
 - **El destino se valida**: solo se aceptan URLs `http:` o `https:`, para que el
   panel no pueda convertirse en un trampolín hacia `javascript:` u otros esquemas.
