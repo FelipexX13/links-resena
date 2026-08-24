@@ -2,7 +2,7 @@
  * Redireccionador de tarjetas de reseña — Cloudflare Worker
  *
  *   GET  /             página informativa
- *   GET  /A7K2         307 al link de reseña de esa tarjeta
+ *   GET  /A7K2         pantalla con el botón que abre la reseña
  *   GET  /admin        login + panel para activar tarjetas
  *
  *   POST /api/login    {clave} → cookie de sesión firmada
@@ -46,21 +46,16 @@ export default {
     const tarjeta = await env.TARJETAS.get("c:" + codigo, "json");
     if (!tarjeta || !tarjeta.destino) return html(vistaSinConfigurar(codigo), 404);
 
-    // En iOS, los Universal Links solo se disparan si la persona TOCA el enlace:
-    // una redirección de servidor no cuenta, así que Safari se queda en la web
-    // móvil de Maps y el !12e1 se ignora. Por eso al iPhone se le sirve una
-    // pantalla con un botón — ese toque sí abre la app. Android no lo necesita:
-    // su App Link sí se dispara con la redirección.
-    if (esIOS(request.headers.get("user-agent")) || url.searchParams.has("ver")) {
-      return html(vistaPuente(tarjeta, codigo));
-    }
-
-    // 307 (temporal) a propósito: un 301 se cachea en el navegador casi para
-    // siempre y dejaría la tarjeta clavada en el destino viejo si la repunteas.
-    return new Response(null, {
-      status: 307,
-      headers: { Location: tarjeta.destino, "Cache-Control": "no-store" },
-    });
+    // Nunca se redirige: se sirve una pantalla con un botón.
+    //
+    // Ni iOS ni Android le entregan el link a la app de Google Maps cuando se
+    // llega por un salto de servidor. En iOS el Universal Link exige que una
+    // persona toque el enlace; en Android el intent se resuelve al abrir la URL
+    // y el navegador no lo vuelve a resolver en mitad de una redirección, así
+    // que se queda renderizando la web de Maps y el !12e1 se ignora.
+    //
+    // El botón da ese toque, que es lo único que abre la app en ambos.
+    return html(vistaPuente(tarjeta, codigo));
   },
 };
 
@@ -215,12 +210,6 @@ function leerCookie(request, nombre) {
 }
 
 /* ---------- utilidades ---------- */
-
-// iPadOS 13+ se anuncia como Macintosh, pero para un QR de mostrador el caso
-// que importa es el iPhone.
-function esIOS(ua) {
-  return /iPhone|iPad|iPod/i.test(String(ua || ""));
-}
 
 function normalizar(s) {
   const c = String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");

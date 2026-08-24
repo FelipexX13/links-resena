@@ -9,7 +9,7 @@ cuando quieras, sin reimprimir nada.
 | Ruta | Qué hace | Acceso |
 |---|---|---|
 | `/` | Página informativa | público |
-| `/A7K2` | Redirige 307 al link de reseña — en iPhone, pantalla con botón | público |
+| `/A7K2` | Pantalla con el botón que abre la reseña | público |
 | `/admin` | Login y panel de tarjetas | público, pero sin datos hasta iniciar sesión |
 | `/api/login`, `/api/salir`, `/api/sesion` | Manejo de la sesión | público |
 | `/api/lista`, `/api/guardar`, `/api/borrar` | Leer y modificar tarjetas | **requiere sesión** |
@@ -139,10 +139,16 @@ ella, **todas las sesiones abiertas quedan invalidadas al instante**.
 
 ## Decisiones que conviene no cambiar
 
-- **La redirección es 307, no 301.** Un 301 se cachea en el navegador casi para
-  siempre: si algún día repunteas una tarjeta, los celulares que ya la escanearon
-  seguirían yendo al destino viejo y no habría forma de arreglarlo desde el servidor.
-  Por lo mismo va `Cache-Control: no-store`.
+- **Nunca se redirige: siempre se sirve una pantalla con un botón.** Ni iOS ni
+  Android le entregan el link a la app de Google Maps cuando se llega por un salto
+  de servidor. En iOS el Universal Link exige que una persona **toque** el enlace.
+  En Android el intent se resuelve al abrir la URL, y el navegador no lo vuelve a
+  resolver en mitad de una redirección: sigue el salto él mismo y termina
+  renderizando la web de Maps, que ignora el `!12e1`.
+
+  Comprobado en los dos, y con las dos entradas — QR y NFC. El botón da ese toque,
+  que es lo único que abre la app. Como no hay redirección, tampoco hay riesgo de
+  que un 301 mal puesto deje una tarjeta clavada en un destino viejo.
 - **El destino siempre es `google.com/maps/place//data=…!12e1`.** Ese link abre el
   cuadro de calificación dentro de la app de Google Maps, donde la persona ya
   tiene sesión iniciada: es el camino más corto a la reseña.
@@ -153,15 +159,9 @@ ella, **todas las sesiones abiertas quedan invalidadas al instante**.
   historial de git — incluida la derivación del Place ID a partir del
   identificador hexadecimal.
 
-- **En iPhone se sirve una pantalla con un botón en vez de redirigir.** No es
-  capricho: iOS solo le entrega el link a la app de Google Maps si la persona lo
-  **toca**, y una redirección de servidor no cuenta como gesto. Sin ese toque,
-  Safari se queda en la web móvil y el `!12e1` se ignora — comprobado: el mismo
-  link abierto directo sí abre la app. Android no lo necesita porque su App Link
-  sí se dispara con la redirección, así que allá sigue el 307 instantáneo.
-
-  La pantalla muestra el nombre del negocio y un botón grande al destino, en el
-  estilo de tarjeta que el local tenga elegido.
+- **En el NFC va la URL corta de la tarjeta, no el link de Google.** Si se graba
+  el link de Google directo, el tag deja de ser reasignable y además se topa con
+  lo mismo: el lanzamiento desde NFC no cuenta como toque, así que abre la web.
 
 - **El destino se valida**: solo se aceptan URLs `http:` o `https:`, para que el
   panel no pueda convertirse en un trampolín hacia `javascript:` u otros esquemas.
