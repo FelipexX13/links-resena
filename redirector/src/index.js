@@ -2,7 +2,7 @@
  * Redireccionador de tarjetas de reseña — Cloudflare Worker
  *
  *   GET  /             página informativa
- *   GET  /A7K2         Android: 302 a intent:// · resto: pantalla con botón
+ *   GET  /A7K2         pantalla con el botón que abre la reseña
  *   GET  /admin        login + panel para activar tarjetas
  *
  *   POST /api/login    {clave} → cookie de sesión firmada
@@ -46,22 +46,15 @@ export default {
     const tarjeta = await env.TARJETAS.get("c:" + codigo, "json");
     if (!tarjeta || !tarjeta.destino) return html(vistaSinConfigurar(codigo), 404);
 
-    // En Android con navegador Chromium se salta la pantalla: se redirige a un
-    // URI intent://, que nombra el paquete de Maps y por tanto no depende de la
-    // verificación de dominio ni de que el usuario toque nada. Es el mismo
-    // mecanismo que usan los servicios de deep link.
+    // Nunca se redirige: se sirve una pantalla con un botón.
     //
-    // Al resto se le sirve la pantalla con el botón, porque:
-    //   · iOS no tiene equivalente — el Universal Link exige un toque real
-    //   · Firefox y varios navegadores dentro de apps no entienden intent:// y
-    //     mostrarían un error de esquema desconocido en vez de abrir la app
-    if (aceptaIntent(request.headers.get("user-agent"))) {
-      return new Response(null, {
-        status: 302,
-        headers: { Location: urlIntent(tarjeta.destino), "Cache-Control": "no-store" },
-      });
-    }
-
+    // Ni iOS ni Android le entregan el link a la app de Google Maps cuando se
+    // llega por un salto de servidor. En iOS el Universal Link exige que una
+    // persona toque el enlace; en Android el intent se resuelve al abrir la URL
+    // y el navegador no lo vuelve a resolver en mitad de una redirección, así
+    // que se queda renderizando la web de Maps y el !12e1 se ignora.
+    //
+    // El botón da ese toque, que es lo único que abre la app en ambos.
     return html(vistaPuente(tarjeta));
   },
 };
@@ -217,29 +210,6 @@ function leerCookie(request, nombre) {
 }
 
 /* ---------- utilidades ---------- */
-
-// Chromium en Android. Se excluyen Firefox, que no implementa intent://, y los
-// navegadores incrustados en apps (Instagram, Facebook, TikTok y demás WebViews),
-// donde el esquema depende de que la app lo intercepte y a menudo no lo hace.
-function aceptaIntent(ua) {
-  const u = String(ua || "");
-  if (!/Android/i.test(u)) return false;
-  if (/Firefox|FxiOS|; ?wv\)/i.test(u)) return false;
-  if (/FBAN|FBAV|FB_IAB|Instagram|musical_ly|Bytedance|TikTok|Line\/|MicroMessenger|OKApp/i.test(u)) return false;
-  return /Chrome\/|CriOS|SamsungBrowser|EdgA|OPR\//i.test(u);
-}
-
-// intent://HOST/RUTA#Intent;scheme=…;package=…;S.browser_fallback_url=…;end
-// El respaldo se usa si Maps no está instalado: Chrome abre esa URL en vez de
-// quedarse en una página en blanco.
-function urlIntent(destino) {
-  const u = new URL(destino);
-  return "intent://" + u.host + u.pathname + u.search +
-    "#Intent;scheme=" + u.protocol.replace(":", "") +
-    ";package=com.google.android.apps.maps" +
-    ";S.browser_fallback_url=" + encodeURIComponent(destino) +
-    ";end";
-}
 
 function normalizar(s) {
   const c = String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");

@@ -9,7 +9,7 @@ cuando quieras, sin reimprimir nada.
 | Ruta | Qué hace | Acceso |
 |---|---|---|
 | `/` | Página informativa | público |
-| `/A7K2` | Android: 302 a `intent://` · resto: pantalla con botón | público |
+| `/A7K2` | Pantalla con el botón que abre la reseña | público |
 | `/admin` | Login y panel de tarjetas | público, pero sin datos hasta iniciar sesión |
 | `/api/login`, `/api/salir`, `/api/sesion` | Manejo de la sesión | público |
 | `/api/lista`, `/api/guardar`, `/api/borrar` | Leer y modificar tarjetas | **requiere sesión** |
@@ -139,26 +139,30 @@ ella, **todas las sesiones abiertas quedan invalidadas al instante**.
 
 ## Decisiones que conviene no cambiar
 
-- **Android va directo con `intent://`; el resto ve una pantalla con un botón.**
-  Redirigir a la URL `https` no abre la app en ninguno de los dos sistemas: el
-  traspaso se decide al abrir la URL y el navegador no lo vuelve a resolver en
-  mitad de un salto, así que termina renderizando la web de Maps, que ignora el
-  `!12e1`.
+- **Nunca se redirige: siempre se sirve una pantalla con un botón.** Ni iOS ni
+  Android le entregan el link a la app de Google Maps cuando se llega por un salto
+  de servidor. En iOS el Universal Link exige que una persona **toque** el enlace.
+  En Android el intent se resuelve al abrir la URL, y el navegador no lo vuelve a
+  resolver en mitad de una redirección: sigue el salto él mismo y termina
+  renderizando la web de Maps, que ignora el `!12e1`.
 
-  En Android la salida es el URI `intent://`, que nombra el paquete de Maps: no
-  depende de la verificación de dominio ni de un toque. Es el mismo mecanismo de
-  los servicios de deep link. Lleva `S.browser_fallback_url`, así que si Maps no
-  está instalado Chrome abre la web en vez de quedarse en blanco.
+  Comprobado en los dos, y con las dos entradas — QR y NFC. El botón da ese toque,
+  que es lo único que abre la app. Como no hay redirección, tampoco hay riesgo de
+  que un 301 mal puesto deje una tarjeta clavada en un destino viejo.
 
-  Se manda solo a Chromium en Android. **Firefox no implementa `intent://`** y los
-  navegadores dentro de apps (Instagram, Facebook, TikTok) dependen de que la app
-  intercepte el esquema; a todos ellos, y a iOS, se les sirve la pantalla. En iOS
-  no hay equivalente: el Universal Link exige que una persona toque el enlace, y
-  `comgooglemaps://` no tiene acción de reseña.
+  **Dos intentos de quitar ese toque, los dos fallidos y comprobados en teléfono:**
 
-  Descartado por el camino: el **AAR** (Android Application Record) en el tag NFC.
-  Abre Maps, pero en su pantalla principal — Maps no registra ninguna actividad
-  para eventos NFC, así que Android lanza la app y ya. Comprobado en dispositivo.
+  - **AAR** (Android Application Record) en el tag NFC. Abre Maps, pero en su
+    pantalla principal: Maps no registra ninguna actividad para eventos NFC, así
+    que Android se limita a lanzar la app.
+  - **Redirección a un URI `intent://`**, el mecanismo de los servicios de deep
+    link. Chrome bloquea el salto a un esquema externo cuando viene de una
+    redirección sin gesto del usuario, y cae al `browser_fallback_url`: el cliente
+    termina en la web de Maps, peor que la pantalla propia.
+
+  La prueba de que es un techo de la plataforma y no de este código: la web de
+  Google Maps, en el dominio de Google, tampoco abre su propia app sola — muestra
+  un diálogo pidiendo que toques "Continuar".
 - **El destino siempre es `google.com/maps/place//data=…!12e1`.** Ese link abre el
   cuadro de calificación dentro de la app de Google Maps, donde la persona ya
   tiene sesión iniciada: es el camino más corto a la reseña.
