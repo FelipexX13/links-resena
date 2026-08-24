@@ -2,7 +2,7 @@
  * Redireccionador de tarjetas de reseña — Cloudflare Worker
  *
  *   GET  /             página informativa
- *   GET  /A7K2         pantalla con el botón que abre la reseña
+ *   GET  /A7K2         QR en Android: 307 · NFC (?n) e iOS: pantalla con botón
  *   GET  /admin        login + panel para activar tarjetas
  *
  *   POST /api/login    {clave} → cookie de sesión firmada
@@ -46,15 +46,32 @@ export default {
     const tarjeta = await env.TARJETAS.get("c:" + codigo, "json");
     if (!tarjeta || !tarjeta.destino) return html(vistaSinConfigurar(codigo), 404);
 
-    // Nunca se redirige: se sirve una pantalla con un botón.
+    // Lo que decide si la app se abre sola es de dónde viene la navegación, no
+    // el sistema:
     //
-    // Ni iOS ni Android le entregan el link a la app de Google Maps cuando se
-    // llega por un salto de servidor. En iOS el Universal Link exige que una
-    // persona toque el enlace; en Android el intent se resuelve al abrir la URL
-    // y el navegador no lo vuelve a resolver en mitad de una redirección, así
-    // que se queda renderizando la web de Maps y el !12e1 se ignora.
+    //   · QR   → la persona toca el resultado del escaneo. Ese gesto viaja con la
+    //            navegación, así que Chrome le entrega el link a la app de Maps
+    //            al seguir la redirección. Entra directo al cuadro de estrellas.
+    //   · NFC  → Android lanza el navegador sin gesto. Chrome sigue el salto él
+    //            mismo y termina renderizando la web de Maps, que ignora el !12e1.
     //
-    // El botón da ese toque, que es lo único que abre la app en ambos.
+    // Por eso el tag NFC lleva ?n en su URL y el QR no: así el mismo código sirve
+    // a las dos entradas y cada una recibe lo que le funciona.
+    const desdeNFC = url.searchParams.has("n");
+    const esAndroid = /Android/i.test(request.headers.get("user-agent") || "");
+
+    if (esAndroid && !desdeNFC) {
+      // 307 y no 301: un 301 se cachea en el navegador casi para siempre y
+      // dejaría la tarjeta clavada en el destino viejo al repuntearla.
+      return new Response(null, {
+        status: 307,
+        headers: { Location: tarjeta.destino, "Cache-Control": "no-store" },
+      });
+    }
+
+    // Todo lo demás recibe la pantalla con el botón: ese toque es lo único que
+    // abre la app entrando por NFC, y en iOS es lo único que la abre nunca —
+    // ahí el Universal Link exige un toque real de la persona.
     return html(vistaPuente(tarjeta));
   },
 };

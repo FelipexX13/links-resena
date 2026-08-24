@@ -139,7 +139,20 @@ ella, **todas las sesiones abiertas quedan invalidadas al instante**.
 
 ## Decisiones que conviene no cambiar
 
-- **Nunca se redirige: siempre se sirve una pantalla con un botón.** Ni iOS ni
+- **El QR y el NFC llevan URLs distintas, y por eso reciben cosas distintas.**
+  Lo que decide si la app se abre sola no es el sistema, sino de dónde viene la
+  navegación:
+
+  | Entrada | Qué pasa |
+  |---|---|
+  | **QR** | la persona toca el resultado del escaneo; ese gesto viaja con la navegación, así que Chrome le entrega el link a la app al seguir el 307 |
+  | **NFC** | Android lanza el navegador sin gesto; Chrome sigue el salto él mismo y renderiza la web de Maps, que ignora el `!12e1` |
+
+  Por eso el tag lleva `?n` en su URL y el QR no. El panel muestra las dos al
+  abrir el QR de una tarjeta. En iOS todo va a la pantalla: allá el Universal
+  Link exige un toque real de la persona, venga de donde venga.
+
+- **La pantalla con el botón es lo que salva las entradas sin gesto.** Ni iOS ni
   Android le entregan el link a la app de Google Maps cuando se llega por un salto
   de servidor. En iOS el Universal Link exige que una persona **toque** el enlace.
   En Android el intent se resuelve al abrir la URL, y el navegador no lo vuelve a

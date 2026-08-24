@@ -116,6 +116,11 @@ const ESTILOS = `
     letter-spacing:.06em;text-transform:uppercase;color:#4285F4;text-decoration:none;
     border:1.5px solid #e5e9f2;border-radius:999px;padding:5px 13px}
   .qr-dl:hover{border-color:#4285F4;background:#f1f6ff}
+  .nfc{margin-top:20px;padding-top:16px;border-top:1px solid #e5e9f2;text-align:center}
+  .nfc b{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:#66718a;margin-bottom:9px}
+  .nfc .qr-url{font-size:11.5px}
+  .nfc button{margin-top:10px}
   .qr-url{text-align:center;font-family:ui-monospace,monospace;font-size:12px;
     color:#1b2333;background:#f7f9fd;border:1px solid #e5e9f2;border-radius:10px;
     padding:8px 12px;display:inline-block;word-break:break-all}
@@ -464,6 +469,7 @@ function abrirQR(codigo) {
   const url = (ORIGEN + "/" + codigo).toUpperCase();
   $("qrTitulo").textContent = "QR de la tarjeta " + codigo;
   $("qrUrl").textContent = url;
+  $("nfcUrl").textContent = ORIGEN + "/" + codigo + "?n=1";
 
   if (typeof qrcode === "undefined") {
     $("qrPar").innerHTML = "<p>No se pudo cargar el generador de QR. Revisa tu conexión y recarga la página.</p>";
@@ -491,6 +497,17 @@ function cerrarQR() {
   if (focoPrevio && focoPrevio.focus) focoPrevio.focus();
   focoPrevio = null;
 }
+
+$("copiarNfc").onclick = async () => {
+  const b = $("copiarNfc");
+  try {
+    await navigator.clipboard.writeText($("nfcUrl").textContent);
+    b.textContent = "Copiado";
+    setTimeout(() => { b.textContent = "Copiar"; }, 1500);
+  } catch (e) {
+    avisar("aviso", "No se pudo copiar: seleccióna la URL a mano.", false);
+  }
+};
 
 $("cerrarQR").onclick = cerrarQR;
 $("modalQR").addEventListener("click", (e) => {
@@ -596,6 +613,12 @@ export function vistaAdmin(origen) {
     <div style="text-align:center"><span class="qr-url" id="qrUrl"></span></div>
     <div class="qr-pair" id="qrPar"></div>
     <p class="mono" style="text-align:center;font-size:11px;margin:16px 0 0" id="qrDato"></p>
+
+    <div class="nfc">
+      <b>Para grabar en el tag NFC</b>
+      <span class="qr-url" id="nfcUrl"></span>
+      <div><button class="gris" id="copiarNfc">Copiar</button></div>
+    </div>
   </div>
 </div>
 
