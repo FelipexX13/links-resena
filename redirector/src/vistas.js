@@ -150,6 +150,7 @@ const $ = (id) => document.getElementById(id);
 let TARJETAS = [];
 let focoPrevio = null;
 let ESTILO = 2;
+let NOMBRE_AUTO = "";
 const NOMBRE_ESTILO = { 1: "Ola", 2: "Pastel", 3: "Círculo", 4: "Oscuro" };
 
 function escHtml(s) {
@@ -253,13 +254,19 @@ $("analizar").onclick = () => {
   limpiarAviso("aviso");
   $("fichaNombre").textContent = r.negocio || "Negocio sin nombre en la URL";
   $("fichaReview").value = r.review;
-  $("ficha").hidden = false;
   const bits = [];
   if (r.ftid) bits.push("ID: " + r.ftid);
   if (r.cid) bits.push("CID: " + r.cid);
   $("fichaMeta").textContent = bits.join("  ·  ");
   $("ficha").hidden = false;
-  if (!$("negocio").value.trim() && r.negocio) $("negocio").value = r.negocio;
+
+  // al editar, el campo viene con el nombre anterior: si esta URL es de otro
+  // local hay que actualizarlo, pero sin pisar un nombre escrito a mano
+  const actual = $("negocio").value.trim();
+  if (r.negocio && (!actual || actual === NOMBRE_AUTO)) {
+    $("negocio").value = r.negocio;
+    NOMBRE_AUTO = r.negocio;
+  }
 };
 
 /* ---------- alta de tarjetas ---------- */
@@ -299,6 +306,7 @@ function editar(codigo) {
 
   $("codigo").value = t.codigo;
   $("negocio").value = t.negocio || "";
+  NOMBRE_AUTO = t.negocio || "";   // lo puso el panel, no la persona
   $("maps").value = "";
   $("fichaNombre").textContent = t.negocio || t.codigo;
   $("fichaMeta").textContent = "";
@@ -322,6 +330,7 @@ function salirDeEdicion() {
   $("codigo").value = $("negocio").value = $("maps").value = "";
   $("ficha").hidden = true;
   $("fichaReview").value = "";
+  NOMBRE_AUTO = "";
 }
 
 $("cancelarEd").onclick = () => { salirDeEdicion(); limpiarAviso("aviso"); };
