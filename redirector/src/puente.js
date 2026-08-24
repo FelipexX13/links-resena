@@ -64,8 +64,6 @@ const BASE = `
   .boton:active{opacity:.85}
   /* decir a dónde lleva y que no se pide nada es lo que quita el olor a fraude */
   .nota{font-size:12px;line-height:1.45;margin:14px auto 0;max-width:30ch;opacity:.55}
-  .pie{margin-top:16px;font-size:10px;letter-spacing:.12em;opacity:.3;
-    font-family:ui-monospace,"SF Mono",monospace}
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 `;
 
@@ -85,7 +83,6 @@ const E1 = `
   .g{width:66px;height:66px}
   h1{margin-top:14px}
   .boton{background:#1a73e8;color:#fff;max-width:340px;margin-inline:auto}
-  .pie{color:#202124}
 `;
 
 /* ---------- 2 · pastel ---------- */
@@ -112,7 +109,6 @@ const E3 = `
   .pregunta{font-size:13.5px;margin-top:6px}
   .boton{margin-top:16px;padding:12px 22px;font-size:15px;background:#1a73e8;color:#fff;width:100%}
   .nota{font-size:11px;margin-top:10px;max-width:26ch}
-  .pie{margin-top:10px}
   @media (max-height:660px){
     .aro{width:min(86vw,350px);padding:9px}
     .g{width:40px;height:40px}
@@ -132,12 +128,11 @@ const E4 = `
   .pregunta{opacity:.75}
   .nota{opacity:.5}
   .boton{background:#FFC400;color:#1a1508;font-weight:700}
-  .pie{color:#fff}
 `;
 
 const CSS = { 1: E1, 2: E2, 3: E3, 4: E4 };
 
-export function vistaPuente(tarjeta, codigo) {
+export function vistaPuente(tarjeta) {
   const estilo = estiloValido(tarjeta.estilo);
   const nombre = String(tarjeta.negocio || "").trim();
 
@@ -151,7 +146,6 @@ export function vistaPuente(tarjeta, codigo) {
   const boton = `<a class="boton" href="${esc(tarjeta.destino)}">Calificar en Google Maps</a>`;
   const nota = `<p class="nota">Se abre Google Maps para que dejes tu reseña.
     No te pedimos ningún dato.</p>`;
-  const pie = `<div class="pie">${esc(codigo)}</div>`;
 
   let cuerpo;
   if (estilo === 1) {
@@ -166,7 +160,6 @@ export function vistaPuente(tarjeta, codigo) {
     ${titulo}
     ${boton}
     ${nota}
-    ${pie}
   </div>
 </div>`;
   } else if (estilo === 3) {
@@ -186,7 +179,6 @@ export function vistaPuente(tarjeta, codigo) {
     ${pregunta}
     ${boton}
     ${nota}
-    ${pie}
   </div>`;
   }
 

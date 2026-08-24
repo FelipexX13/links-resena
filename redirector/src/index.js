@@ -55,7 +55,7 @@ export default {
     // que se queda renderizando la web de Maps y el !12e1 se ignora.
     //
     // El botón da ese toque, que es lo único que abre la app en ambos.
-    return html(vistaPuente(tarjeta, codigo));
+    return html(vistaPuente(tarjeta));
   },
 };
 
