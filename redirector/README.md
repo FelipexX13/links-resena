@@ -137,6 +137,31 @@ ella, **todas las sesiones abiertas quedan invalidadas al instante**.
 
 ---
 
+## Aguante y abuso
+
+El DDoS volumétrico lo filtra Cloudflare en el borde para todas las cuentas, plan
+gratuito incluido: no hay nada que programar contra eso.
+
+Lo que sí está expuesto son las **cuotas diarias del plan gratuito**, porque
+agotarlas deja las tarjetas sin servicio hasta el día siguiente:
+
+| Recurso | Límite diario | Consumo por visita |
+|---|---|---|
+| Peticiones a Workers | 100.000 | 1 |
+| Lecturas de KV | 100.000 | 1, **0 si la tarjeta está en caché** |
+| Escrituras de KV | 1.000 | solo al activar o borrar tarjetas |
+
+Por eso las tarjetas se leen a través de la caché del borde: un aluvión sobre el
+mismo código se resuelve sin tocar KV. Las peticiones al Worker no se pueden
+evitar — esas se cuentan igual.
+
+Lo que **no** se puede montar aquí son las reglas de rate limiting y el WAF de
+Cloudflare: necesitan una zona, y `workers.dev` no lo es. Si algún día el
+proyecto justifica un dominio propio, eso es lo primero que se desbloquea.
+
+El login ya tiene su propio freno, aparte de todo esto: ocho intentos fallidos
+por IP y quince minutos de bloqueo.
+
 ## Decisiones que conviene no cambiar
 
 - **El QR y el NFC llevan URLs distintas, y por eso reciben cosas distintas.**
