@@ -24,9 +24,11 @@ export const ESTILOS = [
   { id: 4, nombre: "Oscuro", detalle: "Negro con borde dorado" },
 ];
 
+export const ESTILO_POR_DEFECTO = 2; // pastel
+
 export function estiloValido(n) {
   const i = parseInt(n, 10);
-  return i >= 1 && i <= 4 ? i : 1;
+  return i >= 1 && i <= 4 ? i : ESTILO_POR_DEFECTO;
 }
 
 const LOGO_G = `<svg class="g" viewBox="0 0 48 48" aria-hidden="true">

@@ -149,7 +149,7 @@ const SCRIPT_PANEL = String.raw`
 const $ = (id) => document.getElementById(id);
 let TARJETAS = [];
 let focoPrevio = null;
-let ESTILO = 1;
+let ESTILO = 2;
 const NOMBRE_ESTILO = { 1: "Ola", 2: "Pastel", 3: "Círculo", 4: "Oscuro" };
 
 function escHtml(s) {
@@ -366,7 +366,7 @@ function pintarTabla() {
     filas +=
       "<tr><td class='mono'><b>" + c + "</b><br><span style='color:#66718a'>" +
       escHtml(HOST) + "/" + c + "</span></td><td>" + (escHtml(t.negocio) || "—") +
-      "<br><span class='etiqueta'>" + (NOMBRE_ESTILO[t.estilo] || "Ola") + "</span>" +
+      "<br><span class='etiqueta'>" + (NOMBRE_ESTILO[t.estilo] || "Pastel") + "</span>" +
       "</td><td class='mono' style='font-size:11px'>" + escHtml(t.destino) +
       "</td><td><button class='gris' data-editar='" + c + "'>Editar</button>" +
       "<button class='gris' data-ver='" + c + "'>Ver</button>" +
@@ -546,9 +546,9 @@ export function vistaAdmin(origen) {
 
     <label>Estilo de la tarjeta <span>— es lo que ve el cliente al escanear</span></label>
     <div class="estilos" id="estilos">
-      <div class="estilo sel" data-estilo="1"><div class="mini mini1"><span>★★★★★</span></div>
+      <div class="estilo" data-estilo="1"><div class="mini mini1"><span>★★★★★</span></div>
         <b>Ola</b><i>Degradado con onda</i></div>
-      <div class="estilo" data-estilo="2"><div class="mini mini2"><span>★★★★★</span></div>
+      <div class="estilo sel" data-estilo="2"><div class="mini mini2"><span>★★★★★</span></div>
         <b>Pastel</b><i>Marco suave</i></div>
       <div class="estilo" data-estilo="3"><div class="mini mini3"><span>★★★★★</span></div>
         <b>Círculo</b><i>Aro de colores</i></div>
