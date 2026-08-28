@@ -42,8 +42,6 @@ const ESTILOS = `
   button.accion:hover{transform:translateY(-1px);box-shadow:0 5px 12px -7px rgba(20,30,60,.55)}
   button.accion-editar{background:#4285F4}
   button.accion-editar:hover{background:#1a73e8}
-  button.accion-ver{background:#FBBC05;color:#5f4500}
-  button.accion-ver:hover{background:#f2ad00;color:#473500}
   button.accion-qr{background:#34A853}
   button.accion-qr:hover{background:#2d9247}
   button.accion-borrar{background:#EA4335;color:#fff}
@@ -56,7 +54,7 @@ const ESTILOS = `
   td{padding:10px 6px;border-bottom:1px solid #f0f3f9;vertical-align:top;overflow-wrap:anywhere}
   td:last-child{width:1%;white-space:nowrap}
   td button{padding:7px 12px;font-size:12.5px;margin-left:0}
-  .acciones{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;min-width:132px}
+  .acciones{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;min-width:196px}
   .acciones .accion{width:100%;padding-left:8px;padding-right:8px}
   .paginacion{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:16px}
   .paginas{display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap}
@@ -554,7 +552,6 @@ function pintarTabla() {
       "</td><td><div class='acciones'>" +
       "<button type='button' class='accion accion-qr' data-qr='" + c + "'>QR</button>" +
       "<button type='button' class='accion accion-editar' data-editar='" + c + "'>Editar</button>" +
-      "<button type='button' class='accion accion-ver' data-ver='" + c + "'>Ver</button>" +
       "<button type='button' class='accion accion-borrar' data-borrar='" + c + "'>Borrar</button>" +
       "</div></td></tr>";
   });
@@ -592,9 +589,6 @@ $("tabla").addEventListener("click", async (e) => {
 
   const ed = e.target.closest("[data-editar]");
   if (ed) { editar(ed.dataset.editar); return; }
-
-  const v = e.target.closest("[data-ver]");
-  if (v) { window.open("/" + v.dataset.ver + "?ver=1", "_blank", "noopener"); return; }
 
   const q = e.target.closest("[data-qr]");
   if (q) { abrirQR(q.dataset.qr); return; }
