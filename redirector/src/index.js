@@ -105,9 +105,12 @@ async function api(request, env, accion, url, ctx) {
       return json({ error: "El destino debe empezar por http:// o https://" }, 400);
     }
 
+    const negocio = String(cuerpo.negocio || "").trim().slice(0, 120);
+    if (!negocio) return json({ error: "Falta el nombre del negocio" }, 400);
+
     const registro = {
       destino: destino.href,
-      negocio: String(cuerpo.negocio || "").slice(0, 120),
+      negocio: negocio,
       actualizado: new Date().toISOString(),
     };
     await env.TARJETAS.put("c:" + codigo, JSON.stringify(registro), { metadata: registro });

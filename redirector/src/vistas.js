@@ -68,9 +68,10 @@ const ESTILOS = `
   .aviso{margin-top:14px;padding:11px 13px;border-radius:12px;font-size:13px;display:none}
   .aviso.ok{display:block;background:#e9f7ee;color:#1c6b34}
   .aviso.mal{display:block;background:#fdecea;color:#a8261b}
-  .ficha{margin-top:16px;padding:14px;border-radius:14px;background:#f7f9fd;
-    border:1px solid #e5e9f2;font-size:13px}
-  .ficha b{display:block;font-size:15px;margin-bottom:6px}
+  .ficha{margin-top:16px;padding:14px 14px 14px 15px;border-radius:14px;background:#effaf3;
+    border:1px solid #cbe9d6;border-left:4px solid #34A853;font-size:13px}
+  .ficha b{display:block;font-size:15px;margin-bottom:6px;color:#1c6b34}
+  .ficha input{background:#fff;border-color:#cbe9d6}
   .ficha .meta{font-family:ui-monospace,monospace;font-size:11px;color:#66718a;
     margin-top:8px;word-break:break-all}
   .activador{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
@@ -93,15 +94,41 @@ const ESTILOS = `
     letter-spacing:-.035em;margin:4px 34px 6px;color:#1b2333;overflow-wrap:anywhere}
   .qr-titulo{text-align:center;font-family:ui-monospace,monospace;font-size:11px;
     letter-spacing:.12em;text-transform:uppercase;color:#66718a;margin:0 0 14px}
-  .modal-cerrar{position:absolute;top:16px;right:16px;padding:0;width:32px;height:32px;
+  .modal-cerrar{position:absolute;top:16px;right:16px;z-index:2;padding:0;width:32px;height:32px;
     border-radius:50%;background:#f0f3f9;color:#66718a;font-size:15px;line-height:1}
   .modal-cerrar:hover{background:#e2e7f2;color:#1b2333}
   .modal-tarjeta{max-width:680px}
   .modal-tarjeta h1{margin-top:2px;margin-bottom:5px}
   .modal-tarjeta .modal-subtitulo{margin-bottom:18px}
-  .modal-kicker{text-transform:uppercase;font-family:ui-monospace,monospace;font-size:10px;
-    letter-spacing:.12em;color:#66718a;margin-bottom:7px}
+  .modal-kicker{display:inline-block;text-transform:uppercase;font-family:ui-monospace,monospace;
+    font-size:10px;letter-spacing:.12em;color:#1a73e8;background:#e8f0fe;
+    border-radius:999px;padding:4px 11px;margin-bottom:11px}
   .modal-acciones{justify-content:flex-end}
+  /* un velo del color de la marca detrás de la cabecera del modal */
+  .modal-tarjeta::after{content:"";position:absolute;top:5px;left:0;right:0;height:118px;
+    pointer-events:none;z-index:0;
+    background:linear-gradient(180deg,rgba(66,133,244,.09),rgba(66,133,244,0))}
+  .modal-tarjeta > *:not(.modal-cerrar){position:relative;z-index:1}
+
+  /* ---- los tres pasos del formulario, cada uno con su color ---- */
+  label.paso{display:flex;align-items:center;gap:9px;margin:18px 0 6px}
+  label.paso .n{width:21px;height:21px;border-radius:50%;flex:0 0 auto;
+    display:inline-flex;align-items:center;justify-content:center;
+    font-size:11.5px;font-weight:700;color:#fff}
+  .n1{background:#4285F4}
+  .n2{background:#EA4335}
+  .n3{background:#34A853}
+  /* el número que le toca en la secuencia */
+  .num{margin-left:auto;font-family:ui-monospace,monospace;font-weight:700;font-size:10.5px;
+    letter-spacing:.08em;text-transform:uppercase;color:#8a6100;background:#fef7e0;
+    border:1px solid #fbe3a2;border-radius:999px;padding:3px 10px}
+  .c1:focus{border-color:#4285F4;box-shadow:0 0 0 4px rgba(66,133,244,.16)}
+  .c2:focus{border-color:#EA4335;box-shadow:0 0 0 4px rgba(234,67,53,.15)}
+  .c3:focus{border-color:#34A853;box-shadow:0 0 0 4px rgba(52,168,83,.16)}
+  .ayuda-alta{margin:0 0 7px}
+  button.leer{background:#fff;color:#d93025;border:1.5px solid #f6cdc9}
+  button.leer:hover{background:#fdf3f2;border-color:#EA4335;color:#c5221f}
+  .obligatorios{margin-right:auto;align-self:center;font-size:11.5px;color:#66718a}
 
   /* el damero indica que el PNG es transparente */
   .qr-pair{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;margin-top:18px}
@@ -161,6 +188,7 @@ let TARJETAS = [];
 let focoPrevio = null;
 let focoTarjeta = null;
 let NOMBRE_AUTO = "";
+let URL_LEIDA = "";
 let EDITANDO_CODIGO = "";
 let PAGINA = 1;
 const POR_PAGINA = 10;
@@ -216,6 +244,49 @@ $("salir").onclick = async () => {
   await llamar("salir", { method: "POST" }).catch(() => {});
   mostrar(false);
 };
+
+/* ---------- numeración de los códigos ---------- */
+
+// Los códigos van en orden alfabético y son un contador en base 26: AAAA es la
+// tarjeta nº 1, AAAB la nº 2, AADV la nº 100. Al abrir una tarjeta nueva el panel
+// propone la siguiente libre, para no tener que llevar la cuenta a mano.
+const LETRAS = 26;
+const LARGO_CODIGO = 4;
+const TOPE = Math.pow(LETRAS, LARGO_CODIGO);
+
+function indiceDeCodigo(codigo) {
+  if (!/^[A-Z]{4}$/.test(String(codigo || ""))) return -1;
+  let n = 0;
+  for (let i = 0; i < codigo.length; i++) n = n * LETRAS + (codigo.charCodeAt(i) - 65);
+  return n;
+}
+
+function codigoDeIndice(n) {
+  let salida = "";
+  for (let i = 0; i < LARGO_CODIGO; i++) {
+    salida = String.fromCharCode(65 + (n % LETRAS)) + salida;
+    n = Math.floor(n / LETRAS);
+  }
+  return salida;
+}
+
+// Se salta los códigos que no sean cuatro letras: si alguna vez se activa uno a
+// mano con números, la secuencia sigue contando por su lado sin romperse.
+function siguienteCodigo() {
+  let mayor = -1;
+  TARJETAS.forEach((t) => {
+    const n = indiceDeCodigo(t.codigo);
+    if (n > mayor) mayor = n;
+  });
+  const proximo = mayor + 1;
+  if (proximo >= TOPE) return { codigo: "", numero: 0 };
+  return { codigo: codigoDeIndice(proximo), numero: proximo + 1 };
+}
+
+function pintarNumero(codigo) {
+  const n = indiceDeCodigo(codigo);
+  $("numeroTarjeta").textContent = n < 0 ? "" : "nº " + (n + 1);
+}
 
 /* ---------- lectura de la URL de Google Maps ---------- */
 
@@ -303,6 +374,7 @@ $("analizar").onclick = () => {
     return;
   }
   limpiarAviso("aviso");
+  URL_LEIDA = $("maps").value.trim();
   $("fichaNombre").textContent = r.negocio || "Escribe abajo el nombre del negocio";
   $("fichaReview").value = r.review;
   const bits = [];
@@ -327,6 +399,15 @@ $("formTarjeta").onsubmit = async (e) => {
   const destino = $("fichaReview").value.trim();
   if (!destino) {
     avisar("aviso", "Primero pega la URL de Google Maps y dale a Leer la URL.", false);
+    return;
+  }
+  // sin esto, cambiar la URL y guardar sin releerla dejaría el destino viejo
+  if ($("maps").value.trim() !== URL_LEIDA) {
+    avisar("aviso", "Cambiaste la URL: dale a Leer la URL para confirmar el link nuevo.", false);
+    return;
+  }
+  if (!$("negocio").value.trim()) {
+    avisar("aviso", "Falta el nombre del negocio.", false);
     return;
   }
   try {
@@ -359,7 +440,10 @@ function editar(codigo) {
   $("codigo").value = t.codigo;
   $("negocio").value = t.negocio || "";
   NOMBRE_AUTO = t.negocio || "";   // lo puso el panel, no la persona
-  $("maps").value = "";
+  // el destino guardado se puede releer tal cual: el lector saca de ahí el Place ID
+  $("maps").value = t.destino;
+  URL_LEIDA = t.destino;
+  pintarNumero(t.codigo);
   $("fichaNombre").textContent = t.negocio || t.codigo;
   $("fichaMeta").textContent = "";
   $("fichaReview").value = t.destino;
@@ -379,10 +463,15 @@ function salirDeEdicion() {
   $("ficha").hidden = true;
   $("fichaReview").value = "";
   NOMBRE_AUTO = "";
+  URL_LEIDA = "";
+  $("numeroTarjeta").textContent = "";
 }
 
 function prepararNuevaTarjeta() {
   salirDeEdicion();
+  const sig = siguienteCodigo();
+  $("codigo").value = sig.codigo;
+  $("numeroTarjeta").textContent = sig.numero ? "nº " + sig.numero : "";
   $("tarjetaModalKicker").textContent = "Nueva tarjeta";
   $("tarjetaModalTitulo").textContent = "Activar una tarjeta";
   $("tarjetaModalSubtitulo").textContent = "Apunta el código impreso al link de reseña de un negocio.";
@@ -673,14 +762,15 @@ export function vistaAdmin(origen) {
     <p class="modal-subtitulo" id="tarjetaModalSubtitulo">Apunta el código impreso al link de reseña de un negocio.</p>
 
     <form id="formTarjeta">
-      <label for="codigo">Código impreso en la tarjeta</label>
-      <input id="codigo" placeholder="A7K2" autocomplete="off">
+      <label class="paso" for="codigo"><span class="n n1">1</span>Código de la tarjeta
+        <span class="num" id="numeroTarjeta"></span></label>
+      <input class="c1" id="codigo" placeholder="AADW" autocomplete="off" required>
 
-      <label for="maps">URL de Google Maps del negocio
-        <span>— o su Place ID, o un link de reseña ya hecho</span></label>
-      <input id="maps" placeholder="https://www.google.com/maps/place/Mercacentro+No.+4+Av.+Guabinal/@4.4416918,-75.2070794,16z/data=..." autocomplete="off">
+      <label class="paso" for="maps"><span class="n n2">2</span>URL de Google Maps del negocio</label>
+      <p class="ayuda ayuda-alta">También sirve su <b>Place ID</b> o un link de reseña ya hecho.</p>
+      <input class="c2" id="maps" placeholder="https://www.google.com/maps/place/Mercacentro+No.+4+Av.+Guabinal/@4.4416918,-75.2070794,16z/data=..." autocomplete="off" required>
 
-      <div class="fila"><button type="button" class="gris" id="analizar">Leer la URL</button></div>
+      <div class="fila"><button type="button" class="leer" id="analizar">Leer la URL</button></div>
       <p class="ayuda">El panel saca el <b>Place ID</b> solo a partir de la URL de Maps. Si esa URL
         no lo trae, búscalo por nombre y ciudad en el
         <a href="https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder"
@@ -694,10 +784,11 @@ export function vistaAdmin(origen) {
         <div class="meta" id="fichaMeta"></div>
       </div>
 
-      <label for="negocio">Negocio <span>— solo para tu referencia</span></label>
-      <input id="negocio" placeholder="Mercacentro Av. Guabinal" autocomplete="off">
+      <label class="paso" for="negocio"><span class="n n3">3</span>Nombre del negocio</label>
+      <input class="c3" id="negocio" placeholder="Mercacentro Av. Guabinal" autocomplete="off" required>
 
       <div class="fila modal-acciones">
+        <span class="obligatorios">Los tres campos son obligatorios</span>
         <button type="button" class="gris" id="cancelarTarjeta">Cancelar</button>
         <button type="submit" id="guardar">Activar tarjeta</button>
       </div>

@@ -96,11 +96,15 @@ El panel lleva incorporado el generador de links de reseña, así que no hay que
 saltar a otra herramienta:
 
 1. Entra a `https://r.grve.workers.dev/admin` e inicia sesión.
-2. Escribe el **código impreso** en la tarjeta.
+2. El **código** viene propuesto: el siguiente de la secuencia, con su número al
+   lado. Se puede cambiar si vas a activar una tarjeta ya impresa.
 3. Pega la **URL de Google Maps** del negocio y dale a **Leer la URL**. De ahí sale
    el **Place ID** del local y el link que abre el formulario de reseñas. El campo
    también acepta el Place ID pegado tal cual, o un link de reseña ya hecho.
 4. **Guardar tarjeta**. Queda activa de inmediato y aparece el **QR para imprimir**.
+
+Los tres campos son obligatorios, y el link solo se guarda si le diste a **Leer la
+URL** después del último cambio: así no se queda el destino viejo por olvido.
 
 Ese QR codifica `HTTPS://R.GRVE.WORKERS.DEV/CODIGO`, **no** el link de Google: es
 lo que hace que la tarjeta se pueda reasignar después. Sale en dos versiones PNG
@@ -226,6 +230,14 @@ por IP y quince minutos de bloqueo.
 
 - **El destino se valida**: solo se aceptan URLs `http:` o `https:`, para que el
   panel no pueda convertirse en un trampolín hacia `javascript:` u otros esquemas.
+- **Los códigos son un contador en base 26**, cuatro letras, en orden alfabético:
+  `AAAA` es la tarjeta nº 1, `AAAB` la nº 2, `AABA` la nº 27, `AADV` la nº 100. El
+  panel propone siempre la siguiente libre, mirando el mayor código de cuatro
+  letras que ya exista. Caben 456.976 tarjetas antes de necesitar una quinta letra.
+
+  Se saltan los códigos que no sean cuatro letras: si algún día se activa uno a
+  mano con números, la secuencia sigue contando por su lado sin romperse.
+
 - **Los códigos se normalizan** a mayúsculas y solo admiten `A-Z0-9`, de 3 a 12
   caracteres. Al generarlos para imprimir, evita los ambiguos: usa el alfabeto
   `23456789ABCDEFGHJKMNPQRSTUVWXYZ` (sin `0`/`O` ni `1`/`I`/`L`), porque alguien
