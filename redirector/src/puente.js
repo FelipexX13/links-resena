@@ -1,8 +1,8 @@
 /**
  * Pantalla que ve el cliente al escanear el QR o acercar el NFC.
  *
- * Existe por una razón técnica: iOS solo le entrega el link a la app de Google
- * Maps si la persona lo TOCA — una redirección de servidor no cuenta como gesto.
+ * Existe por una razón técnica: el destino se le entrega a la app de Google solo
+ * si la persona lo TOCA — una redirección de servidor no cuenta como gesto.
  *
  * El diseño está gobernado por un problema de confianza: esto es marca de Google
  * en un dominio que no es Google, que es exactamente la forma de un phishing. Por
@@ -11,24 +11,33 @@
  *   · tipografía Roboto, en minúsculas y peso medio, como los productos de Google
  *   · se dice a dónde lleva el botón y que no se pide ningún dato
  *
- * Cuatro estilos, uno por cada diseño de tarjeta:
- *   1 ola · 2 pastel · 3 círculo · 4 oscuro
+ * La tarjeta usa un único diseño Pastel. Sus cinco colores se guardan por
+ * tarjeta para que cada local pueda personalizar el degradado sin cambiar la
+ * estructura ni el funcionamiento del QR.
  */
 
 import { esc } from "./vistas.js";
 
 export const ESTILOS = [
-  { id: 1, nombre: "Ola", detalle: "Degradado con onda blanca" },
   { id: 2, nombre: "Pastel", detalle: "Marco suave, tarjeta clara" },
-  { id: 3, nombre: "Círculo", detalle: "Aro de colores sobre blanco" },
-  { id: 4, nombre: "Oscuro", detalle: "Negro con borde dorado" },
 ];
 
 export const ESTILO_POR_DEFECTO = 2; // pastel
+export const DEGRADADO_PASTEL_DEFAULT = [
+  "#F6C3AD", "#F4B3C4", "#C7D6F2", "#BCE2D6", "#F2D7A0",
+];
+const COLOR_HEX = /^#[0-9a-f]{6}$/i;
 
-export function estiloValido(n) {
-  const i = parseInt(n, 10);
-  return i >= 1 && i <= 4 ? i : ESTILO_POR_DEFECTO;
+export function estiloValido() {
+  return ESTILO_POR_DEFECTO;
+}
+
+export function degradadoValido(value) {
+  const colores = Array.isArray(value) ? value : [];
+  return DEGRADADO_PASTEL_DEFAULT.map((defecto, i) => {
+    const color = String(colores[i] || "").trim();
+    return COLOR_HEX.test(color) ? color.toUpperCase() : defecto;
+  });
 }
 
 const LOGO_G = `<svg class="g" viewBox="0 0 48 48" aria-hidden="true">
@@ -86,9 +95,9 @@ const E1 = `
 `;
 
 /* ---------- 2 · pastel ---------- */
-const E2 = `
+const E2 = (colores) => `
   body{padding:24px;color:#202124;
-    background:linear-gradient(140deg,#F6C3AD 0%,#F4B3C4 24%,#C7D6F2 50%,#BCE2D6 74%,#F2D7A0 100%)}
+    background:linear-gradient(140deg,${colores[0]} 0%,${colores[1]} 24%,${colores[2]} 50%,${colores[3]} 74%,${colores[4]} 100%)}
   .tarjeta{background:#fff;border-radius:28px;padding:36px 28px 30px;
     max-width:380px;width:100%;box-shadow:0 20px 48px -24px rgba(30,40,70,.4)}
   .boton{background:#1a73e8;color:#fff}
@@ -134,6 +143,7 @@ const CSS = { 1: E1, 2: E2, 3: E3, 4: E4 };
 
 export function vistaPuente(tarjeta) {
   const estilo = estiloValido(tarjeta.estilo);
+  const colores = degradadoValido(tarjeta.degradado);
   const nombre = String(tarjeta.negocio || "").trim();
 
   const titulo = nombre
@@ -143,8 +153,8 @@ export function vistaPuente(tarjeta) {
     ? `<p class="pregunta">agradece tu calificación en Google</p>`
     : "";
 
-  const boton = `<a class="boton" href="${esc(tarjeta.destino)}">Calificar en Google Maps</a>`;
-  const nota = `<p class="nota">Se abre Google Maps para que dejes tu reseña.
+  const boton = `<a class="boton" href="${esc(tarjeta.destino)}">Calificar en Google</a>`;
+  const nota = `<p class="nota">Se abre el formulario de reseñas de Google.
     No te pedimos ningún dato.</p>`;
 
   let cuerpo;
@@ -189,6 +199,6 @@ export function vistaPuente(tarjeta) {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-<style>${BASE}${CSS[estilo]}</style>
+<style>${BASE}${E2(colores)}</style>
 ${cuerpo}`;
 }

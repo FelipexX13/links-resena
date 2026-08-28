@@ -98,8 +98,8 @@ saltar a otra herramienta:
 1. Entra a `https://r.grve.workers.dev/admin` e inicia sesión.
 2. Escribe el **código impreso** en la tarjeta.
 3. Pega la **URL de Google Maps** del negocio y dale a **Leer la URL**. De ahí sale
-   el identificador del local y el link que abre el cuadro de calificación. También
-   acepta un link de reseña ya generado.
+   el **Place ID** del local y el link que abre el formulario de reseñas. El campo
+   también acepta el Place ID pegado tal cual, o un link de reseña ya hecho.
 4. **Guardar tarjeta**. Queda activa de inmediato y aparece el **QR para imprimir**.
 
 Ese QR codifica `HTTPS://R.GRVE.WORKERS.DEV/CODIGO`, **no** el link de Google: es
@@ -171,7 +171,7 @@ por IP y quince minutos de bloqueo.
   | Entrada | Qué pasa |
   |---|---|
   | **QR** | la persona toca el resultado del escaneo; ese gesto viaja con la navegación, así que Chrome le entrega el link a la app al seguir el 307 |
-  | **NFC** | Android lanza el navegador sin gesto; Chrome sigue el salto él mismo y renderiza la web de Maps, que ignora el `!12e1` |
+  | **NFC** | Android lanza el navegador sin gesto; con el destino viejo el salto se quedaba en la web de Maps |
 
   Por eso el tag lleva `?n` en su URL y el QR no. El panel muestra las dos al
   abrir el QR de una tarjeta. En iOS todo va a la pantalla: allá el Universal
@@ -201,15 +201,28 @@ por IP y quince minutos de bloqueo.
   La prueba de que es un techo de la plataforma y no de este código: la web de
   Google Maps, en el dominio de Google, tampoco abre su propia app sola — muestra
   un diálogo pidiendo que toques "Continuar".
-- **El destino siempre es `google.com/maps/place//data=…!12e1`.** Ese link abre el
-  cuadro de calificación dentro de la app de Google Maps, donde la persona ya
-  tiene sesión iniciada: es el camino más corto a la reseña.
+- **El destino es `search.google.com/local/writereview?placeid=…`.** Ese link cae
+  directo en el formulario de reseñas de Google, con la sesión que la persona ya
+  tiene abierta. Reemplazó a `google.com/maps/place//data=…!12e1`, que dependía de
+  que la app de Maps agarrara el link y muchas veces terminaba en la web de Maps
+  sin el cuadro de estrellas.
 
-  Hubo una versión que además ofrecía `search.google.com/local/writereview`, para
-  esquivar el problema de iOS. Dejó de hacer falta cuando apareció la pantalla con
-  botón: el toque abre la app igual. Si alguna vez se necesita, está en el
-  historial de git — incluida la derivación del Place ID a partir del
-  identificador hexadecimal.
+  **El Place ID lo calcula el panel**, no hay que ir al buscador de Google por cada
+  negocio. La URL de Maps trae el identificador hexadecimal del lugar
+  (`!1s0xCELDA:0xLUGAR`), y el Place ID es ese mismo par de números metido en un
+  protobuf mínimo y codificado en base64url:
+
+  | Byte | Qué es |
+  |---|---|
+  | `0x0A` | campo 1, tipo bytes |
+  | `0x12` | longitud 18 |
+  | `0x09` | campo 1, entero fijo de 64 bits → celda, little-endian |
+  | `0x11` | campo 2, entero fijo de 64 bits → lugar, little-endian |
+
+  Por eso todos los Place ID empiezan por `ChIJ`: es la base64 de esos tres
+  primeros bytes, que no cambian nunca. La conversión está comprobada contra el
+  buscador oficial de Place ID. Si algún lugar raro no convierte, el campo del
+  panel acepta el `ChIJ…` pegado a mano.
 
 - **En el NFC va la URL corta de la tarjeta, no el link de Google.** Si se graba
   el link de Google directo, el tag deja de ser reasignable y además se topa con

@@ -38,6 +38,16 @@ const ESTILOS = `
   button:hover{background:#1a68e5}
   button.gris{background:#fff;color:#66718a;border:1.5px solid #e5e9f2}
   button.gris:hover{background:#fafbff;color:#1b2333}
+  button.accion{border:0;color:#fff;transition:transform .12s ease,box-shadow .18s ease}
+  button.accion:hover{transform:translateY(-1px);box-shadow:0 5px 12px -7px rgba(20,30,60,.55)}
+  button.accion-editar{background:#4285F4}
+  button.accion-editar:hover{background:#1a73e8}
+  button.accion-ver{background:#FBBC05;color:#5f4500}
+  button.accion-ver:hover{background:#f2ad00;color:#473500}
+  button.accion-qr{background:#34A853}
+  button.accion-qr:hover{background:#2d9247}
+  button.accion-borrar{background:#EA4335;color:#fff}
+  button.accion-borrar:hover{background:#d93025}
   .barra{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
   .fila{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
   table{width:100%;border-collapse:collapse;margin-top:16px;font-size:13px}
@@ -45,7 +55,15 @@ const ESTILOS = `
     color:#66718a;border-bottom:1px solid #e5e9f2;padding:8px 6px}
   td{padding:10px 6px;border-bottom:1px solid #f0f3f9;vertical-align:top;overflow-wrap:anywhere}
   td:last-child{width:1%;white-space:nowrap}
-  td button{padding:7px 12px;font-size:12.5px;margin-left:4px}
+  td button{padding:7px 12px;font-size:12.5px;margin-left:0}
+  .acciones{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;min-width:132px}
+  .acciones .accion{width:100%;padding-left:8px;padding-right:8px}
+  .paginacion{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:16px}
+  .paginas{display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap}
+  button.pagina{min-width:34px;padding:7px 10px;font-size:12px;background:#fff;color:#66718a;border:1.5px solid #e5e9f2}
+  button.pagina:hover:not(:disabled){background:#f1f6ff;color:#1a73e8;border-color:#4285F4}
+  button.pagina.activa{background:#4285F4;color:#fff;border-color:#4285F4}
+  button.pagina:disabled{opacity:.45;cursor:not-allowed}
   .contador{font-family:ui-monospace,monospace;font-size:11px;color:#66718a;margin-top:10px}
   .aviso{margin-top:14px;padding:11px 13px;border-radius:12px;font-size:13px;display:none}
   .aviso.ok{display:block;background:#e9f7ee;color:#1c6b34}
@@ -55,48 +73,48 @@ const ESTILOS = `
   .ficha b{display:block;font-size:15px;margin-bottom:6px}
   .ficha .meta{font-family:ui-monospace,monospace;font-size:11px;color:#66718a;
     margin-top:8px;word-break:break-all}
+  .activador{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  .activador-copy{max-width:520px}
+  .activador-copy h1{margin-bottom:5px}
+  .activador-copy p{margin-bottom:0}
 
-  /* ---- selector de estilo de tarjeta ---- */
-  .estilos{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:2px}
-  .estilo{border:2px solid #e5e9f2;border-radius:14px;padding:7px;cursor:pointer;
-    background:#fff;text-align:center;transition:border-color .15s,box-shadow .15s,transform .12s}
-  .estilo:hover{transform:translateY(-1px);border-color:#cfd8ea}
-  .estilo.sel{border-color:#1a73e8;box-shadow:0 0 0 3px rgba(26,115,232,.15)}
-  .estilo b{display:block;font-size:11.5px;margin-top:7px;color:#1b2333}
-  .estilo i{display:block;font-size:9.5px;font-style:normal;color:#66718a;line-height:1.25}
-  .mini{height:58px;border-radius:9px;overflow:hidden;position:relative;
-    display:flex;align-items:center;justify-content:center}
-  .mini span{position:relative;z-index:2;font-size:8.5px;letter-spacing:.5px;color:#FFC400}
-  .mini1{background:linear-gradient(100deg,#FBBC05,#F0592B 40%,#A93BC0 72%,#4285F4)}
-  .mini1::after{content:"";position:absolute;left:-12%;right:-12%;bottom:-15px;height:28px;
-    background:#fff;border-radius:50%}
-  .mini2{background:linear-gradient(140deg,#F6C3AD,#F4B3C4 30%,#C7D6F2 62%,#BCE2D6)}
-  .mini2::after{content:"";position:absolute;inset:7px;background:rgba(255,255,255,.92);
-    border-radius:8px}
-  .mini3{background:#fff;box-shadow:inset 0 0 0 1px #eef1f7}
-  .mini3::after{content:"";position:absolute;width:48px;height:48px;border-radius:50%;
-    left:50%;top:50%;transform:translate(-50%,-50%);
-    background:conic-gradient(from 210deg,#FBBC05,#F79B1E,#EA4335,#A93BC0,#4285F4,#34A853,#FBBC05);
-    -webkit-mask:radial-gradient(circle,transparent 57%,#000 59%);
-    mask:radial-gradient(circle,transparent 57%,#000 59%)}
-  .mini4{background:#000;box-shadow:inset 0 0 0 2px #FFC400}
-  .editando{display:flex;align-items:center;justify-content:space-between;gap:12px;
-    margin-top:14px;padding:10px 12px 10px 15px;border-radius:12px;font-size:12.5px;
-    background:#fff7e0;color:#7a5a00;border:1px solid #f5e2ab}
-  .editando button{padding:6px 14px;font-size:12px}
+  /* ---- editor del degradado pastel ---- */
+  .degradado-editor{margin-top:2px;padding:14px;border:1px solid #e5e9f2;
+    border-radius:14px;background:#fff}
+  .degradado-preview{height:64px;border-radius:11px;
+    background:linear-gradient(140deg,#F6C3AD 0%,#F4B3C4 24%,#C7D6F2 50%,#BCE2D6 74%,#F2D7A0 100%);
+    box-shadow:inset 0 0 0 1px rgba(27,35,51,.08),0 7px 16px -12px rgba(20,30,60,.45)}
+  .degradado-colores{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:12px}
+  .color-parada{min-width:0}
+  .color-parada label{margin:0 0 5px;font-size:10px;text-align:center;color:#66718a}
+  .color-parada input[type=color]{height:38px;padding:3px;cursor:pointer;background:#fff}
+  @media (max-width:520px){.degradado-colores{grid-template-columns:repeat(3,1fr)}}
+  .ayuda{font-size:11.5px;line-height:1.5;color:#66718a;margin:9px 0 0}
+  .ayuda a{color:#4285F4}
+  .ayuda code{background:#f0f3f9;border-radius:5px;padding:1px 5px;font-size:11px}
   .etiqueta{display:inline-block;margin-top:5px;font-size:10px;letter-spacing:.06em;
     text-transform:uppercase;color:#66718a;background:#f0f3f9;border-radius:999px;padding:2px 8px}
 
-  /* ---- ventana del QR ---- */
+  /* ---- ventanas modales ---- */
   .modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;
     justify-content:center;padding:20px}
   .modal-fondo{position:absolute;inset:0;background:rgba(15,22,40,.55)}
   .modal-caja{position:relative;background:#fff;border-radius:20px;width:100%;max-width:540px;
     max-height:88vh;overflow:auto;padding:28px;
     box-shadow:0 30px 70px -20px rgba(15,22,40,.55)}
+  .qr-negocio{text-align:center;font-size:clamp(30px,6vw,42px);line-height:1.08;
+    letter-spacing:-.035em;margin:4px 34px 6px;color:#1b2333;overflow-wrap:anywhere}
+  .qr-titulo{text-align:center;font-family:ui-monospace,monospace;font-size:11px;
+    letter-spacing:.12em;text-transform:uppercase;color:#66718a;margin:0 0 14px}
   .modal-cerrar{position:absolute;top:16px;right:16px;padding:0;width:32px;height:32px;
     border-radius:50%;background:#f0f3f9;color:#66718a;font-size:15px;line-height:1}
   .modal-cerrar:hover{background:#e2e7f2;color:#1b2333}
+  .modal-tarjeta{max-width:680px}
+  .modal-tarjeta h1{margin-top:2px;margin-bottom:5px}
+  .modal-tarjeta .modal-subtitulo{margin-bottom:18px}
+  .modal-kicker{text-transform:uppercase;font-family:ui-monospace,monospace;font-size:10px;
+    letter-spacing:.12em;color:#66718a;margin-bottom:7px}
+  .modal-acciones{justify-content:flex-end}
 
   /* el damero indica que el PNG es transparente */
   .qr-pair{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;margin-top:18px}
@@ -154,9 +172,15 @@ const SCRIPT_PANEL = String.raw`
 const $ = (id) => document.getElementById(id);
 let TARJETAS = [];
 let focoPrevio = null;
+let focoTarjeta = null;
 let ESTILO = 2;
 let NOMBRE_AUTO = "";
-const NOMBRE_ESTILO = { 1: "Ola", 2: "Pastel", 3: "Círculo", 4: "Oscuro" };
+let EDITANDO_CODIGO = "";
+let PAGINA = 1;
+const POR_PAGINA = 10;
+const NOMBRE_ESTILO = { 1: "Pastel", 2: "Pastel", 3: "Pastel", 4: "Pastel" };
+const DEGRADADO_DEFECTO = ["#F6C3AD", "#F4B3C4", "#C7D6F2", "#BCE2D6", "#F2D7A0"];
+let DEGRADADO = DEGRADADO_DEFECTO.slice();
 
 function escHtml(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
@@ -170,6 +194,33 @@ function avisar(caja, texto, ok) {
 }
 
 function limpiarAviso(caja) { $(caja).className = "aviso"; }
+
+function colorValido(color) { return /^#[0-9a-f]{6}$/i.test(String(color || "")); }
+
+function gradienteCSS(colores) {
+  return "linear-gradient(140deg," + colores[0] + " 0%," + colores[1] +
+    " 24%," + colores[2] + " 50%," + colores[3] + " 74%," + colores[4] + " 100%)";
+}
+
+function pintarDegradado() {
+  $("degradadoPreview").style.background = gradienteCSS(DEGRADADO);
+}
+
+function cargarDegradado(colores) {
+  DEGRADADO = DEGRADADO_DEFECTO.slice();
+  if (Array.isArray(colores)) colores.slice(0, 5).forEach((color, i) => {
+    if (colorValido(color)) DEGRADADO[i] = String(color).toUpperCase();
+  });
+  for (let i = 0; i < DEGRADADO.length; i++) $("color" + i).value = DEGRADADO[i];
+  pintarDegradado();
+}
+
+function degradadoDesdeFormulario() {
+  return DEGRADADO.map((color, i) => {
+    const control = $("color" + i);
+    return control && colorValido(control.value) ? control.value.toUpperCase() : color;
+  });
+}
 
 /* ---------- sesión ---------- */
 // la cookie es HttpOnly: este script nunca la ve, solo la manda el navegador
@@ -186,7 +237,7 @@ async function llamar(ruta, opciones) {
 function mostrar(dentro) {
   $("pantallaPanel").hidden = !dentro;
   $("pantallaLogin").hidden = dentro;
-  if (dentro) listar(); else { cerrarQR(); $("clave").focus(); }
+  if (dentro) listar(); else { cerrarQR(); cerrarTarjeta(); $("clave").focus(); }
 }
 
 $("formLogin").onsubmit = async (e) => {
@@ -212,13 +263,41 @@ $("salir").onclick = async () => {
 
 /* ---------- lectura de la URL de Google Maps ---------- */
 
+// El destino de la tarjeta es search.google.com/local/writereview?placeid=…, y
+// ese parámetro pide el Place ID ("ChIJ…"). La URL de Google Maps no lo trae:
+// lleva el identificador hexadecimal del lugar (!1s0xCELDA:0xLUGAR). Pero uno es
+// el otro escrito distinto, así que el panel lo convierte solo y no hay que ir al
+// buscador de Place ID por cada negocio.
+//
+// El Place ID es ese par de números dentro de un protobuf mínimo, en base64url:
+//   0x0A  campo 1, tipo bytes
+//   0x12  longitud 18
+//   0x09  campo 1, entero fijo de 64 bits  → celda, little-endian
+//   0x11  campo 2, entero fijo de 64 bits  → lugar, little-endian
+// De ahí viene que todos empiecen por "ChIJ": es la base64 de esos tres primeros
+// bytes, que son siempre los mismos.
+function bytesLE(hex) {
+  const salida = [];
+  let v = BigInt(hex);
+  for (let i = 0; i < 8; i++) { salida.push(Number(v & 0xffn)); v >>= 8n; }
+  return salida;
+}
+
+function placeIdDesdeFtid(ftid) {
+  const mitades = ftid.split(":");
+  const bytes = [0x0a, 0x12, 0x09].concat(bytesLE(mitades[0]), [0x11], bytesLE(mitades[1]));
+  let crudo = "";
+  for (let i = 0; i < bytes.length; i++) crudo += String.fromCharCode(bytes[i]);
+  return btoa(crudo).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function linkResena(placeId) {
+  return "https://search.google.com/local/writereview?placeid=" + placeId;
+}
+
 function analizarMaps(crudo) {
   const url = String(crudo || "").trim();
-  if (!url) return { error: "Pega la URL de Google Maps del negocio." };
-
-  if (/maps\.app\.goo\.gl|goo\.gl\/maps/i.test(url)) {
-    return { error: "Es un link corto. Ábrelo en el navegador, espera a que cargue el mapa y copia la URL larga de la barra de direcciones." };
-  }
+  if (!url) return { error: "Pega la URL de Google Maps del negocio, o su Place ID." };
 
   let negocio = "";
   const nm = url.match(/\/maps\/place\/([^/@?]+)/);
@@ -226,27 +305,38 @@ function analizarMaps(crudo) {
     try { negocio = decodeURIComponent(nm[1].replace(/\+/g, " ")).trim(); } catch (e) {}
   }
 
-  // identificador hexadecimal: !1s0xAAAA:0xBBBB  o  ftid=0xAAAA:0xBBBB
+  // 1 · el Place ID ya viene dado: un link de reseña hecho antes, una URL que lo
+  //     lleva como parámetro, o el identificador pegado tal cual del buscador
+  const dado = url.match(/[?&#](?:placeid|place_id)=([A-Za-z0-9_-]{15,})/i) ||
+               url.match(/place_id[:=]([A-Za-z0-9_-]{15,})/i) ||
+               url.match(/!1s(Ch[A-Za-z0-9_-]{15,})/) ||
+               url.match(/^([A-Za-z0-9_-]{15,})$/);
+  if (dado) {
+    return { negocio: negocio, placeId: dado[1], review: linkResena(dado[1]) };
+  }
+
+  if (/maps\.app\.goo\.gl|goo\.gl\/maps/i.test(url)) {
+    return { error: "Es un link corto. Ábrelo en el navegador, espera a que cargue el mapa y copia la URL larga de la barra de direcciones." };
+  }
+
+  // 2 · identificador hexadecimal: !1s0xAAAA:0xBBBB  o  ftid=0xAAAA:0xBBBB
   const ft = url.match(/(?:!1s|ftid=)(0x[0-9a-f]+:0x[0-9a-f]+)/i);
   if (ft) {
     const ftid = ft[1].toLowerCase();
-    let cid = "";
-    try { cid = BigInt(ftid.split(":")[1]).toString(); } catch (e) {}
-    return {
-      negocio: negocio,
-      ftid: ftid,
-      cid: cid,
-      // abre el cuadro de calificación dentro de la app de Maps, que ya tiene sesión
-      review: "https://www.google.com/maps/place//data=!4m3!3m2!1s" + ftid + "!12e1",
-    };
+    let placeId = "";
+    try { placeId = placeIdDesdeFtid(ftid); } catch (e) {}
+    if (!placeId) {
+      return { error: "No se pudo convertir el identificador de esa URL. Busca el negocio en el buscador de Place ID y pega aquí el ChIJ… que te dé." };
+    }
+    return { negocio: negocio, ftid: ftid, placeId: placeId, review: linkResena(placeId) };
   }
 
   const cd = url.match(/(?:[?&](?:lu)?cid=)(\d{5,})/i);
   if (cd) {
-    return { error: "Esa URL solo trae el CID, no el identificador completo. Abre la ficha del negocio en Google Maps y copia la URL larga de la barra de direcciones." };
+    return { error: "Esa URL solo trae el CID, no el identificador completo. Abre la ficha del negocio en Google Maps y copia la URL larga, o pega su Place ID." };
   }
 
-  return { error: "No se encontró el identificador del negocio en esa URL. Abre su ficha en Google Maps (clic en el nombre del lugar) y copia la URL completa." };
+  return { error: "No se encontró el identificador del negocio en esa URL. Abre su ficha en Google Maps (clic en el nombre del lugar) y copia la URL completa, o pega el Place ID del buscador." };
 }
 
 $("analizar").onclick = () => {
@@ -257,11 +347,11 @@ $("analizar").onclick = () => {
     return;
   }
   limpiarAviso("aviso");
-  $("fichaNombre").textContent = r.negocio || "Negocio sin nombre en la URL";
+  $("fichaNombre").textContent = r.negocio || "Escribe abajo el nombre del negocio";
   $("fichaReview").value = r.review;
   const bits = [];
-  if (r.ftid) bits.push("ID: " + r.ftid);
-  if (r.cid) bits.push("CID: " + r.cid);
+  if (r.placeId) bits.push("Place ID: " + r.placeId);
+  if (r.ftid) bits.push("ID de Maps: " + r.ftid);
   $("fichaMeta").textContent = bits.join("  ·  ");
   $("ficha").hidden = false;
 
@@ -276,7 +366,8 @@ $("analizar").onclick = () => {
 
 /* ---------- alta de tarjetas ---------- */
 
-$("guardar").onclick = async () => {
+$("formTarjeta").onsubmit = async (e) => {
+  e.preventDefault();
   const destino = $("fichaReview").value.trim();
   if (!destino) {
     avisar("aviso", "Primero pega la URL de Google Maps y dale a Leer la URL.", false);
@@ -291,11 +382,12 @@ $("guardar").onclick = async () => {
         negocio: $("negocio").value,
         destino: destino,
         estilo: ESTILO,
+        degradado: degradadoDesdeFormulario(),
       }),
     });
-    const editaba = !$("editando").hidden;
-    avisar("aviso", "Tarjeta " + datos.codigo + (editaba ? " actualizada" : " activada"), true);
-    salirDeEdicion();
+    const editaba = Boolean(EDITANDO_CODIGO);
+    cerrarTarjeta();
+    avisar("avisoPanel", "Tarjeta " + datos.codigo + (editaba ? " actualizada" : " activada"), true);
     await listar();
     abrirQR(datos.codigo);
   } catch (e) {
@@ -309,6 +401,7 @@ function editar(codigo) {
   const t = TARJETAS.filter((x) => x.codigo === codigo)[0];
   if (!t) return;
 
+  EDITANDO_CODIGO = t.codigo;
   $("codigo").value = t.codigo;
   $("negocio").value = t.negocio || "";
   NOMBRE_AUTO = t.negocio || "";   // lo puso el panel, no la persona
@@ -318,27 +411,70 @@ function editar(codigo) {
   $("fichaReview").value = t.destino;
   $("ficha").hidden = false;
 
-  ESTILO = parseInt(t.estilo, 10) || 1;
-  document.querySelectorAll("#estilos .estilo").forEach((d) => {
-    d.classList.toggle("sel", parseInt(d.dataset.estilo, 10) === ESTILO);
-  });
+  ESTILO = 2;
+  cargarDegradado(t.degradado);
 
-  $("editandoTxt").textContent = "Editando " + t.codigo + " · el link no cambia";
-  $("editando").hidden = false;
+  $("tarjetaModalKicker").textContent = "Editar tarjeta " + t.codigo;
+  $("tarjetaModalTitulo").textContent = "Editar configuración";
+  $("tarjetaModalSubtitulo").textContent = "Actualiza el negocio, el link de reseña o los colores Pastel.";
+  $("guardar").textContent = "Guardar cambios";
   limpiarAviso("aviso");
-  window.scrollTo({ top: 0, behavior: "smooth" });
-  $("codigo").focus();
+  abrirTarjetaModal();
 }
 
 function salirDeEdicion() {
-  $("editando").hidden = true;
+  EDITANDO_CODIGO = "";
   $("codigo").value = $("negocio").value = $("maps").value = "";
   $("ficha").hidden = true;
   $("fichaReview").value = "";
   NOMBRE_AUTO = "";
+  cargarDegradado();
 }
 
-$("cancelarEd").onclick = () => { salirDeEdicion(); limpiarAviso("aviso"); };
+function prepararNuevaTarjeta() {
+  salirDeEdicion();
+  $("tarjetaModalKicker").textContent = "Nueva tarjeta";
+  $("tarjetaModalTitulo").textContent = "Activar una tarjeta";
+  $("tarjetaModalSubtitulo").textContent = "Asigna un negocio, guarda su link de reseña y personaliza el degradado Pastel.";
+  $("guardar").textContent = "Activar tarjeta";
+  limpiarAviso("aviso");
+  abrirTarjetaModal();
+}
+
+function abrirTarjetaModal() {
+  focoTarjeta = document.activeElement;
+  $("modalTarjeta").hidden = false;
+  document.body.style.overflow = "hidden";
+  $("codigo").focus();
+}
+
+function cerrarTarjeta() {
+  if ($("modalTarjeta").hidden) return;
+  $("modalTarjeta").hidden = true;
+  document.body.style.overflow = $("modalQR").hidden ? "" : "hidden";
+  if (focoTarjeta && focoTarjeta.focus) focoTarjeta.focus();
+  focoTarjeta = null;
+  salirDeEdicion();
+  limpiarAviso("aviso");
+}
+
+$("abrirActivar").onclick = prepararNuevaTarjeta;
+$("cerrarTarjeta").onclick = cerrarTarjeta;
+$("cancelarTarjeta").onclick = cerrarTarjeta;
+$("modalTarjeta").addEventListener("click", (e) => {
+  if (e.target.hasAttribute("data-cerrar-tarjeta")) cerrarTarjeta();
+});
+
+document.querySelectorAll("#degradadoEditor input[type=color]").forEach((control) => {
+  control.addEventListener("input", () => {
+    const indice = parseInt(control.id.replace("color", ""), 10);
+    if (Number.isInteger(indice) && colorValido(control.value)) {
+      DEGRADADO[indice] = control.value.toUpperCase();
+      pintarDegradado();
+    }
+  });
+});
+cargarDegradado();
 
 /* ---------- listado y buscador ---------- */
 
@@ -352,7 +488,7 @@ async function listar() {
     TARJETAS = datos.tarjetas;
     pintarTabla();
   } catch (e) {
-    avisar("aviso", e.message, false);
+    avisar("avisoPanel", e.message, false);
   }
 }
 
@@ -374,41 +510,59 @@ function pintarTabla() {
     return;
   }
 
+  const totalPaginas = Math.ceil(lista.length / POR_PAGINA);
+  if (PAGINA > totalPaginas) PAGINA = totalPaginas;
+  const inicio = (PAGINA - 1) * POR_PAGINA;
+  const fin = Math.min(inicio + POR_PAGINA, lista.length);
+  const visibles = lista.slice(inicio, fin);
+
   let filas = "";
-  lista.forEach((t) => {
+  visibles.forEach((t) => {
     const c = escHtml(t.codigo);
     filas +=
       "<tr><td class='mono'><b>" + c + "</b><br><span style='color:#66718a'>" +
       escHtml(HOST) + "/" + c + "</span></td><td>" + (escHtml(t.negocio) || "—") +
       "<br><span class='etiqueta'>" + (NOMBRE_ESTILO[t.estilo] || "Pastel") + "</span>" +
       "</td><td class='mono' style='font-size:11px'>" + escHtml(t.destino) +
-      "</td><td><button class='gris' data-editar='" + c + "'>Editar</button>" +
-      "<button class='gris' data-ver='" + c + "'>Ver</button>" +
-      "<button class='gris' data-qr='" + c + "'>QR</button>" +
-      "<button class='gris' data-borrar='" + c + "'>Borrar</button></td></tr>";
+      "</td><td><div class='acciones'>" +
+      "<button type='button' class='accion accion-qr' data-qr='" + c + "'>QR</button>" +
+      "<button type='button' class='accion accion-editar' data-editar='" + c + "'>Editar</button>" +
+      "<button type='button' class='accion accion-ver' data-ver='" + c + "'>Ver</button>" +
+      "<button type='button' class='accion accion-borrar' data-borrar='" + c + "'>Borrar</button>" +
+      "</div></td></tr>";
   });
   $("tabla").innerHTML =
     "<table><thead><tr><th>Código</th><th>Negocio</th><th>Destino</th><th></th></tr></thead><tbody>" +
-    filas + "</tbody></table>";
+    filas + "</tbody></table>" + paginacion(PAGINA, totalPaginas);
   $("contador").textContent = busca
-    ? lista.length + " de " + TARJETAS.length
-    : TARJETAS.length + (TARJETAS.length === 1 ? " tarjeta" : " tarjetas");
+    ? "Mostrando " + (inicio + 1) + "–" + fin + " de " + lista.length + " resultados (" + TARJETAS.length + " tarjetas)"
+    : "Mostrando " + (inicio + 1) + "–" + fin + " de " + TARJETAS.length + " tarjetas";
 }
 
-$("estilos").addEventListener("click", (e) => {
-  const caja = e.target.closest("[data-estilo]");
-  if (!caja) return;
-  ESTILO = parseInt(caja.dataset.estilo, 10);
-  document.querySelectorAll("#estilos .estilo").forEach((d) => {
-    d.classList.toggle("sel", d === caja);
-  });
-});
+function paginacion(actual, total) {
+  if (total <= 1) return "";
+  let html = "<nav class='paginacion' aria-label='Paginación de tarjetas'>";
+  html += "<button type='button' class='pagina' data-pagina='" + (actual - 1) + "'" +
+    (actual === 1 ? " disabled" : "") + ">Anterior</button>";
+  html += "<div class='paginas'>";
+  for (let i = 1; i <= total; i++) {
+    html += "<button type='button' class='pagina" + (i === actual ? " activa" : "") +
+      "' data-pagina='" + i + "' aria-label='Página " + i + "'" +
+      (i === actual ? " aria-current='page'" : "") + ">" + i + "</button>";
+  }
+  html += "</div><button type='button' class='pagina' data-pagina='" + (actual + 1) + "'" +
+    (actual === total ? " disabled" : "") + ">Siguiente</button></nav>";
+  return html;
+}
 
-$("buscar").addEventListener("input", pintarTabla);
-$("limpiarBusca").onclick = () => { $("buscar").value = ""; pintarTabla(); $("buscar").focus(); };
+$("buscar").addEventListener("input", () => { PAGINA = 1; pintarTabla(); });
+$("limpiarBusca").onclick = () => { $("buscar").value = ""; PAGINA = 1; pintarTabla(); $("buscar").focus(); };
 $("recargar").onclick = () => listar();
 
 $("tabla").addEventListener("click", async (e) => {
+  const pg = e.target.closest("[data-pagina]");
+  if (pg && !pg.disabled) { PAGINA = parseInt(pg.dataset.pagina, 10) || 1; pintarTabla(); return; }
+
   const ed = e.target.closest("[data-editar]");
   if (ed) { editar(ed.dataset.editar); return; }
 
@@ -427,11 +581,11 @@ $("tabla").addEventListener("click", async (e) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ codigo: b.dataset.borrar }),
     });
-    avisar("aviso", "Tarjeta " + b.dataset.borrar + " borrada", true);
+    avisar("avisoPanel", "Tarjeta " + b.dataset.borrar + " borrada", true);
     cerrarQR();
     listar();
   } catch (err) {
-    avisar("aviso", err.message, false);
+    avisar("avisoPanel", err.message, false);
   }
 });
 
@@ -467,6 +621,8 @@ function tile(mod, src, pie, archivo) {
 
 function abrirQR(codigo) {
   const url = (ORIGEN + "/" + codigo).toUpperCase();
+  const tarjeta = TARJETAS.filter((x) => x.codigo === codigo)[0];
+  $("qrNegocio").textContent = tarjeta && tarjeta.negocio ? tarjeta.negocio : "Tarjeta " + codigo;
   $("qrTitulo").textContent = "QR de la tarjeta " + codigo;
   $("qrUrl").textContent = url;
   $("nfcUrl").textContent = ORIGEN + "/" + codigo + "?n=1";
@@ -505,7 +661,7 @@ $("copiarNfc").onclick = async () => {
     b.textContent = "Copiado";
     setTimeout(() => { b.textContent = "Copiar"; }, 1500);
   } catch (e) {
-    avisar("aviso", "No se pudo copiar: seleccióna la URL a mano.", false);
+    avisar("avisoQR", "No se pudo copiar: seleccióna la URL a mano.", false);
   }
 };
 
@@ -514,7 +670,9 @@ $("modalQR").addEventListener("click", (e) => {
   if (e.target.hasAttribute("data-cerrar")) cerrarQR();
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") cerrarQR();
+  if (e.key !== "Escape") return;
+  if (!$("modalTarjeta").hidden) cerrarTarjeta();
+  else cerrarQR();
 });
 
 llamar("sesion").then((s) => mostrar(s.activa)).catch(() => mostrar(false));
@@ -539,52 +697,15 @@ export function vistaAdmin(origen) {
 </div>
 
 <div id="pantallaPanel" hidden>
-  <div class="caja">
-    <div class="barra">
-      <h1 style="margin:0">Activar una tarjeta</h1>
-      <button class="gris" id="salir">Cerrar sesión</button>
+  <div class="caja activador">
+    <div class="activador-copy">
+      <h1>Activar una tarjeta</h1>
+      <p>Configura el código, el negocio y el degradado Pastel desde una ventana rápida.</p>
     </div>
-
-    <div class="editando" id="editando" hidden>
-      <span id="editandoTxt"></span>
-      <button class="gris" id="cancelarEd">Cancelar</button>
+    <div class="fila" style="margin-top:0">
+      <button type="button" id="abrirActivar">Activar tarjeta</button>
+      <button type="button" class="gris" id="salir">Cerrar sesión</button>
     </div>
-
-    <label for="codigo">Código impreso en la tarjeta</label>
-    <input id="codigo" placeholder="A7K2" autocomplete="off">
-
-    <label for="maps">URL de Google Maps del negocio
-      <span>— o un link de reseña ya generado</span></label>
-    <input id="maps" placeholder="https://www.google.com/maps/place/Mercacentro+No.+4+Av.+Guabinal/@4.4416918,-75.2070794,16z/data=..." autocomplete="off">
-
-    <div class="fila"><button class="gris" id="analizar">Leer la URL</button></div>
-
-    <div class="ficha" id="ficha" hidden>
-      <b id="fichaNombre"></b>
-
-      <label for="fichaReview">Link de reseña que va a quedar en la tarjeta</label>
-      <input id="fichaReview" readonly>
-      <div class="meta" id="fichaMeta"></div>
-    </div>
-
-    <label for="negocio">Negocio <span>— solo para tu referencia</span></label>
-    <input id="negocio" placeholder="Mercacentro Av. Guabinal" autocomplete="off">
-
-    <label>Estilo de la tarjeta <span>— es lo que ve el cliente al escanear</span></label>
-    <div class="estilos" id="estilos">
-      <div class="estilo" data-estilo="1"><div class="mini mini1"><span>★★★★★</span></div>
-        <b>Ola</b><i>Degradado con onda</i></div>
-      <div class="estilo sel" data-estilo="2"><div class="mini mini2"><span>★★★★★</span></div>
-        <b>Pastel</b><i>Marco suave</i></div>
-      <div class="estilo" data-estilo="3"><div class="mini mini3"><span>★★★★★</span></div>
-        <b>Círculo</b><i>Aro de colores</i></div>
-      <div class="estilo" data-estilo="4"><div class="mini mini4"><span>★★★★★</span></div>
-        <b>Oscuro</b><i>Negro y dorado</i></div>
-    </div>
-
-    <div class="fila"><button id="guardar">Guardar tarjeta</button></div>
-
-    <div class="aviso" id="aviso"></div>
   </div>
 
   <div class="caja">
@@ -592,6 +713,7 @@ export function vistaAdmin(origen) {
       <h2>Tarjetas activadas</h2>
       <button class="gris" id="recargar">Refrescar</button>
     </div>
+    <div class="aviso" id="avisoPanel"></div>
 
     <label for="buscar">Buscar <span>— por código o por negocio</span></label>
     <div style="display:flex;gap:10px">
@@ -604,11 +726,67 @@ export function vistaAdmin(origen) {
   </div>
 </div>
 
+<div class="modal" id="modalTarjeta" hidden>
+  <div class="modal-fondo" data-cerrar-tarjeta></div>
+  <div class="modal-caja modal-tarjeta franja" role="dialog" aria-modal="true" aria-labelledby="tarjetaModalTitulo" aria-describedby="tarjetaModalSubtitulo">
+    <button type="button" class="modal-cerrar" id="cerrarTarjeta" aria-label="Cerrar">✕</button>
+    <div class="modal-kicker" id="tarjetaModalKicker">Nueva tarjeta</div>
+    <h1 id="tarjetaModalTitulo">Activar una tarjeta</h1>
+    <p class="modal-subtitulo" id="tarjetaModalSubtitulo">Asigna un negocio, guarda su link de reseña y personaliza el degradado Pastel.</p>
+
+    <form id="formTarjeta">
+      <label for="codigo">Código impreso en la tarjeta</label>
+      <input id="codigo" placeholder="A7K2" autocomplete="off">
+
+      <label for="maps">URL de Google Maps del negocio
+        <span>— o su Place ID, o un link de reseña ya hecho</span></label>
+      <input id="maps" placeholder="https://www.google.com/maps/place/Mercacentro+No.+4+Av.+Guabinal/@4.4416918,-75.2070794,16z/data=..." autocomplete="off">
+
+      <div class="fila"><button type="button" class="gris" id="analizar">Leer la URL</button></div>
+      <p class="ayuda">El panel saca el <b>Place ID</b> solo a partir de la URL de Maps. Si esa URL
+        no lo trae, búscalo por nombre y ciudad en el
+        <a href="https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder"
+           target="_blank" rel="noopener">buscador de Place ID</a> y pega aquí el <code>ChIJ…</code>.</p>
+
+      <div class="ficha" id="ficha" hidden>
+        <b id="fichaNombre"></b>
+
+        <label for="fichaReview">Link de reseña que va a quedar en la tarjeta</label>
+        <input id="fichaReview" readonly>
+        <div class="meta" id="fichaMeta"></div>
+      </div>
+
+      <label for="negocio">Negocio <span>— solo para tu referencia</span></label>
+      <input id="negocio" placeholder="Mercacentro Av. Guabinal" autocomplete="off">
+
+      <label>Degradado de la tarjeta <span>— modo Pastel, colores editables</span></label>
+      <div class="degradado-editor" id="degradadoEditor">
+        <div class="degradado-preview" id="degradadoPreview" aria-label="Vista previa del degradado pastel"></div>
+        <div class="degradado-colores">
+          <div class="color-parada"><label for="color0">Color 1</label><input id="color0" type="color" value="#F6C3AD"></div>
+          <div class="color-parada"><label for="color1">Color 2</label><input id="color1" type="color" value="#F4B3C4"></div>
+          <div class="color-parada"><label for="color2">Color 3</label><input id="color2" type="color" value="#C7D6F2"></div>
+          <div class="color-parada"><label for="color3">Color 4</label><input id="color3" type="color" value="#BCE2D6"></div>
+          <div class="color-parada"><label for="color4">Color 5</label><input id="color4" type="color" value="#F2D7A0"></div>
+        </div>
+      </div>
+
+      <div class="fila modal-acciones">
+        <button type="button" class="gris" id="cancelarTarjeta">Cancelar</button>
+        <button type="submit" id="guardar">Activar tarjeta</button>
+      </div>
+
+      <div class="aviso" id="aviso"></div>
+    </form>
+  </div>
+</div>
+
 <div class="modal" id="modalQR" hidden>
   <div class="modal-fondo" data-cerrar></div>
-  <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="qrTitulo">
+  <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="qrNegocio">
     <button class="modal-cerrar" id="cerrarQR" aria-label="Cerrar">✕</button>
-    <h1 id="qrTitulo" style="margin:6px 0 6px;font-size:22px">QR de la tarjeta</h1>
+    <h1 id="qrNegocio" class="qr-negocio">Nombre del negocio</h1>
+    <p id="qrTitulo" class="qr-titulo">QR de la tarjeta</p>
     <p style="margin:0 0 14px">Esto es lo que va impreso en el plástico, no el link de Google.</p>
     <div style="text-align:center"><span class="qr-url" id="qrUrl"></span></div>
     <div class="qr-pair" id="qrPar"></div>
@@ -619,6 +797,7 @@ export function vistaAdmin(origen) {
       <span class="qr-url" id="nfcUrl"></span>
       <div><button class="gris" id="copiarNfc">Copiar</button></div>
     </div>
+    <div class="aviso" id="avisoQR"></div>
   </div>
 </div>
 

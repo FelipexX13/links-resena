@@ -9,7 +9,7 @@
  *   POST /api/salir    cierra la sesión
  *   GET  /api/sesion   ¿hay sesión activa?
  *   GET  /api/lista    listado de tarjetas          (sesión)
- *   POST /api/guardar  {codigo, destino, negocio}   (sesión)
+ *   POST /api/guardar  {codigo, destino, negocio, degradado} (sesión)
  *   POST /api/borrar   {codigo}                     (sesión)
  *
  * Secreto obligatorio:  ADMIN_PASSWORD
@@ -21,7 +21,7 @@
  */
 
 import { vistaInicio, vistaSinConfigurar, vistaAdmin } from "./vistas.js";
-import { vistaPuente, estiloValido } from "./puente.js";
+import { vistaPuente, estiloValido, degradadoValido } from "./puente.js";
 
 const RESERVADAS = new Set(["admin", "api", "favicon.ico", "robots.txt"]);
 const FORMATO_CODIGO = /^[A-Z0-9]{3,12}$/;
@@ -46,17 +46,17 @@ export default {
     const tarjeta = await leerTarjeta(env, ctx, codigo);
     if (!tarjeta || !tarjeta.destino) return html(vistaSinConfigurar(codigo), 404);
 
-    // Lo que decide si la app se abre sola es de dónde viene la navegación, no
-    // el sistema:
+    // El destino es el formulario de reseñas de Google (search.google.com), que
+    // se abre en el navegador: ya no depende de que la app de Maps agarre el
+    // link. Con el destino anterior sí dependía, y de ahí viene este reparto:
     //
     //   · QR   → la persona toca el resultado del escaneo. Ese gesto viaja con la
-    //            navegación, así que Chrome le entrega el link a la app de Maps
-    //            al seguir la redirección. Entra directo al cuadro de estrellas.
-    //   · NFC  → Android lanza el navegador sin gesto. Chrome sigue el salto él
-    //            mismo y termina renderizando la web de Maps, que ignora el !12e1.
+    //            navegación, así que el 307 llega con un toque detrás.
+    //   · NFC  → Android lanza el navegador sin gesto, y el salto se quedaba en
+    //            la web de Maps en vez de abrir la app.
     //
-    // Por eso el tag NFC lleva ?n en su URL y el QR no: así el mismo código sirve
-    // a las dos entradas y cada una recibe lo que le funciona.
+    // Se queda como está hasta probar el destino nuevo entrando por NFC: si el
+    // formulario abre bien con un 307, esta pantalla intermedia sobra.
     const desdeNFC = url.searchParams.has("n");
     const esAndroid = /Android/i.test(request.headers.get("user-agent") || "");
 
@@ -126,6 +126,7 @@ async function api(request, env, accion, url, ctx) {
     const registro = {
       destino: destino.href,
       estilo: estiloValido(cuerpo.estilo),
+      degradado: degradadoValido(cuerpo.degradado),
       negocio: String(cuerpo.negocio || "").slice(0, 120),
       actualizado: new Date().toISOString(),
     };
