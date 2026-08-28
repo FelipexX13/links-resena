@@ -9,7 +9,7 @@ cuando quieras, sin reimprimir nada.
 | Ruta | Qué hace | Acceso |
 |---|---|---|
 | `/` | Página informativa | público |
-| `/A7K2` | Pantalla con el botón que abre la reseña | público |
+| `/A7K2` | 307 al formulario de reseñas del negocio | público |
 | `/admin` | Login y panel de tarjetas | público, pero sin datos hasta iniciar sesión |
 | `/api/login`, `/api/salir`, `/api/sesion` | Manejo de la sesión | público |
 | `/api/lista`, `/api/guardar`, `/api/borrar` | Leer y modificar tarjetas | **requiere sesión** |
@@ -107,6 +107,9 @@ lo que hace que la tarjeta se pueda reasignar después. Sale en dos versiones PN
 con fondo transparente — negra para fondos claros, blanca para fondos oscuros — y
 el botón **QR** de cada fila de la tabla lo vuelve a mostrar cuando quieras.
 
+En el tag NFC va **ese mismo link**. Los tags grabados antes con `?n=1` al final
+siguen sirviendo: ese parámetro ya no se mira.
+
 Borrar una tarjeta no la rompe: vuelve a mostrar la página de "todavía no está
 activada", así que puedes reasignarla a otro negocio cuando quieras.
 
@@ -164,43 +167,37 @@ por IP y quince minutos de bloqueo.
 
 ## Decisiones que conviene no cambiar
 
-- **El QR y el NFC llevan URLs distintas, y por eso reciben cosas distintas.**
-  Lo que decide si la app se abre sola no es el sistema, sino de dónde viene la
-  navegación:
+- **Todo el mundo recibe un 307, sin pantalla de por medio.** QR o NFC, Android o
+  iPhone: el mismo salto directo. Se puede porque el destino es una **página web**
+  (el formulario de reseñas de Google) y no una app: no hay entrega a una app
+  nativa, que era lo único que exigía un toque de la persona.
 
-  | Entrada | Qué pasa |
-  |---|---|
-  | **QR** | la persona toca el resultado del escaneo; ese gesto viaja con la navegación, así que Chrome le entrega el link a la app al seguir el 307 |
-  | **NFC** | Android lanza el navegador sin gesto; con el destino viejo el salto se quedaba en la web de Maps |
+  Hubo una época en que sí hacía falta una pantalla intermedia con un botón,
+  porque el destino era `google.com/maps/place//data=…!12e1` y ese link solo
+  servía si la **app** de Maps lo agarraba. Ni iOS ni Android le entregan un link
+  a una app cuando se llega por un salto de servidor: en iOS el Universal Link
+  exige un toque real, y en Android el navegador sigue la redirección él mismo y
+  termina renderizando la web de Maps. Comprobado en los dos, con QR y con NFC.
 
-  Por eso el tag lleva `?n` en su URL y el QR no. El panel muestra las dos al
-  abrir el QR de una tarjeta. En iOS todo va a la pantalla: allá el Universal
-  Link exige un toque real de la persona, venga de donde venga.
-
-- **La pantalla con el botón es lo que salva las entradas sin gesto.** Ni iOS ni
-  Android le entregan el link a la app de Google Maps cuando se llega por un salto
-  de servidor. En iOS el Universal Link exige que una persona **toque** el enlace.
-  En Android el intent se resuelve al abrir la URL, y el navegador no lo vuelve a
-  resolver en mitad de una redirección: sigue el salto él mismo y termina
-  renderizando la web de Maps, que ignora el `!12e1`.
-
-  Comprobado en los dos, y con las dos entradas — QR y NFC. El botón da ese toque,
-  que es lo único que abre la app. Como no hay redirección, tampoco hay riesgo de
-  que un 301 mal puesto deje una tarjeta clavada en un destino viejo.
-
-  **Dos intentos de quitar ese toque, los dos fallidos y comprobados en teléfono:**
+  **Tres formas de quitar ese toque, todas fallidas y comprobadas en teléfono**, por
+  si a alguien se le ocurre reintentarlas:
 
   - **AAR** (Android Application Record) en el tag NFC. Abre Maps, pero en su
     pantalla principal: Maps no registra ninguna actividad para eventos NFC, así
     que Android se limita a lanzar la app.
   - **Redirección a un URI `intent://`**, el mecanismo de los servicios de deep
     link. Chrome bloquea el salto a un esquema externo cuando viene de una
-    redirección sin gesto del usuario, y cae al `browser_fallback_url`: el cliente
-    termina en la web de Maps, peor que la pantalla propia.
+    redirección sin gesto del usuario, y cae al `browser_fallback_url`.
+  - **Grabar el link de Google directo en el tag.** Además de romper la
+    reasignación, choca con lo mismo: el lanzamiento desde NFC no cuenta como toque.
 
-  La prueba de que es un techo de la plataforma y no de este código: la web de
+  La prueba de que era un techo de la plataforma y no de este código: la web de
   Google Maps, en el dominio de Google, tampoco abre su propia app sola — muestra
-  un diálogo pidiendo que toques "Continuar".
+  un diálogo pidiendo que toques "Continuar". La salida no fue vencer ese techo,
+  sino **cambiar a un destino que no lo necesita**.
+
+  Si algún día el destino vuelve a ser un link de app, la pantalla con el botón
+  está en el historial de git, en `src/puente.js`.
 - **El destino es `search.google.com/local/writereview?placeid=…`.** Ese link cae
   directo en el formulario de reseñas de Google, con la sesión que la persona ya
   tiene abierta. Reemplazó a `google.com/maps/place//data=…!12e1`, que dependía de
@@ -224,9 +221,8 @@ por IP y quince minutos de bloqueo.
   buscador oficial de Place ID. Si algún lugar raro no convierte, el campo del
   panel acepta el `ChIJ…` pegado a mano.
 
-- **En el NFC va la URL corta de la tarjeta, no el link de Google.** Si se graba
-  el link de Google directo, el tag deja de ser reasignable y además se topa con
-  lo mismo: el lanzamiento desde NFC no cuenta como toque, así que abre la web.
+- **En el NFC va la URL corta de la tarjeta, no el link de Google**, igual que en
+  el QR. Es lo que mantiene el tag reasignable después de grabado.
 
 - **El destino se valida**: solo se aceptan URLs `http:` o `https:`, para que el
   panel no pueda convertirse en un trampolín hacia `javascript:` u otros esquemas.

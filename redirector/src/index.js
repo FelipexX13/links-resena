@@ -2,14 +2,14 @@
  * Redireccionador de tarjetas de reseña — Cloudflare Worker
  *
  *   GET  /             página informativa
- *   GET  /A7K2         QR en Android: 307 · NFC (?n) e iOS: pantalla con botón
+ *   GET  /A7K2         307 al formulario de reseñas del negocio
  *   GET  /admin        login + panel para activar tarjetas
  *
  *   POST /api/login    {clave} → cookie de sesión firmada
  *   POST /api/salir    cierra la sesión
  *   GET  /api/sesion   ¿hay sesión activa?
  *   GET  /api/lista    listado de tarjetas          (sesión)
- *   POST /api/guardar  {codigo, destino, negocio, degradado} (sesión)
+ *   POST /api/guardar  {codigo, destino, negocio}  (sesión)
  *   POST /api/borrar   {codigo}                     (sesión)
  *
  * Secreto obligatorio:  ADMIN_PASSWORD
@@ -21,7 +21,6 @@
  */
 
 import { vistaInicio, vistaSinConfigurar, vistaAdmin } from "./vistas.js";
-import { vistaPuente, estiloValido, degradadoValido } from "./puente.js";
 
 const RESERVADAS = new Set(["admin", "api", "favicon.ico", "robots.txt"]);
 const FORMATO_CODIGO = /^[A-Z0-9]{3,12}$/;
@@ -46,33 +45,16 @@ export default {
     const tarjeta = await leerTarjeta(env, ctx, codigo);
     if (!tarjeta || !tarjeta.destino) return html(vistaSinConfigurar(codigo), 404);
 
-    // El destino es el formulario de reseñas de Google (search.google.com), que
-    // se abre en el navegador: ya no depende de que la app de Maps agarre el
-    // link. Con el destino anterior sí dependía, y de ahí viene este reparto:
+    // Salto directo, sin pantalla de por medio. El destino es el formulario de
+    // reseñas de Google, que se abre en el navegador: no depende de que la app
+    // de Maps agarre el link, así que da igual por dónde llegue la visita.
     //
-    //   · QR   → la persona toca el resultado del escaneo. Ese gesto viaja con la
-    //            navegación, así que el 307 llega con un toque detrás.
-    //   · NFC  → Android lanza el navegador sin gesto, y el salto se quedaba en
-    //            la web de Maps en vez de abrir la app.
-    //
-    // Se queda como está hasta probar el destino nuevo entrando por NFC: si el
-    // formulario abre bien con un 307, esta pantalla intermedia sobra.
-    const desdeNFC = url.searchParams.has("n");
-    const esAndroid = /Android/i.test(request.headers.get("user-agent") || "");
-
-    if (esAndroid && !desdeNFC) {
-      // 307 y no 301: un 301 se cachea en el navegador casi para siempre y
-      // dejaría la tarjeta clavada en el destino viejo al repuntearla.
-      return new Response(null, {
-        status: 307,
-        headers: { Location: tarjeta.destino, "Cache-Control": "no-store" },
-      });
-    }
-
-    // Todo lo demás recibe la pantalla con el botón: ese toque es lo único que
-    // abre la app entrando por NFC, y en iOS es lo único que la abre nunca —
-    // ahí el Universal Link exige un toque real de la persona.
-    return html(vistaPuente(tarjeta));
+    // 307 y no 301: un 301 se cachea en el navegador casi para siempre y dejaría
+    // la tarjeta clavada en el destino viejo al reasignarla.
+    return new Response(null, {
+      status: 307,
+      headers: { Location: tarjeta.destino, "Cache-Control": "no-store" },
+    });
   },
 };
 
@@ -125,8 +107,6 @@ async function api(request, env, accion, url, ctx) {
 
     const registro = {
       destino: destino.href,
-      estilo: estiloValido(cuerpo.estilo),
-      degradado: degradadoValido(cuerpo.degradado),
       negocio: String(cuerpo.negocio || "").slice(0, 120),
       actualizado: new Date().toISOString(),
     };

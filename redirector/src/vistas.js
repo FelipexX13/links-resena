@@ -78,22 +78,9 @@ const ESTILOS = `
   .activador-copy h1{margin-bottom:5px}
   .activador-copy p{margin-bottom:0}
 
-  /* ---- editor del degradado pastel ---- */
-  .degradado-editor{margin-top:2px;padding:14px;border:1px solid #e5e9f2;
-    border-radius:14px;background:#fff}
-  .degradado-preview{height:64px;border-radius:11px;
-    background:linear-gradient(140deg,#F6C3AD 0%,#F4B3C4 24%,#C7D6F2 50%,#BCE2D6 74%,#F2D7A0 100%);
-    box-shadow:inset 0 0 0 1px rgba(27,35,51,.08),0 7px 16px -12px rgba(20,30,60,.45)}
-  .degradado-colores{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:12px}
-  .color-parada{min-width:0}
-  .color-parada label{margin:0 0 5px;font-size:10px;text-align:center;color:#66718a}
-  .color-parada input[type=color]{height:38px;padding:3px;cursor:pointer;background:#fff}
-  @media (max-width:520px){.degradado-colores{grid-template-columns:repeat(3,1fr)}}
   .ayuda{font-size:11.5px;line-height:1.5;color:#66718a;margin:9px 0 0}
   .ayuda a{color:#4285F4}
   .ayuda code{background:#f0f3f9;border-radius:5px;padding:1px 5px;font-size:11px}
-  .etiqueta{display:inline-block;margin-top:5px;font-size:10px;letter-spacing:.06em;
-    text-transform:uppercase;color:#66718a;background:#f0f3f9;border-radius:999px;padding:2px 8px}
 
   /* ---- ventanas modales ---- */
   .modal{position:fixed;inset:0;z-index:50;display:flex;align-items:center;
@@ -173,14 +160,10 @@ const $ = (id) => document.getElementById(id);
 let TARJETAS = [];
 let focoPrevio = null;
 let focoTarjeta = null;
-let ESTILO = 2;
 let NOMBRE_AUTO = "";
 let EDITANDO_CODIGO = "";
 let PAGINA = 1;
 const POR_PAGINA = 10;
-const NOMBRE_ESTILO = { 1: "Pastel", 2: "Pastel", 3: "Pastel", 4: "Pastel" };
-const DEGRADADO_DEFECTO = ["#F6C3AD", "#F4B3C4", "#C7D6F2", "#BCE2D6", "#F2D7A0"];
-let DEGRADADO = DEGRADADO_DEFECTO.slice();
 
 function escHtml(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
@@ -194,33 +177,6 @@ function avisar(caja, texto, ok) {
 }
 
 function limpiarAviso(caja) { $(caja).className = "aviso"; }
-
-function colorValido(color) { return /^#[0-9a-f]{6}$/i.test(String(color || "")); }
-
-function gradienteCSS(colores) {
-  return "linear-gradient(140deg," + colores[0] + " 0%," + colores[1] +
-    " 24%," + colores[2] + " 50%," + colores[3] + " 74%," + colores[4] + " 100%)";
-}
-
-function pintarDegradado() {
-  $("degradadoPreview").style.background = gradienteCSS(DEGRADADO);
-}
-
-function cargarDegradado(colores) {
-  DEGRADADO = DEGRADADO_DEFECTO.slice();
-  if (Array.isArray(colores)) colores.slice(0, 5).forEach((color, i) => {
-    if (colorValido(color)) DEGRADADO[i] = String(color).toUpperCase();
-  });
-  for (let i = 0; i < DEGRADADO.length; i++) $("color" + i).value = DEGRADADO[i];
-  pintarDegradado();
-}
-
-function degradadoDesdeFormulario() {
-  return DEGRADADO.map((color, i) => {
-    const control = $("color" + i);
-    return control && colorValido(control.value) ? control.value.toUpperCase() : color;
-  });
-}
 
 /* ---------- sesión ---------- */
 // la cookie es HttpOnly: este script nunca la ve, solo la manda el navegador
@@ -381,8 +337,6 @@ $("formTarjeta").onsubmit = async (e) => {
         codigo: $("codigo").value,
         negocio: $("negocio").value,
         destino: destino,
-        estilo: ESTILO,
-        degradado: degradadoDesdeFormulario(),
       }),
     });
     const editaba = Boolean(EDITANDO_CODIGO);
@@ -411,12 +365,9 @@ function editar(codigo) {
   $("fichaReview").value = t.destino;
   $("ficha").hidden = false;
 
-  ESTILO = 2;
-  cargarDegradado(t.degradado);
-
   $("tarjetaModalKicker").textContent = "Editar tarjeta " + t.codigo;
   $("tarjetaModalTitulo").textContent = "Editar configuración";
-  $("tarjetaModalSubtitulo").textContent = "Actualiza el negocio, el link de reseña o los colores Pastel.";
+  $("tarjetaModalSubtitulo").textContent = "Cambia el negocio o el link de reseña al que apunta esta tarjeta.";
   $("guardar").textContent = "Guardar cambios";
   limpiarAviso("aviso");
   abrirTarjetaModal();
@@ -428,14 +379,13 @@ function salirDeEdicion() {
   $("ficha").hidden = true;
   $("fichaReview").value = "";
   NOMBRE_AUTO = "";
-  cargarDegradado();
 }
 
 function prepararNuevaTarjeta() {
   salirDeEdicion();
   $("tarjetaModalKicker").textContent = "Nueva tarjeta";
   $("tarjetaModalTitulo").textContent = "Activar una tarjeta";
-  $("tarjetaModalSubtitulo").textContent = "Asigna un negocio, guarda su link de reseña y personaliza el degradado Pastel.";
+  $("tarjetaModalSubtitulo").textContent = "Apunta el código impreso al link de reseña de un negocio.";
   $("guardar").textContent = "Activar tarjeta";
   limpiarAviso("aviso");
   abrirTarjetaModal();
@@ -464,17 +414,6 @@ $("cancelarTarjeta").onclick = cerrarTarjeta;
 $("modalTarjeta").addEventListener("click", (e) => {
   if (e.target.hasAttribute("data-cerrar-tarjeta")) cerrarTarjeta();
 });
-
-document.querySelectorAll("#degradadoEditor input[type=color]").forEach((control) => {
-  control.addEventListener("input", () => {
-    const indice = parseInt(control.id.replace("color", ""), 10);
-    if (Number.isInteger(indice) && colorValido(control.value)) {
-      DEGRADADO[indice] = control.value.toUpperCase();
-      pintarDegradado();
-    }
-  });
-});
-cargarDegradado();
 
 /* ---------- listado y buscador ---------- */
 
@@ -522,7 +461,6 @@ function pintarTabla() {
     filas +=
       "<tr><td class='mono'><b>" + c + "</b><br><span style='color:#66718a'>" +
       escHtml(HOST) + "/" + c + "</span></td><td>" + (escHtml(t.negocio) || "—") +
-      "<br><span class='etiqueta'>" + (NOMBRE_ESTILO[t.estilo] || "Pastel") + "</span>" +
       "</td><td class='mono' style='font-size:11px'>" + escHtml(t.destino) +
       "</td><td><div class='acciones'>" +
       "<button type='button' class='accion accion-qr' data-qr='" + c + "'>QR</button>" +
@@ -625,7 +563,7 @@ function abrirQR(codigo) {
   $("qrNegocio").textContent = tarjeta && tarjeta.negocio ? tarjeta.negocio : "Tarjeta " + codigo;
   $("qrTitulo").textContent = "QR de la tarjeta " + codigo;
   $("qrUrl").textContent = url;
-  $("nfcUrl").textContent = ORIGEN + "/" + codigo + "?n=1";
+  $("nfcUrl").textContent = ORIGEN + "/" + codigo;
 
   if (typeof qrcode === "undefined") {
     $("qrPar").innerHTML = "<p>No se pudo cargar el generador de QR. Revisa tu conexión y recarga la página.</p>";
@@ -700,7 +638,7 @@ export function vistaAdmin(origen) {
   <div class="caja activador">
     <div class="activador-copy">
       <h1>Activar una tarjeta</h1>
-      <p>Configura el código, el negocio y el degradado Pastel desde una ventana rápida.</p>
+      <p>Apunta un código impreso al link de reseña de un negocio, desde una ventana rápida.</p>
     </div>
     <div class="fila" style="margin-top:0">
       <button type="button" id="abrirActivar">Activar tarjeta</button>
@@ -732,7 +670,7 @@ export function vistaAdmin(origen) {
     <button type="button" class="modal-cerrar" id="cerrarTarjeta" aria-label="Cerrar">✕</button>
     <div class="modal-kicker" id="tarjetaModalKicker">Nueva tarjeta</div>
     <h1 id="tarjetaModalTitulo">Activar una tarjeta</h1>
-    <p class="modal-subtitulo" id="tarjetaModalSubtitulo">Asigna un negocio, guarda su link de reseña y personaliza el degradado Pastel.</p>
+    <p class="modal-subtitulo" id="tarjetaModalSubtitulo">Apunta el código impreso al link de reseña de un negocio.</p>
 
     <form id="formTarjeta">
       <label for="codigo">Código impreso en la tarjeta</label>
@@ -759,18 +697,6 @@ export function vistaAdmin(origen) {
       <label for="negocio">Negocio <span>— solo para tu referencia</span></label>
       <input id="negocio" placeholder="Mercacentro Av. Guabinal" autocomplete="off">
 
-      <label>Degradado de la tarjeta <span>— modo Pastel, colores editables</span></label>
-      <div class="degradado-editor" id="degradadoEditor">
-        <div class="degradado-preview" id="degradadoPreview" aria-label="Vista previa del degradado pastel"></div>
-        <div class="degradado-colores">
-          <div class="color-parada"><label for="color0">Color 1</label><input id="color0" type="color" value="#F6C3AD"></div>
-          <div class="color-parada"><label for="color1">Color 2</label><input id="color1" type="color" value="#F4B3C4"></div>
-          <div class="color-parada"><label for="color2">Color 3</label><input id="color2" type="color" value="#C7D6F2"></div>
-          <div class="color-parada"><label for="color3">Color 4</label><input id="color3" type="color" value="#BCE2D6"></div>
-          <div class="color-parada"><label for="color4">Color 5</label><input id="color4" type="color" value="#F2D7A0"></div>
-        </div>
-      </div>
-
       <div class="fila modal-acciones">
         <button type="button" class="gris" id="cancelarTarjeta">Cancelar</button>
         <button type="submit" id="guardar">Activar tarjeta</button>
@@ -795,6 +721,8 @@ export function vistaAdmin(origen) {
     <div class="nfc">
       <b>Para grabar en el tag NFC</b>
       <span class="qr-url" id="nfcUrl"></span>
+      <p class="ayuda" style="text-align:center">El mismo link del QR. Los tags que ya grabaste
+        con <code>?n=1</code> al final siguen funcionando igual.</p>
       <div><button class="gris" id="copiarNfc">Copiar</button></div>
     </div>
     <div class="aviso" id="avisoQR"></div>
