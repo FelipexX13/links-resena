@@ -103,14 +103,14 @@ const ESTILOS = `
   .cabecera{position:sticky;top:0;z-index:10;background:rgba(242,245,250,.82);
     backdrop-filter:blur(14px) saturate(1.6);border-bottom:1px solid var(--linea)}
   .cabecera-fila{display:flex;align-items:center;justify-content:space-between;gap:18px;
-    flex-wrap:wrap;padding:15px 0}
+    flex-wrap:wrap;padding:20px 0}
   .marca{display:flex;align-items:center;gap:11px;min-width:0}
   .marca-texto{display:flex;flex-direction:column;line-height:1.25;min-width:0}
   .marca-texto strong{font-size:15px;font-weight:600;letter-spacing:-.015em}
   .marca-host{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;color:var(--tinta-3)}
   .cabecera-acciones{display:flex;gap:9px;flex-wrap:wrap}
 
-  main{padding:30px 0 72px}
+  .contenido{padding-top:34px;padding-bottom:80px}
   section+section{margin-top:20px}
 
   /* ---------- botones ---------- */
@@ -1055,7 +1055,7 @@ export function vistaAdmin(origen) {
     </div>
   </header>
 
-  <main id="principal" class="envoltorio">
+  <main id="principal" class="envoltorio contenido">
     <section class="lamina resumen" aria-label="Resumen">
       <div class="dato">
         <div class="dato-valor" id="datoTarjetas">—</div>
