@@ -101,6 +101,7 @@ const ESTILOS = `
   /* ---------- cabecera de la aplicación ---------- */
   .envoltorio{max-width:var(--ancho);margin:0 auto;padding:0 22px}
   .cabecera{position:sticky;top:0;z-index:10;background:rgba(242,245,250,.82);
+    -webkit-backdrop-filter:blur(14px) saturate(1.6);
     backdrop-filter:blur(14px) saturate(1.6);border-bottom:1px solid var(--linea)}
   .cabecera-fila{display:flex;align-items:center;justify-content:space-between;gap:18px;
     flex-wrap:wrap;padding:20px 0}
@@ -185,6 +186,52 @@ const ESTILOS = `
     padding:3px 8px;display:inline-block;max-width:26ch;overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
   @media (max-width:820px){.col-destino{display:none}}
+
+  /* ---------- teléfono ---------- */
+  @media (max-width:640px){
+    /* Sin esto la fila reparte 230px a los botones y deja el nombre del negocio
+       en 72px. Una tabla de 4 columnas no cabe: cada fila pasa a ser un bloque. */
+    table,tbody,tr,td{display:block;width:auto}
+    thead{display:none}
+    table{margin-top:10px}
+    tr{padding:14px 0;border-bottom:1px solid var(--linea-suave)}
+    tr:hover{background:transparent}
+    td{border:0;padding:0}
+    td:last-child{width:auto;white-space:normal;padding-top:11px}
+    .negocio{font-size:15px;margin-top:2px}
+    .acciones{grid-template-columns:repeat(3,minmax(0,1fr));min-width:0}
+    .acciones button{padding:9px 6px}
+
+    /* 132px de cabecera fija en una pantalla de 844 es peaje permanente */
+    .cabecera{position:static}
+    .cabecera-fila{padding:14px 0;gap:12px}
+    .cabecera-acciones{width:100%}
+    .cabecera-acciones button{flex:1 1 0}
+
+    .envoltorio{padding:0 16px}
+    .contenido{padding-top:20px;padding-bottom:56px}
+    /* Envuelto a 2+1 el tercero heredaba un borde izquierdo suelto. Apilado sin
+       más subía a 214px; con número y etiqueta enfrentados baja a una línea. */
+    .resumen{display:block}
+    .dato{display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+      border-left:0;border-top:1px solid var(--linea);padding:11px 16px}
+    .dato:first-child{border-top:0}
+    .dato-valor{font-size:21px}
+    .dato-valor.cod{font-size:19px}
+    .dato-pie{margin-top:0;text-align:right}
+    .dato-valor{font-size:23px}
+    .dato-valor.cod{font-size:20px}
+    .panel{padding:18px 16px}
+
+    /* menos de 16px y iOS hace zoom al enfocar el campo */
+    input{font-size:16px}
+
+    .modal{padding:12px}
+    .modal-caja{padding:24px 18px;max-height:92vh}
+    .qr-negocio{margin-left:8px;margin-right:34px}
+    .modal-acciones button{flex:1 1 auto}
+    .obligatorios{width:100%;margin-bottom:2px}
+  }
 
   /* ---------- carga, vacío ---------- */
   .hueso{display:block;height:11px;border-radius:999px;
