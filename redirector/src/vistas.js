@@ -115,16 +115,19 @@ const ESTILOS = `
   section+section{margin-top:20px}
 
   /* ---------- botones ---------- */
-  button{border:none;border-radius:999px;padding:10px 20px;cursor:pointer;
+  button,a.boton{border:none;border-radius:999px;padding:10px 20px;cursor:pointer;
     font-family:inherit;font-weight:600;font-size:13.5px;letter-spacing:-.005em;
     background:var(--azul);color:#fff;white-space:nowrap;
     transition:background var(--paso),color var(--paso),border-color var(--paso),
       transform var(--paso),box-shadow var(--paso)}
-  button:hover{background:var(--azul-fuerte)}
-  button:active{transform:translateY(1px)}
+  a.boton{display:inline-flex;align-items:center;gap:7px;text-decoration:none;line-height:1}
+  button:hover,a.boton:hover{background:var(--azul-fuerte);color:#fff}
+  button:active,a.boton:active{transform:translateY(1px)}
   :focus-visible{outline:2px solid var(--azul);outline-offset:2px}
-  button.fantasma{background:var(--papel);color:var(--tinta-2);border:1px solid var(--linea)}
-  button.fantasma:hover{background:var(--papel-2);color:var(--tinta);border-color:var(--tinta-3)}
+  button.fantasma,a.boton.fantasma{background:var(--papel);color:var(--tinta-2);
+    border:1px solid var(--linea)}
+  button.fantasma:hover,a.boton.fantasma:hover{background:var(--papel-2);
+    color:var(--tinta);border-color:var(--tinta-3)}
   button.leer{background:var(--azul-piel);color:var(--azul-fuerte);border:1px solid var(--azul-borde)}
   button.leer:hover{background:var(--azul);color:#fff;border-color:var(--azul)}
   button[disabled]{opacity:.45;cursor:not-allowed}
@@ -206,7 +209,7 @@ const ESTILOS = `
     .cabecera{position:static}
     .cabecera-fila{padding:14px 0;gap:12px}
     .cabecera-acciones{width:100%}
-    .cabecera-acciones button{flex:1 1 0}
+    .cabecera-acciones button,.cabecera-acciones a.boton{flex:1 1 0;justify-content:center}
 
     .envoltorio{padding:0 16px}
     .contenido{padding-top:20px;padding-bottom:56px}
@@ -1279,6 +1282,11 @@ export function vistaAdmin(origen) {
       </div>
       <nav class="cabecera-acciones" aria-label="Acciones de la sesión">
         <button type="button" id="abrirActivar">Activar tarjeta</button>
+        <a class="boton fantasma" href="https://www.google.com/maps" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/>
+          </svg>Google Maps</a>
         <button type="button" class="fantasma" id="salir">Cerrar sesión</button>
       </nav>
     </div>
