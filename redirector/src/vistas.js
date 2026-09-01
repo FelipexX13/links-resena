@@ -329,7 +329,7 @@ const ESTILOS = `
   .segmento button.activa{background:var(--azul);color:#fff}
   .segmento button.activa:hover{background:var(--azul-fuerte)}
 
-  .tipo{display:inline-block;margin-top:4px;font-size:11px;font-weight:500;
+  .tipo{display:inline-block;margin:4px 0 0 12px;font-size:11px;font-weight:500;
     border-radius:999px;padding:2px 9px;border:1px solid transparent}
   .tipo-acrilico{background:var(--azul-piel);color:var(--azul-fuerte);border-color:var(--azul-borde)}
   .tipo-sticker{background:var(--ambar-piel);color:var(--ambar-tinta);border-color:var(--ambar-borde)}
