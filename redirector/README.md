@@ -12,7 +12,7 @@ cuando quieras, sin reimprimir nada.
 | `/A7K2` | 307 al formulario de reseñas del negocio | público |
 | `/admin` | Login y panel de tarjetas | público, pero sin datos hasta iniciar sesión |
 | `/api/login`, `/api/salir`, `/api/sesion` | Manejo de la sesión | público |
-| `/api/lista`, `/api/guardar`, `/api/borrar` | Leer y modificar tarjetas | **requiere sesión** |
+| `/api/lista`, `/api/guardar`, `/api/rango`, `/api/borrar` | Leer y modificar tarjetas | **requiere sesión** |
 
 Los códigos son insensibles a mayúsculas: `/a7k2` y `/A7K2` llevan al mismo sitio.
 
@@ -90,6 +90,27 @@ crea el namespace KV en **Storage & Databases → KV**, enlázalo en
 
 ---
 
+## Acrílico y sticker
+
+Cada tarjeta es de un tipo, y el panel filtra por él:
+
+- **Acrílico** — pieza de mesa para un solo local. Son las tarjetas **nº 1 a 100**.
+- **Sticker** — se pega en las mesas, y el mismo lote se reparte entre locales.
+  Son las **nº 101 a 210**.
+
+El tipo se guarda en el registro. Las tarjetas viejas no lo traen, así que se
+deduce del número: de la 101 en adelante, sticker. El formulario lo cambia cuando
+haga falta, el número solo decide el valor por defecto.
+
+## Editar un rango
+
+Un local que compra diez mesas necesita diez códigos distintos apuntando al mismo
+link. **Editar un rango** pide el número inicial y el final, el link y el negocio,
+y los escribe todos de una vez.
+
+El panel parte el rango en tandas de 25. No es capricho: el plan gratuito corta a
+**50 subpeticiones por petición** y cada escritura en KV cuenta como una.
+
 ## Activar una tarjeta
 
 El panel lleva incorporado el generador de links de reseña, así que no hay que
@@ -107,9 +128,18 @@ Los tres campos son obligatorios, y el link solo se guarda si le diste a **Leer 
 URL** después del último cambio: así no se queda el destino viejo por olvido.
 
 Ese QR codifica `HTTPS://R.GRVE.WORKERS.DEV/CODIGO`, **no** el link de Google: es
-lo que hace que la tarjeta se pueda reasignar después. Sale en dos versiones PNG
-con fondo transparente — negra para fondos claros, blanca para fondos oscuros — y
-el botón **QR** de cada fila de la tabla lo vuelve a mostrar cuando quieras.
+lo que hace que la tarjeta se pueda reasignar después. Salen **cuatro PNG con
+fondo transparente**, y el botón **QR** de cada fila los vuelve a mostrar:
+
+| Versión | Corrección | Módulos | Para qué |
+|---|---|---|---|
+| Negro / Blanco | M | 25×25 | el QR normal, el más denso al imprimir |
+| Negro / Blanco con hueco | H | 29×29 | círculo transparente en el centro, para meter un logo |
+
+El hueco se abre borrando, no pintando encima: el centro queda **transparente de
+verdad**, no blanco. Ocupa el 9% del área y la corrección H tolera el 30%, así que
+el QR sigue leyéndose. Esa corrección cuesta pasar de 25×25 a 29×29 módulos, y por
+eso las versiones sólidas se quedan en M: cada módulo imprime más grande.
 
 En el tag NFC va **ese mismo link**. Los tags grabados antes con `?n=1` al final
 siguen sirviendo: ese parámetro ya no se mira.

@@ -229,6 +229,10 @@ const ESTILOS = `
     .modal{padding:12px}
     .modal-caja{padding:24px 18px;max-height:92vh}
     .qr-negocio{margin-left:8px;margin-right:34px}
+    .qr-pair{grid-template-columns:1fr;justify-items:center}
+    .rango-fila{grid-template-columns:1fr}
+    .segmento{display:flex;width:100%}
+    .segmento button{flex:1 1 0;padding:8px 6px}
     .modal-acciones button{flex:1 1 auto}
     .obligatorios{width:100%;margin-bottom:2px}
   }
@@ -314,6 +318,27 @@ const ESTILOS = `
   .c2:focus{border-color:var(--rojo);box-shadow:0 0 0 3px var(--rojo-piel)}
   .c3:focus{border-color:var(--verde);box-shadow:0 0 0 3px var(--verde-piel)}
   .obligatorios{margin-right:auto;font-size:12px;color:var(--tinta-3)}
+  .n4{background:var(--ambar);color:#4a3400}
+
+  /* ---- segmentados: tipo de tarjeta, modo del formulario, filtro ---- */
+  .segmento{display:inline-flex;gap:3px;padding:3px;background:var(--papel-2);
+    border:1px solid var(--linea);border-radius:999px}
+  .segmento button{background:transparent;color:var(--tinta-2);font-size:12.5px;
+    padding:6px 15px;border-radius:999px}
+  .segmento button:hover{background:var(--papel);color:var(--tinta)}
+  .segmento button.activa{background:var(--azul);color:#fff}
+  .segmento button.activa:hover{background:var(--azul-fuerte)}
+
+  .tipo{display:inline-block;margin-top:4px;font-size:11px;font-weight:500;
+    border-radius:999px;padding:2px 9px;border:1px solid transparent}
+  .tipo-acrilico{background:var(--azul-piel);color:var(--azul-fuerte);border-color:var(--azul-borde)}
+  .tipo-sticker{background:var(--ambar-piel);color:var(--ambar-tinta);border-color:var(--ambar-borde)}
+
+  .filtros{margin-top:12px}
+  .rango-fila{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .rango-resumen{margin-top:10px;padding:10px 13px;border-radius:var(--r-m);
+    background:var(--ambar-piel);border:1px solid var(--ambar-borde);
+    color:var(--ambar-tinta);font-size:12.5px}
   .acciones-izq{justify-content:flex-start;margin-top:14px}
   .nota-mono{font-family:"Geist Mono",ui-monospace,monospace;font-size:13px;color:var(--tinta-3)}
   .centrado{margin-left:auto;margin-right:auto}
@@ -342,7 +367,8 @@ const ESTILOS = `
     border-radius:var(--r-m);padding:8px 13px;display:inline-block;word-break:break-all}
   .centrado{text-align:center}
   /* el damero indica que el PNG es transparente */
-  .qr-pair{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;margin-top:20px}
+  .qr-pair{display:grid;grid-template-columns:repeat(2,max-content);gap:16px;
+    justify-content:center;margin-top:20px}
   .qr-tile{margin:0;flex:0 0 auto;text-align:center}
   .qr-art{display:inline-block;line-height:0;border:1px solid var(--linea);border-radius:var(--r-l);
     padding:11px;background-color:#fff;
@@ -353,8 +379,7 @@ const ESTILOS = `
     background-image:linear-gradient(45deg,#222834 25%,transparent 25%,transparent 75%,#222834 75%),
                      linear-gradient(45deg,#222834 25%,transparent 25%,transparent 75%,#222834 75%)}
   .qr-art img{width:150px;height:150px;display:block}
-  .qr-tile figcaption{font-size:11.5px;color:var(--tinta-2);margin-top:10px}
-  .qr-dl{display:inline-block;margin-top:9px;font-size:11.5px;font-weight:500;color:var(--azul);
+  .qr-dl{display:block;margin-top:9px;font-size:11.5px;font-weight:500;color:var(--azul);
     text-decoration:none;border:1px solid var(--linea);border-radius:999px;padding:5px 13px;
     transition:background var(--paso),border-color var(--paso)}
   .qr-dl:hover{border-color:var(--azul);background:var(--azul-piel)}
@@ -427,7 +452,13 @@ let CONFIRMANDO = "";
 let RELOJ_CONFIRMA = null;
 let BOTON_CONFIRMA = null;
 let PAGINA = 1;
+let TIPO = "acrilico";
+let FILTRO_TIPO = "";
+let MODO = "una";
 const POR_PAGINA = 10;
+// tandas de 25: el plan gratuito corta a 50 subpeticiones y cada escritura cuenta
+const TANDA = 25;
+const TIPO_NOMBRE = { acrilico: "Acrílico", sticker: "Sticker" };
 
 function escHtml(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
@@ -518,6 +549,28 @@ function siguienteCodigo() {
   const proximo = mayor + 1;
   if (proximo >= TOPE) return { codigo: "", numero: 0 };
   return { codigo: codigoDeIndice(proximo), numero: proximo + 1 };
+}
+
+// Las 100 primeras se imprimieron en acrílico, de la 101 en adelante son
+// stickers para mesa. Solo es el valor por defecto: el formulario lo cambia.
+function tipoPorDefecto(codigo) {
+  return indiceDeCodigo(codigo) >= 100 ? "sticker" : "acrilico";
+}
+
+function tipoDe(tarjeta) {
+  return TIPO_NOMBRE[tarjeta.tipo] ? tarjeta.tipo : tipoPorDefecto(tarjeta.codigo);
+}
+
+function pintarTipo(valor) {
+  TIPO = TIPO_NOMBRE[valor] ? valor : "acrilico";
+  marcarSegmento("tipoTarjeta", TIPO);
+}
+
+function marcarSegmento(caja, valor) {
+  const botones = $(caja).querySelectorAll("button");
+  for (let i = 0; i < botones.length; i++) {
+    botones[i].classList.toggle("activa", botones[i].dataset.valor === valor);
+  }
 }
 
 function pintarNumero(codigo) {
@@ -636,6 +689,26 @@ $("analizar").onclick = () => {
 
 /* ---------- alta de tarjetas ---------- */
 
+function codigosDelRango() {
+  const desde = parseInt($("desde").value, 10);
+  const hasta = parseInt($("hasta").value, 10);
+  if (!(desde >= 1) || !(hasta >= desde) || hasta > TOPE) return [];
+  const lista = [];
+  for (let n = desde; n <= hasta; n++) lista.push(codigoDeIndice(n - 1));
+  return lista;
+}
+
+function pintarResumenRango() {
+  const lista = codigosDelRango();
+  const caja = $("rangoResumen");
+  if (!lista.length) {
+    caja.textContent = "Escribe un rango válido: del menor al mayor.";
+    return;
+  }
+  caja.textContent = lista.length + (lista.length === 1 ? " tarjeta · " : " tarjetas · ") +
+    lista[0] + " → " + lista[lista.length - 1];
+}
+
 $("formTarjeta").onsubmit = async (e) => {
   e.preventDefault();
   const destino = $("fichaReview").value.trim();
@@ -655,8 +728,35 @@ $("formTarjeta").onsubmit = async (e) => {
   const boton = $("guardar");
   const etiqueta = boton.textContent;
   boton.disabled = true;
-  boton.textContent = "Guardando…";
   try {
+    if (MODO === "rango") {
+      const codigos = codigosDelRango();
+      if (!codigos.length) {
+        avisar("aviso", "El rango no es válido: el número final debe ser mayor o igual que el inicial.", false);
+        return;
+      }
+      for (let i = 0; i < codigos.length; i += TANDA) {
+        const tanda = codigos.slice(i, i + TANDA);
+        boton.textContent = "Guardando " + Math.min(i + TANDA, codigos.length) + " de " + codigos.length + "…";
+        await llamar("rango", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            codigos: tanda,
+            negocio: $("negocio").value,
+            destino: destino,
+            tipo: TIPO,
+          }),
+        });
+      }
+      cerrarTarjeta();
+      avisar("avisoPanel", codigos.length + " tarjetas apuntando a " + $("negocio").value +
+        " (" + codigos[0] + " → " + codigos[codigos.length - 1] + ")", true);
+      await listar();
+      return;
+    }
+
+    boton.textContent = "Guardando…";
     const datos = await llamar("guardar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -664,6 +764,7 @@ $("formTarjeta").onsubmit = async (e) => {
         codigo: $("codigo").value,
         negocio: $("negocio").value,
         destino: destino,
+        tipo: TIPO,
       }),
     });
     const editaba = Boolean(EDITANDO_CODIGO);
@@ -693,6 +794,8 @@ function editar(codigo) {
   $("maps").value = t.destino;
   URL_LEIDA = t.destino;
   pintarNumero(t.codigo);
+  pintarTipo(tipoDe(t));
+  pintarModo("una");
   $("fichaNombre").textContent = t.negocio || t.codigo;
   $("fichaMeta").textContent = placeIdDeDestino(t.destino)
     ? "Place ID: " + placeIdDeDestino(t.destino) : "";
@@ -707,6 +810,30 @@ function editar(codigo) {
   abrirTarjetaModal();
 }
 
+function pintarModo(valor) {
+  MODO = valor === "rango" ? "rango" : "una";
+  marcarSegmento("modoTarjeta", MODO);
+  $("campoUna").hidden = MODO === "rango";
+  $("campoRango").hidden = MODO === "una";
+  $("guardar").textContent = MODO === "rango"
+    ? "Aplicar al rango"
+    : (EDITANDO_CODIGO ? "Guardar cambios" : "Activar tarjeta");
+  if (MODO === "rango") pintarResumenRango();
+}
+
+$("modoTarjeta").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-valor]");
+  if (b) pintarModo(b.dataset.valor);
+});
+
+$("tipoTarjeta").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-valor]");
+  if (b) pintarTipo(b.dataset.valor);
+});
+
+$("desde").addEventListener("input", pintarResumenRango);
+$("hasta").addEventListener("input", pintarResumenRango);
+
 function salirDeEdicion() {
   EDITANDO_CODIGO = "";
   $("codigo").value = $("negocio").value = $("maps").value = "";
@@ -715,6 +842,7 @@ function salirDeEdicion() {
   NOMBRE_AUTO = "";
   URL_LEIDA = "";
   $("numeroTarjeta").textContent = "";
+  $("desde").value = $("hasta").value = "";
 }
 
 function prepararNuevaTarjeta() {
@@ -722,6 +850,8 @@ function prepararNuevaTarjeta() {
   const sig = siguienteCodigo();
   $("codigo").value = sig.codigo;
   $("numeroTarjeta").textContent = sig.numero ? "nº " + sig.numero : "";
+  pintarTipo(tipoPorDefecto(sig.codigo));
+  pintarModo("una");
   $("tarjetaModalKicker").textContent = "Nueva tarjeta";
   $("tarjetaModalTitulo").textContent = "Activar una tarjeta";
   $("tarjetaModalSubtitulo").textContent = "Apunta el código impreso al link de reseña de un negocio.";
@@ -748,6 +878,20 @@ function cerrarTarjeta() {
 }
 
 $("abrirActivar").onclick = prepararNuevaTarjeta;
+
+$("abrirRango").onclick = () => {
+  salirDeEdicion();
+  $("tarjetaModalKicker").textContent = "Varias tarjetas";
+  $("tarjetaModalTitulo").textContent = "Editar un rango";
+  $("tarjetaModalSubtitulo").textContent = "Un local con diez mesas son diez códigos distintos apuntando al mismo link. Se hace de una vez.";
+  pintarTipo("sticker");
+  pintarModo("rango");
+  limpiarAviso("aviso");
+  focoTarjeta = document.activeElement;
+  $("modalTarjeta").hidden = false;
+  document.body.style.overflow = "hidden";
+  $("desde").focus();
+};
 $("cerrarTarjeta").onclick = cerrarTarjeta;
 $("cancelarTarjeta").onclick = cerrarTarjeta;
 $("modalTarjeta").addEventListener("click", (e) => {
@@ -778,7 +922,11 @@ function pintarResumen() {
   const negocios = {};
   TARJETAS.forEach((t) => { const n = String(t.negocio || "").trim(); if (n) negocios[n] = 1; });
   const sig = siguienteCodigo();
-  $("datoTarjetas").textContent = TARJETAS.length;
+  const activas = TARJETAS.filter((t) => t.destino).length;
+  $("datoTarjetas").textContent = activas;
+  $("datoTarjetasPie").textContent = activas === TARJETAS.length
+    ? "Tarjetas activas"
+    : "Activas de " + TARJETAS.length + " impresas";
   $("datoNegocios").textContent = Object.keys(negocios).length;
   $("datoSiguiente").textContent = sig.codigo || "—";
   $("datoSiguientePie").textContent = sig.numero
@@ -788,10 +936,21 @@ function pintarResumen() {
 
 function filtradas() {
   const busca = sinTildes($("buscar").value.trim());
-  if (!busca) return TARJETAS;
-  return TARJETAS.filter((t) =>
-    sinTildes(t.codigo).includes(busca) || sinTildes(t.negocio).includes(busca));
+  return TARJETAS.filter((t) => {
+    if (FILTRO_TIPO && tipoDe(t) !== FILTRO_TIPO) return false;
+    if (!busca) return true;
+    return sinTildes(t.codigo).includes(busca) || sinTildes(t.negocio).includes(busca);
+  });
 }
+
+$("filtroTipo").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-valor]");
+  if (!b) return;
+  FILTRO_TIPO = b.dataset.valor;
+  marcarSegmento("filtroTipo", FILTRO_TIPO);
+  PAGINA = 1;
+  pintarTabla();
+});
 
 function esqueleto() {
   let filas = "";
@@ -837,9 +996,9 @@ function pintarTabla() {
   if (!lista.length) {
     $("tabla").innerHTML =
       "<div class='vacio'><h2>Sin coincidencias</h2>" +
-      "<p>Ninguna tarjeta coincide con <b>" + escHtml(busca) + "</b>. " +
-      "Se busca por código y por nombre del negocio.</p>" +
-      "<button type='button' class='fantasma' data-limpiar>Quitar la búsqueda</button></div>";
+      "<p>Ninguna tarjeta coincide" + (busca ? " con <b>" + escHtml(busca) + "</b>" : "") +
+      (FILTRO_TIPO ? " en " + TIPO_NOMBRE[FILTRO_TIPO] : "") + ".</p>" +
+      "<button type='button' class='fantasma' data-limpiar>Quitar los filtros</button></div>";
     $("contador").textContent = "0 de " + TARJETAS.length + " tarjetas";
     return;
   }
@@ -854,10 +1013,12 @@ function pintarTabla() {
     const c = escHtml(t.codigo);
     const n = indiceDeCodigo(t.codigo);
     const place = placeIdDeDestino(t.destino);
+    const tipo = tipoDe(t);
     filas +=
       "<tr><td><div class='cod'>" + c + "</div>" +
       (n < 0 ? "" : "<div class='fila-num'>nº " + (n + 1) + "</div>") +
       "</td><td class='negocio'>" + (escHtml(t.negocio) || "—") +
+      "<div class='tipo tipo-" + tipo + "'>" + TIPO_NOMBRE[tipo] + "</div>" +
       "</td><td class='col-destino'><span class='place' title='" + escHtml(t.destino) + "'>" +
       (place ? escHtml(place) : escHtml(t.destino)) +
       "</span></td><td><div class='acciones'>" +
@@ -869,9 +1030,9 @@ function pintarTabla() {
 
   $("tabla").innerHTML = cabeceraTabla() + filas + "</tbody></table>" +
     paginacion(PAGINA, totalPaginas);
-  $("contador").textContent = busca
-    ? "Mostrando " + (inicio + 1) + "–" + fin + " de " + lista.length + " resultados, sobre " + TARJETAS.length + " tarjetas"
-    : "Mostrando " + (inicio + 1) + "–" + fin + " de " + TARJETAS.length + " tarjetas";
+  const acotado = busca || FILTRO_TIPO;
+  $("contador").textContent = "Mostrando " + (inicio + 1) + "–" + fin + " de " + lista.length +
+    (acotado ? " tarjetas filtradas, sobre " + TARJETAS.length : " tarjetas");
 }
 
 // Con 456.976 códigos posibles, listar todas las páginas no escala: se muestran
@@ -934,7 +1095,14 @@ function pedirConfirmacion(boton, codigo) {
 
 $("tabla").addEventListener("click", async (e) => {
   if (e.target.closest("[data-activar]")) { prepararNuevaTarjeta(); return; }
-  if (e.target.closest("[data-limpiar]")) { $("limpiarBusca").click(); return; }
+  if (e.target.closest("[data-limpiar]")) {
+    $("buscar").value = "";
+    FILTRO_TIPO = "";
+    marcarSegmento("filtroTipo", "");
+    PAGINA = 1;
+    pintarTabla();
+    return;
+  }
 
   const pg = e.target.closest("[data-pagina]");
   if (pg && !pg.disabled) { PAGINA = parseInt(pg.dataset.pagina, 10) || 1; pintarTabla(); return; }
@@ -973,9 +1141,15 @@ $("tabla").addEventListener("click", async (e) => {
 // bastante más compacto que el modo byte. Por eso la URL va en MAYÚSCULAS.
 const ALFANUM = /^[0-9A-Z $%*+\-./:]+$/;
 
-function qrPng(texto, color, cell, quiet) {
+// Diámetro del hueco, en fracción del lado del QR. 0.34 se come el 9% del área;
+// la corrección H tolera el 30%, así que sobra margen para tinta y escaneo malo.
+const HUECO = 0.34;
+
+function qrPng(texto, color, cell, quiet, hueco) {
   const modo = ALFANUM.test(texto) ? "Alphanumeric" : "Byte";
-  const t = qrcode(0, "M");
+  // Con hueco sube a corrección H. Cuesta pasar de 25x25 a 29x29 módulos, así
+  // que el sólido se queda en M: imprime más grande cada módulo.
+  const t = qrcode(0, hueco ? "H" : "M");
   t.addData(texto, modo);
   t.make();
   const n = t.getModuleCount();
@@ -986,14 +1160,21 @@ function qrPng(texto, color, cell, quiet) {
   for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) {
     if (t.isDark(r, k)) x.fillRect((k + quiet) * cell, (r + quiet) * cell, cell, cell);
   }
+  if (hueco) {
+    // destination-out borra en vez de pintar: el hueco queda transparente de
+    // verdad, y el borde del círculo corta los módulos en limpio
+    x.globalCompositeOperation = "destination-out";
+    x.beginPath();
+    x.arc(c.width / 2, c.height / 2, (n * cell * HUECO) / 2, 0, Math.PI * 2);
+    x.fill();
+  }
   return { src: c.toDataURL("image/png"), modulos: n, modo: modo };
 }
 
-function tile(mod, src, pie, archivo) {
+function tile(mod, src, etiqueta, archivo) {
   return "<figure class='qr-tile " + mod + "'>" +
-    "<div class='qr-art'><img src='" + src + "' alt='QR de la tarjeta, " + pie + "'></div>" +
-    "<figcaption>" + pie + "</figcaption><br>" +
-    "<a class='qr-dl' href='" + src + "' download='" + archivo + "'>Descargar PNG</a>" +
+    "<div class='qr-art'><img src='" + src + "' alt='QR de la tarjeta, " + etiqueta + "'></div>" +
+    "<a class='qr-dl' href='" + src + "' download='" + archivo + "'>" + etiqueta + "</a>" +
     "</figure>";
 }
 
@@ -1008,15 +1189,12 @@ function abrirQR(codigo) {
 
   if (typeof qrcode === "undefined") {
     $("qrPar").innerHTML = "<p>No se pudo cargar el generador de QR. Revisa tu conexión y recarga la página.</p>";
-    $("qrDato").textContent = "";
   } else {
-    const negro = qrPng(url, "#000000", 10, 4);
-    const blanco = qrPng(url, "#ffffff", 10, 4);
     $("qrPar").innerHTML =
-      tile("", negro.src, "Negro sobre transparente", codigo + "-qr-negro.png") +
-      tile("inv", blanco.src, "Blanco sobre transparente", codigo + "-qr-blanco.png");
-    $("qrDato").textContent =
-      negro.modulos + "×" + negro.modulos + " módulos · modo " + negro.modo + " · corrección M";
+      tile("", qrPng(url, "#000000", 10, 4, false).src, "Negro", codigo + "-qr-negro.png") +
+      tile("inv", qrPng(url, "#ffffff", 10, 4, false).src, "Blanco", codigo + "-qr-blanco.png") +
+      tile("", qrPng(url, "#000000", 10, 4, true).src, "Negro con hueco", codigo + "-qr-negro-hueco.png") +
+      tile("inv", qrPng(url, "#ffffff", 10, 4, true).src, "Blanco con hueco", codigo + "-qr-blanco-hueco.png");
   }
 
   focoPrevio = document.activeElement;
@@ -1106,7 +1284,7 @@ export function vistaAdmin(origen) {
     <section class="lamina resumen" aria-label="Resumen">
       <div class="dato">
         <div class="dato-valor" id="datoTarjetas">—</div>
-        <div class="dato-pie">Tarjetas activas</div>
+        <div class="dato-pie" id="datoTarjetasPie">Tarjetas activas</div>
       </div>
       <div class="dato">
         <div class="dato-valor" id="datoNegocios">—</div>
@@ -1121,7 +1299,10 @@ export function vistaAdmin(origen) {
     <section class="lamina panel">
       <div class="panel-barra">
         <h2>Tarjetas</h2>
-        <button type="button" class="fantasma" id="recargar">Refrescar</button>
+        <div class="cabecera-acciones">
+          <button type="button" id="abrirRango">Editar un rango</button>
+          <button type="button" class="fantasma" id="recargar">Refrescar</button>
+        </div>
       </div>
       <div class="aviso" id="avisoPanel" role="status"></div>
 
@@ -1135,6 +1316,12 @@ export function vistaAdmin(origen) {
                  aria-label="Buscar por código o por negocio" autocomplete="off">
         </div>
         <button type="button" class="fantasma" id="limpiarBusca" hidden>Limpiar</button>
+      </div>
+
+      <div class="segmento filtros" id="filtroTipo" role="group" aria-label="Filtrar por tipo">
+        <button type="button" class="activa" data-valor="">Todas</button>
+        <button type="button" data-valor="acrilico">Acrílico</button>
+        <button type="button" data-valor="sticker">Sticker</button>
       </div>
 
       <div id="tabla"></div>
@@ -1152,9 +1339,26 @@ export function vistaAdmin(origen) {
     <p class="modal-subtitulo" id="tarjetaModalSubtitulo">Apunta el código impreso al link de reseña de un negocio.</p>
 
     <form id="formTarjeta">
-      <label class="paso" for="codigo"><span class="n n1">1</span>Código de la tarjeta
-        <span class="num" id="numeroTarjeta"></span></label>
-      <input class="c1" id="codigo" placeholder="AADW" autocomplete="off" required>
+      <div class="segmento" id="modoTarjeta" role="group" aria-label="Una tarjeta o un rango">
+        <button type="button" class="activa" data-valor="una">Una tarjeta</button>
+        <button type="button" data-valor="rango">Un rango</button>
+      </div>
+
+      <div id="campoUna">
+        <label class="paso" for="codigo"><span class="n n1">1</span>Código de la tarjeta
+          <span class="num" id="numeroTarjeta"></span></label>
+        <input class="c1" id="codigo" placeholder="AADW" autocomplete="off">
+      </div>
+
+      <div id="campoRango" hidden>
+        <label class="paso" for="desde"><span class="n n1">1</span>Rango de tarjetas
+          <span class="suave">— por número</span></label>
+        <div class="rango-fila">
+          <input class="c1" id="desde" type="number" min="1" placeholder="Desde el nº 101" autocomplete="off">
+          <input class="c1" id="hasta" type="number" min="1" placeholder="Hasta el nº 110" autocomplete="off">
+        </div>
+        <div class="rango-resumen" id="rangoResumen">Escribe un rango válido: del menor al mayor.</div>
+      </div>
 
       <label class="paso" for="maps"><span class="n n2">2</span>URL de Google Maps del negocio</label>
       <p class="ayuda ayuda-alta">También sirve su <b>Place ID</b> o un link de reseña ya hecho.</p>
@@ -1178,6 +1382,14 @@ export function vistaAdmin(origen) {
       <label class="paso" for="negocio"><span class="n n3">3</span>Nombre del negocio</label>
       <input class="c3" id="negocio" placeholder="Mercacentro Av. Guabinal" autocomplete="off" required>
 
+      <label class="paso"><span class="n n4">4</span>Tipo de tarjeta</label>
+      <div class="segmento" id="tipoTarjeta" role="group" aria-label="Tipo de tarjeta">
+        <button type="button" class="activa" data-valor="acrilico">Acrílico</button>
+        <button type="button" data-valor="sticker">Sticker</button>
+      </div>
+      <p class="ayuda">Acrílico: pieza de mesa, un solo local. Sticker: se pega en las
+        mesas y el mismo lote se reparte entre varios locales.</p>
+
       <div class="modal-acciones">
         <span class="obligatorios">Los tres campos son obligatorios</span>
         <button type="button" class="fantasma" id="cancelarTarjeta">Cancelar</button>
@@ -1198,13 +1410,10 @@ export function vistaAdmin(origen) {
     <p class="qr-nota">Esto es lo que va impreso en el plástico, no el link de Google.</p>
     <div class="centrado"><span class="qr-url" id="qrUrl"></span></div>
     <div class="qr-pair" id="qrPar"></div>
-    <p class="qr-dato" id="qrDato"></p>
 
     <div class="nfc">
       <b>Para grabar en el tag NFC</b>
       <span class="qr-url" id="nfcUrl"></span>
-      <p class="ayuda centrado">El mismo link del QR. Los tags que ya grabaste
-        con <code>?n=1</code> al final siguen funcionando igual.</p>
       <div><button class="fantasma" id="copiarNfc">Copiar el link</button></div>
     </div>
     <div class="aviso" id="avisoQR" role="alert"></div>

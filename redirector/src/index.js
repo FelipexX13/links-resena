@@ -9,13 +9,15 @@
  *   POST /api/salir    cierra la sesión
  *   GET  /api/sesion   ¿hay sesión activa?
  *   GET  /api/lista    listado de tarjetas          (sesión)
- *   POST /api/guardar  {codigo, destino, negocio}  (sesión)
- *   POST /api/borrar   {codigo}                     (sesión)
+ *   POST /api/guardar  {codigo, destino, negocio, tipo}        (sesión)
+ *   POST /api/rango    {codigos[], destino, negocio, tipo}     (sesión)
+ *   POST /api/borrar   {codigo}                                (sesión)
  *
  * Secreto obligatorio:  ADMIN_PASSWORD
  *
  * Datos en KV (binding TARJETAS):
- *   "c:A7K2"        {"destino":"https://...","negocio":"...","actualizado":"..."}
+ *   "c:A7K2"        {"destino":"https://...","negocio":"...","tipo":"acrilico",
+ *                    "actualizado":"..."}
  *                   + la misma info como metadata, para listar en una sola llamada
  *   "intentos:<ip>" contador de logins fallidos, expira solo a los 15 minutos
  */
@@ -27,6 +29,10 @@ const FORMATO_CODIGO = /^[A-Z0-9]{3,12}$/;
 const COOKIE = "sesion";
 const DURACION_SESION = 8 * 60 * 60 * 1000; // 8 horas
 const MAX_INTENTOS = 8;
+const TIPOS = new Set(["acrilico", "sticker"]);
+// El plan gratuito corta a 50 subpeticiones por petición, y cada escritura en KV
+// cuenta como una. El panel parte los rangos largos en tandas de este tamaño.
+const MAX_RANGO = 25;
 const VENTANA_INTENTOS = 900; // segundos
 
 export default {
@@ -57,6 +63,40 @@ export default {
     });
   },
 };
+
+/* ---------- validación compartida ---------- */
+
+function urlDestino(valor) {
+  let u;
+  try { u = new URL(String(valor || "").trim()); } catch (e) { return ""; }
+  // solo http(s): si no, el panel sería un trampolín hacia javascript: u otros
+  return u.protocol === "https:" || u.protocol === "http:" ? u.href : "";
+}
+
+function tipoValido(valor) {
+  const t = String(valor || "").toLowerCase();
+  return TIPOS.has(t) ? t : "acrilico";
+}
+
+function registroDe(cuerpo) {
+  const destino = urlDestino(cuerpo.destino);
+  if (!destino) return { error: "El destino debe ser una URL http:// o https://" };
+  const negocio = String(cuerpo.negocio || "").trim().slice(0, 120);
+  if (!negocio) return { error: "Falta el nombre del negocio" };
+  return {
+    registro: {
+      destino: destino,
+      negocio: negocio,
+      tipo: tipoValido(cuerpo.tipo),
+      actualizado: new Date().toISOString(),
+    },
+  };
+}
+
+async function escribir(env, codigo, registro) {
+  await env.TARJETAS.put("c:" + codigo, JSON.stringify(registro), { metadata: registro });
+  await olvidarTarjeta(codigo);
+}
 
 /* ---------- API ---------- */
 
@@ -95,27 +135,31 @@ async function api(request, env, accion, url, ctx) {
       return json({ error: "Ese código está reservado por el sistema" }, 400);
     }
 
-    let destino;
-    try {
-      destino = new URL(String(cuerpo.destino || "").trim());
-    } catch (e) {
-      return json({ error: "El destino no es una URL válida" }, 400);
-    }
-    if (destino.protocol !== "https:" && destino.protocol !== "http:") {
-      return json({ error: "El destino debe empezar por http:// o https://" }, 400);
+    const hecho = registroDe(cuerpo);
+    if (hecho.error) return json({ error: hecho.error }, 400);
+
+    await escribir(env, codigo, hecho.registro);
+    return json(Object.assign({ ok: true, codigo }, hecho.registro));
+  }
+
+  // Un local que compra diez mesas quiere diez códigos distintos apuntando al
+  // mismo sitio. Los códigos llegan ya calculados desde el panel, que es quien
+  // sabe convertir número de tarjeta a código.
+  if (accion === "rango" && request.method === "POST") {
+    const cuerpo = await request.json().catch(() => ({}));
+    const codigos = (Array.isArray(cuerpo.codigos) ? cuerpo.codigos : [])
+      .map(normalizar)
+      .filter((c) => c && !RESERVADAS.has(c.toLowerCase()));
+    if (!codigos.length) return json({ error: "El rango no tiene códigos válidos" }, 400);
+    if (codigos.length > MAX_RANGO) {
+      return json({ error: "Máximo " + MAX_RANGO + " tarjetas por tanda" }, 400);
     }
 
-    const negocio = String(cuerpo.negocio || "").trim().slice(0, 120);
-    if (!negocio) return json({ error: "Falta el nombre del negocio" }, 400);
+    const hecho = registroDe(cuerpo);
+    if (hecho.error) return json({ error: hecho.error }, 400);
 
-    const registro = {
-      destino: destino.href,
-      negocio: negocio,
-      actualizado: new Date().toISOString(),
-    };
-    await env.TARJETAS.put("c:" + codigo, JSON.stringify(registro), { metadata: registro });
-    await olvidarTarjeta(codigo);
-    return json(Object.assign({ ok: true, codigo }, registro));
+    for (const codigo of codigos) await escribir(env, codigo, hecho.registro);
+    return json({ ok: true, total: codigos.length });
   }
 
   if (accion === "borrar" && request.method === "POST") {
