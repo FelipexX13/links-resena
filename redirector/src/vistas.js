@@ -367,6 +367,8 @@ const ESTILOS = `
   .acciones-orden{grid-template-columns:repeat(3,minmax(0,1fr));min-width:240px}
   .rango-fila{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
   #rangoOrden{margin-top:14px}
+  .par{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .mini2{font-size:10.5px;color:var(--tinta-3);margin:0 0 4px}
   .rango-resumen{margin-top:10px;padding:10px 13px;border-radius:var(--r-m);
     background:var(--ambar-piel);border:1px solid var(--ambar-borde);
     color:var(--ambar-tinta);font-size:12.5px}
@@ -787,6 +789,36 @@ function pedidasDelLocal() {
   return { acrilicos: na, stickers: ns };
 }
 
+function primeraLibre(tipo) {
+  const libres = libresPorTipo(tipo);
+  return libres.length ? indiceDeCodigo(libres[0]) + 1 : "";
+}
+
+// Un bloque seguido desde el número que se pida. No salta las ocupadas: si hay
+// una dentro, lo dice y no deja guardar. Saltarlas daría un lote distinto del
+// que la persona tiene en la mano.
+function bloqueDesde(tipo, desde, cuantas) {
+  const res = { codigos: [], problema: "" };
+  if (!cuantas) return res;
+  if (!(desde >= 1)) { res.problema = "falta el número inicial"; return res; }
+  for (let n = desde; res.codigos.length < cuantas; n++) {
+    if (n > TOPE) { res.problema = "el bloque se sale de la numeración"; return res; }
+    const codigo = codigoDeIndice(n - 1);
+    const t = TARJETAS.filter((x) => x.codigo === codigo)[0];
+    if (!t) { res.problema = "la nº " + n + " no está impresa"; return res; }
+    if (tipoDe(t) !== tipo) {
+      res.problema = "la nº " + n + " no es " + (tipo === "acrilico" ? "acrílico" : "sticker");
+      return res;
+    }
+    if (t.destino) {
+      res.problema = "la nº " + n + " (" + codigo + ") ya está ocupada";
+      return res;
+    }
+    res.codigos.push(codigo);
+  }
+  return res;
+}
+
 // Si el negocio ya tiene una orden, esto no es un alta sino un cambio de tamaño:
 // se toman las libres que falten, o se sueltan las que sobren. Las que ya tiene y
 // siguen dentro no se tocan, así no se pisa su venta.
@@ -803,11 +835,10 @@ function planDelLocal() {
     plan.tomar[tipo] = [];
     plan.soltar[tipo] = [];
     if (quiere > tiene) {
-      const libres = libresPorTipo(tipo);
-      plan.tomar[tipo] = libres.slice(0, quiere - tiene);
-      if (plan.tomar[tipo].length < quiere - tiene) {
-        plan.falta.push(fila[3] + ": solo quedan " + libres.length + " libres");
-      }
+      const desde = parseInt($(tipo === "acrilico" ? "desdeAcrilico" : "desdeSticker").value, 10);
+      const bloque = bloqueDesde(tipo, desde, quiere - tiene);
+      plan.tomar[tipo] = bloque.codigos;
+      if (bloque.problema) plan.falta.push(fila[3] + ": " + bloque.problema);
     } else if (quiere < tiene) {
       plan.soltar[tipo] = base.codigos[tipo].slice().sort().slice(quiere);
     }
@@ -1101,6 +1132,10 @@ function pintarModo(valor) {
   $("guardar").textContent = MODO === "rango" ? "Aplicar al rango"
     : MODO === "local" ? "Crear la orden"
     : (EDITANDO_CODIGO ? "Guardar cambios" : "Activar tarjeta");
+  if (MODO === "local") {
+    if (!$("desdeAcrilico").value) $("desdeAcrilico").value = primeraLibre("acrilico");
+    if (!$("desdeSticker").value) $("desdeSticker").value = primeraLibre("sticker");
+  }
   if (MODO === "rango") pintarOrigenRango(ORIGEN_RANGO);
   else $("bloqueTipo").hidden = MODO === "local";   // en un local van los dos tipos
   if (MODO === "local") pintarResumenLocal();
@@ -1127,6 +1162,8 @@ $("desde").addEventListener("input", pintarResumenRango);
 $("hasta").addEventListener("input", pintarResumenRango);
 $("nAcrilicos").addEventListener("input", pintarResumenLocal);
 $("nStickers").addEventListener("input", pintarResumenLocal);
+$("desdeAcrilico").addEventListener("input", pintarResumenLocal);
+$("desdeSticker").addEventListener("input", pintarResumenLocal);
 $("negocio").addEventListener("input", () => {
   if (MODO === "local") pintarResumenLocal();
 });
@@ -1141,6 +1178,7 @@ function salirDeEdicion() {
   $("numeroTarjeta").textContent = "";
   $("desde").value = $("hasta").value = "";
   $("nAcrilicos").value = $("nStickers").value = "";
+  $("desdeAcrilico").value = $("desdeSticker").value = "";
   if ($("localExistente").options.length) $("localExistente").value = "";
   if ($("ordenRango").options.length) $("ordenRango").value = "";
   VENTA_EDITADA = { vendida: "", precio: 0 };
@@ -2038,16 +2076,30 @@ export function vistaAdmin(origen) {
         <div class="rango-fila">
           <div>
             <div class="mini">Acrílicos de mesa</div>
-            <input class="c1" id="nAcrilicos" type="number" min="0" placeholder="2"
-                   aria-label="Cuántos acrílicos" autocomplete="off">
+            <div class="par">
+              <div><div class="mini2">desde el nº</div>
+                <input class="c1" id="desdeAcrilico" type="number" min="1" placeholder="1"
+                       aria-label="Acrílicos, desde qué número" autocomplete="off"></div>
+              <div><div class="mini2">cuántos</div>
+                <input class="c1" id="nAcrilicos" type="number" min="0" placeholder="2"
+                       aria-label="Cuántos acrílicos" autocomplete="off"></div>
+            </div>
           </div>
           <div>
             <div class="mini">Stickers de mesa</div>
-            <input class="c1" id="nStickers" type="number" min="0" placeholder="10"
-                   aria-label="Cuántos stickers" autocomplete="off">
+            <div class="par">
+              <div><div class="mini2">desde el nº</div>
+                <input class="c1" id="desdeSticker" type="number" min="1" placeholder="101"
+                       aria-label="Stickers, desde qué número" autocomplete="off"></div>
+              <div><div class="mini2">cuántos</div>
+                <input class="c1" id="nStickers" type="number" min="0" placeholder="10"
+                       aria-label="Cuántos stickers" autocomplete="off"></div>
+            </div>
           </div>
         </div>
         <div class="rango-resumen" id="localResumen">Escribe cuántos acrílicos y cuántos stickers lleva la orden.</div>
+        <p class="ayuda">El número inicial viene puesto con la primera tarjeta libre de cada
+          tipo. Cámbialo si vas a entregar otras: el bloque tiene que estar libre entero.</p>
       </div>
 
       <div id="campoUna">

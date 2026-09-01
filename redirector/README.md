@@ -115,9 +115,20 @@ entonces se acepta o se cancela:
 | **Aceptada** | pagó: lleva fecha e importe | ocupadas |
 | *(cancelada)* | no pagó | **libres otra vez**, listas para la siguiente orden |
 
-**Nueva orden** pide cuántos acrílicos y cuántos stickers, y toma las primeras
-tarjetas **libres** de cada tipo — impresas pero sin destino. No hay que saber qué
-códigos quedan sueltos: el panel los busca.
+**Nueva orden** pide, por cada tipo, **desde qué número** y **cuántas**. El número
+inicial viene puesto con la primera tarjeta libre, así que dejarlo como está se
+comporta como antes; se cambia cuando vas a entregar unas piezas concretas.
+
+El bloque tiene que estar **libre entero**. Si dentro hay una ocupada, o el bloque
+se sale de su tipo, el resumen lo dice con el número exacto y no deja guardar:
+
+```
+No alcanza — acrílicos: la nº 5 (AAAE) ya está ocupada
+No alcanza — acrílicos: la nº 101 no es acrílico
+```
+
+No salta las ocupadas a propósito: saltarlas daría un lote distinto del que tienes
+en la mano.
 
 **Piezas** cambia el tamaño de una orden ya creada. Si sube, toma más libres; si
 baja, suelta las últimas y quedan libres para otra orden. Las que ya tenía y
