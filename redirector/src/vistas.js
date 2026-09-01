@@ -358,9 +358,10 @@ const ESTILOS = `
   .estado{display:inline-block;font-size:11px;font-weight:500;border-radius:999px;
     padding:2px 9px;border:1px solid transparent}
   .estado-vendido{background:var(--verde-piel);color:var(--verde-fuerte);border-color:var(--verde-borde)}
-  .estado-pendiente{background:var(--papel-2);color:var(--tinta-2);border-color:var(--linea)}
+  .estado-pendiente{background:var(--ambar-piel);color:var(--ambar-tinta);border-color:var(--ambar-borde)}
   .piezas{font-family:"Geist Mono",ui-monospace,monospace;font-size:12px;color:var(--tinta-2)}
   .importe{font-family:"Geist Mono",ui-monospace,monospace;font-weight:500}
+  .acciones-orden{grid-template-columns:repeat(2,minmax(0,1fr));min-width:196px}
   .rango-fila{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
   .rango-resumen{margin-top:10px;padding:10px 13px;border-radius:var(--r-m);
     background:var(--ambar-piel);border:1px solid var(--ambar-borde);
@@ -478,6 +479,7 @@ let EDITANDO_CODIGO = "";
 let CONFIRMANDO = "";
 let RELOJ_CONFIRMA = null;
 let BOTON_CONFIRMA = null;
+let ETIQUETA_CONFIRMA = "Desactivar";
 let PAGINA = 1;
 let TIPO = "acrilico";
 let FILTRO_TIPO = "";
@@ -763,7 +765,7 @@ function pintarResumenLocal() {
   }
   if (faltan.length) { caja.textContent = "No alcanza — " + faltan.join(" · "); return; }
   if (!sel.acrilico.length && !sel.sticker.length) {
-    caja.textContent = "Escribe cuántos acrílicos y cuántos stickers compra el local.";
+    caja.textContent = "Escribe cuántos acrílicos y cuántos stickers lleva la orden.";
     return;
   }
   const partes = [];
@@ -844,7 +846,7 @@ $("formTarjeta").onsubmit = async (e) => {
         }
       }
       cerrarTarjeta();
-      avisar("avisoPanel", total + " tarjetas vinculadas a " + $("negocio").value + " · " +
+      avisar("avisoPanel", "Orden de " + $("negocio").value + " creada · " + total + " tarjetas ocupadas: " +
         plural(sel.acrilico.length, "acrílico", "acrílicos") + " y " +
         plural(sel.sticker.length, "sticker", "stickers"), true);
       await listar();
@@ -943,7 +945,7 @@ function pintarModo(valor) {
   $("campoLocal").hidden = MODO !== "local";
   $("bloqueTipo").hidden = MODO === "local";   // en un local van los dos tipos
   $("guardar").textContent = MODO === "rango" ? "Aplicar al rango"
-    : MODO === "local" ? "Vincular al local"
+    : MODO === "local" ? "Crear la orden"
     : (EDITANDO_CODIGO ? "Guardar cambios" : "Activar tarjeta");
   if (MODO === "rango") pintarResumenRango();
   if (MODO === "local") pintarResumenLocal();
@@ -1013,9 +1015,9 @@ $("abrirActivar").onclick = prepararNuevaTarjeta;
 
 $("abrirLocal").onclick = () => {
   salirDeEdicion();
-  $("tarjetaModalKicker").textContent = "Vincular";
-  $("tarjetaModalTitulo").textContent = "Vincular un local";
-  $("tarjetaModalSubtitulo").textContent = "Le asigna acrílicos y stickers libres, todos apuntando a su ficha de Google.";
+  $("tarjetaModalKicker").textContent = "Orden";
+  $("tarjetaModalTitulo").textContent = "Nueva orden";
+  $("tarjetaModalSubtitulo").textContent = "Ocupa acrílicos y stickers libres y los apunta a la ficha del local. Queda pendiente hasta que la aceptes o la canceles.";
   pintarModo("local");
   limpiarAviso("aviso");
   focoTarjeta = document.activeElement;
@@ -1226,7 +1228,7 @@ $("recargar").onclick = () => { CARGANDO = true; pintarTabla(); listar(); };
 function olvidarConfirmacion() {
   clearTimeout(RELOJ_CONFIRMA);
   if (BOTON_CONFIRMA && BOTON_CONFIRMA.isConnected) {
-    BOTON_CONFIRMA.textContent = "Desactivar";
+    BOTON_CONFIRMA.textContent = ETIQUETA_CONFIRMA;
     BOTON_CONFIRMA.classList.remove("confirmando");
   }
   BOTON_CONFIRMA = null;
@@ -1235,6 +1237,7 @@ function olvidarConfirmacion() {
 
 function pedirConfirmacion(boton, codigo) {
   olvidarConfirmacion();
+  ETIQUETA_CONFIRMA = boton.textContent;
   CONFIRMANDO = codigo;
   BOTON_CONFIRMA = boton;
   boton.textContent = "¿Seguro?";
@@ -1274,7 +1277,7 @@ $("tabla").addEventListener("click", async (e) => {
     await llamar("desactivar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ codigo: codigo, tipo: t ? tipoDe(t) : "" }),
+      body: JSON.stringify({ codigos: [codigo], tipo: t ? tipoDe(t) : "" }),
     });
     avisar("avisoPanel", "Tarjeta " + codigo + " desactivada. Queda libre para reasignar.", true);
     cerrarQR();
@@ -1308,8 +1311,11 @@ function locales() {
       if (t.vendida > g.fecha) g.fecha = t.vendida;
     }
   });
-  return Object.keys(mapa).map((k) => mapa[k])
-    .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || "") || a.negocio.localeCompare(b.negocio));
+  // primero las que esperan respuesta: son las que piden hacer algo
+  return Object.keys(mapa).map((k) => mapa[k]).sort((a, b) =>
+    (a.vendidas ? 1 : 0) - (b.vendidas ? 1 : 0) ||
+    (b.fecha || "").localeCompare(a.fecha || "") ||
+    a.negocio.localeCompare(b.negocio));
 }
 
 function hoyISO() {
@@ -1387,29 +1393,36 @@ function pintarVentas() {
   const lista = locales();
   const vendidos = lista.filter((l) => l.vendidas).length;
   const total = TARJETAS.reduce((a, t) => a + (t.vendida ? Number(t.precio) || 0 : 0), 0);
-  $("graficaPie").innerHTML = "<span>" + vendidos + " de " + lista.length +
-    " locales cobrados</span><span>Acumulado <b>" + dinero(total) + "</b></span>";
+  const pendientes = lista.length - vendidos;
+  $("graficaPie").innerHTML = "<span>" + vendidos + " aceptadas · " + pendientes +
+    " pendientes</span><span>Acumulado <b>" + dinero(total) + "</b></span>";
 
   if (!lista.length) {
-    $("tablaLocales").innerHTML = "<div class='vacio'><h2>Todavía no hay locales</h2>" +
-      "<p>Vincula acrílicos y stickers a un negocio y aparecerá aquí para cobrarlo.</p>" +
-      "<button type='button' data-local>Vincular un local</button></div>";
+    $("tablaLocales").innerHTML = "<div class='vacio'><h2>Todavía no hay órdenes</h2>" +
+      "<p>Crea una orden para un local: sus tarjetas quedan ocupadas y apuntando a su " +
+      "ficha de Google, listas para la visita.</p>" +
+      "<button type='button' data-local>Crear una orden</button></div>";
     return;
   }
 
   let filas = "";
   lista.forEach((l) => {
-    const cobrado = l.vendidas > 0;
+    const aceptada = l.vendidas > 0;
     const piezas = l.acrilico + l.sticker;
     filas += "<tr><td class='negocio'>" + escHtml(l.negocio) + "</td>" +
       "<td class='piezas'>" + plural(l.acrilico, "acrílico", "acrílicos") + "<br>" +
       plural(l.sticker, "sticker", "stickers") + "</td>" +
-      "<td><span class='estado " + (cobrado ? "estado-vendido'>Cobrado " + l.fecha : "estado-pendiente'>Sin cobrar") +
-      "</span>" + (cobrado && l.vendidas < piezas
+      "<td><span class='estado " + (aceptada
+        ? "estado-vendido'>Aceptada " + l.fecha
+        : "estado-pendiente'>Pendiente") +
+      "</span>" + (aceptada && l.vendidas < piezas
         ? "<div class='fila-num'>" + l.vendidas + " de " + piezas + " piezas</div>" : "") +
-      "</td><td class='importe'>" + (cobrado ? dinero(l.importe) : "—") + "</td>" +
-      "<td><div class='acciones'><button type='button' class='accion-editar' data-vender='" +
-      escHtml(l.negocio) + "'>" + (cobrado ? "Editar cobro" : "Registrar venta") + "</button></div></td></tr>";
+      "</td><td class='importe'>" + (aceptada ? dinero(l.importe) : "—") + "</td>" +
+      "<td><div class='acciones acciones-orden'>" +
+      "<button type='button' class='accion-editar' data-vender='" + escHtml(l.negocio) + "'>" +
+      (aceptada ? "Editar cobro" : "Aceptar") + "</button>" +
+      "<button type='button' class='accion-apagar' data-cancelar='" + escHtml(l.negocio) +
+      "'>Cancelar</button></div></td></tr>";
   });
   $("tablaLocales").innerHTML =
     "<table><thead><tr><th>Local</th><th>Piezas</th><th>Estado</th><th>Importe</th><th></th>" +
@@ -1440,17 +1453,51 @@ $("metricaVentas").addEventListener("click", (e) => {
 
 /* ---------- registrar la venta de un local ---------- */
 
-$("tablaLocales").addEventListener("click", (e) => {
+$("tablaLocales").addEventListener("click", async (e) => {
   if (e.target.closest("[data-local]")) { $("abrirLocal").click(); return; }
-  const b = e.target.closest("[data-vender]");
-  if (b) abrirVenta(b.dataset.vender);
+
+  const v = e.target.closest("[data-vender]");
+  if (v) { abrirVenta(v.dataset.vender); return; }
+
+  const c = e.target.closest("[data-cancelar]");
+  if (!c) return;
+  const negocio = c.dataset.cancelar;
+  if (CONFIRMANDO !== negocio) { pedirConfirmacion(c, negocio); return; }
+
+  olvidarConfirmacion();
+  const l = locales().filter((x) => x.negocio === negocio)[0];
+  if (!l) return;
+  c.disabled = true;
+  try {
+    const total = l.acrilico + l.sticker;
+    let hechas = 0;
+    for (const tipo of ["acrilico", "sticker"]) {
+      const codigos = l.codigos[tipo];
+      for (let i = 0; i < codigos.length; i += TANDA) {
+        const tanda = codigos.slice(i, i + TANDA);
+        hechas += tanda.length;
+        c.textContent = "Liberando " + hechas + " de " + total + "…";
+        await llamar("desactivar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ codigos: tanda, tipo: tipo }),
+        });
+      }
+    }
+    avisar("avisoPanel", "Orden de " + negocio + " cancelada · " +
+      plural(total, "tarjeta libre", "tarjetas libres") + " otra vez", true);
+    await listar();
+  } catch (err) {
+    avisar("avisoPanel", err.message, false);
+    pintarVentas();
+  }
 });
 
 function abrirVenta(negocio) {
   const l = locales().filter((x) => x.negocio === negocio)[0];
   if (!l) return;
   LOCAL_VENTA = l;
-  $("ventaTitulo").textContent = l.vendidas ? "Editar el cobro" : "Registrar la venta";
+  $("ventaTitulo").textContent = l.vendidas ? "Editar el cobro" : "Aceptar la orden";
   $("ventaSubtitulo").textContent = l.negocio + " · " +
     plural(l.acrilico, "acrílico", "acrílicos") + " y " + plural(l.sticker, "sticker", "stickers");
   $("ventaFecha").value = l.fecha || hoyISO();
@@ -1460,7 +1507,7 @@ function abrirVenta(negocio) {
   };
   $("precioAcrilico").value = unitario("acrilico");
   $("precioSticker").value = unitario("sticker");
-  $("guardarVenta").textContent = l.vendidas ? "Guardar el cobro" : "Registrar venta";
+  $("guardarVenta").textContent = l.vendidas ? "Guardar el cobro" : "Aceptar la orden";
   limpiarAviso("avisoVenta");
   pintarResumenVenta();
   focoVenta = document.activeElement;
@@ -1537,7 +1584,7 @@ $("formVenta").onsubmit = async (e) => {
     }
     const importe = precios.acrilico * l.acrilico + precios.sticker * l.sticker;
     cerrarVenta();
-    avisar("avisoPanel", "Venta de " + l.negocio + " registrada · " + dinero(importe), true);
+    avisar("avisoPanel", "Orden de " + l.negocio + " aceptada · " + dinero(importe), true);
     await listar();
     pintarVentas();
   } catch (err) {
@@ -1734,10 +1781,10 @@ export function vistaAdmin(origen) {
       <div class="panel-barra">
         <div class="segmento" id="vistaPanel" role="group" aria-label="Qué se lista">
           <button type="button" class="activa" data-valor="tarjetas">Tarjetas</button>
-          <button type="button" data-valor="locales">Locales</button>
+          <button type="button" data-valor="locales">Órdenes</button>
         </div>
         <div class="cabecera-acciones">
-          <button type="button" id="abrirLocal">Vincular un local</button>
+          <button type="button" id="abrirLocal">Nueva orden</button>
           <button type="button" class="fantasma" id="abrirRango">Editar un rango</button>
           <button type="button" class="fantasma" id="recargar">Refrescar</button>
         </div>
@@ -1785,12 +1832,12 @@ export function vistaAdmin(origen) {
     <form id="formTarjeta">
       <div class="segmento" id="modoTarjeta" role="group" aria-label="Qué se va a editar">
         <button type="button" class="activa" data-valor="una">Una tarjeta</button>
-        <button type="button" data-valor="local">Un local</button>
+        <button type="button" data-valor="local">Una orden</button>
         <button type="button" data-valor="rango">Un rango</button>
       </div>
 
       <div id="campoLocal" hidden>
-        <label class="paso"><span class="n n1">1</span>Qué compra el local</label>
+        <label class="paso"><span class="n n1">1</span>Qué lleva la orden</label>
         <div class="rango-fila">
           <div>
             <div class="mini">Acrílicos de mesa</div>
@@ -1803,7 +1850,7 @@ export function vistaAdmin(origen) {
                    aria-label="Cuántos stickers" autocomplete="off">
           </div>
         </div>
-        <div class="rango-resumen" id="localResumen">Escribe cuántos acrílicos y cuántos stickers compra el local.</div>
+        <div class="rango-resumen" id="localResumen">Escribe cuántos acrílicos y cuántos stickers lleva la orden.</div>
       </div>
 
       <div id="campoUna">
@@ -1872,7 +1919,7 @@ export function vistaAdmin(origen) {
   <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="ventaTitulo">
     <button type="button" class="modal-cerrar" id="cerrarVenta" aria-label="Cerrar">✕</button>
     <div class="modal-kicker">Venta</div>
-    <h1 id="ventaTitulo">Registrar la venta</h1>
+    <h1 id="ventaTitulo">Aceptar la orden</h1>
     <p class="modal-subtitulo" id="ventaSubtitulo"></p>
 
     <form id="formVenta">
@@ -1889,7 +1936,7 @@ export function vistaAdmin(origen) {
 
       <div class="modal-acciones">
         <button type="button" class="fantasma" id="cancelarVenta">Cancelar</button>
-        <button type="submit" id="guardarVenta">Registrar venta</button>
+        <button type="submit" id="guardarVenta">Aceptar la orden</button>
       </div>
       <div class="aviso" id="avisoVenta" role="alert"></div>
     </form>

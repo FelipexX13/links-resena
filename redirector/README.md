@@ -102,17 +102,30 @@ El tipo se guarda en el registro. Las tarjetas viejas no lo traen, así que se
 deduce del número: de la 101 en adelante, sticker. El formulario lo cambia cuando
 haga falta, el número solo decide el valor por defecto.
 
-## Vincular un local y cobrarlo
+## Órdenes
 
-El panel tiene dos vistas: **Tarjetas** y **Locales**.
+El panel tiene dos vistas: **Tarjetas** y **Órdenes**.
 
-**Vincular un local** pide cuántos acrílicos y cuántos stickers compra, y toma
-las primeras tarjetas **libres** de cada tipo — las que ya están impresas pero no
-apuntan a ningún sitio. No hay que saber qué códigos quedan sueltos.
+Una orden nace antes de saber si el local paga. Se crea, se visita al local, y
+entonces se acepta o se cancela:
 
-**Registrar la venta** pone fecha y precio por unidad. Vincular y cobrar son dos
-pasos distintos a propósito: primero se deja el link funcionando, y se cobra
-después.
+| Estado | Qué significa | Las tarjetas |
+|---|---|---|
+| **Pendiente** | creada, sin respuesta del local | ocupadas y apuntando a su ficha |
+| **Aceptada** | pagó: lleva fecha e importe | ocupadas |
+| *(cancelada)* | no pagó | **libres otra vez**, listas para la siguiente orden |
+
+**Nueva orden** pide cuántos acrílicos y cuántos stickers, y toma las primeras
+tarjetas **libres** de cada tipo — impresas pero sin destino. No hay que saber qué
+códigos quedan sueltos: el panel los busca.
+
+Cancelar libera esas tarjetas y **la orden desaparece**. No queda historial de
+canceladas, así que tampoco hay tasa de conversión. Si algún día hace falta, la
+vía es guardar la orden en su propia clave en vez de deducirla.
+
+Cancelar una orden ya aceptada también funciona, y es la única forma de deshacer
+un cobro mal puesto. Ojo: se lleva por delante su importe, así que desaparece de
+la gráfica.
 
 ### Por qué no hay tabla de ventas
 
@@ -124,6 +137,9 @@ Una entidad "venta" aparte habría que mantenerla sincronizada: reasignar una
 tarjeta, desactivarla o cambiarle el negocio dejaría la venta apuntando a algo que
 ya no existe. Agrupando, eso no puede pasar. La gráfica diaria es un `GROUP BY`
 sobre la fecha, y sale gratis.
+
+El estado de la orden tampoco se guarda, se deduce: **con destino y sin `vendida`
+es pendiente; con `vendida` es aceptada; sin destino la tarjeta está libre.**
 
 ## Editar un rango
 

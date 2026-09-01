@@ -11,7 +11,7 @@
  *   GET  /api/lista    listado de tarjetas          (sesión)
  *   POST /api/guardar  {codigo, destino, negocio, tipo, vendida, precio}  (sesión)
  *   POST /api/rango    {codigos[], ...los mismos campos}                (sesión)
- *   POST /api/desactivar {codigo, tipo}                         (sesión)
+ *   POST /api/desactivar {codigos[], tipo}                       (sesión)
  *
  * Secreto obligatorio:  ADMIN_PASSWORD
  *
@@ -184,8 +184,13 @@ async function api(request, env, accion, url, ctx) {
   // existir en el mundo.
   if (accion === "desactivar" && request.method === "POST") {
     const cuerpo = await request.json().catch(() => ({}));
-    const codigo = normalizar(cuerpo.codigo);
-    if (!codigo) return json({ error: "Código inválido" }, 400);
+    const codigos = (Array.isArray(cuerpo.codigos) ? cuerpo.codigos : [])
+      .map(normalizar)
+      .filter(Boolean);
+    if (!codigos.length) return json({ error: "No hay códigos que desactivar" }, 400);
+    if (codigos.length > MAX_RANGO) {
+      return json({ error: "Máximo " + MAX_RANGO + " tarjetas por tanda" }, 400);
+    }
 
     const registro = {
       destino: "",
@@ -195,8 +200,8 @@ async function api(request, env, accion, url, ctx) {
       precio: 0,
       actualizado: new Date().toISOString(),
     };
-    await escribir(env, codigo, registro);
-    return json({ ok: true });
+    for (const codigo of codigos) await escribir(env, codigo, registro);
+    return json({ ok: true, total: codigos.length });
   }
 
   return json({ error: "Ruta no encontrada" }, 404);
