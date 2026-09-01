@@ -119,6 +119,20 @@ entonces se acepta o se cancela:
 tarjetas **libres** de cada tipo — impresas pero sin destino. No hay que saber qué
 códigos quedan sueltos: el panel los busca.
 
+**Piezas** cambia el tamaño de una orden ya creada. Si sube, toma más libres; si
+baja, suelta las últimas y quedan libres para otra orden. Las que ya tenía y
+siguen dentro no se tocan, así no se pisa su venta. El resumen enseña el
+movimiento antes de guardar:
+
+```
+Haunch Burguer: de 2+10 a 3+15   ·   +1 acrílico · AAAC   +5 stickers · AAEG → AAEK
+Haunch Burguer: de 2+10 a 1+4    ·   −1 acrílico · AAAB quedan libres   −6 stickers · AAEA → AAEF quedan libres
+```
+
+Si al subir el link del formulario no es el que ya tenía la orden, solo lo llevan
+las tarjetas nuevas — y el resumen lo avisa. Para repuntar las que ya están en la
+calle, **Un rango → De una orden**.
+
 Cancelar libera esas tarjetas y **la orden desaparece**. No queda historial de
 canceladas, así que tampoco hay tasa de conversión. Si algún día hace falta, la
 vía es guardar la orden en su propia clave en vez de deducirla.

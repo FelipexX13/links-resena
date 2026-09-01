@@ -364,7 +364,7 @@ const ESTILOS = `
   .estado-pendiente{background:var(--ambar-piel);color:var(--ambar-tinta);border-color:var(--ambar-borde)}
   .piezas{font-family:"Geist Mono",ui-monospace,monospace;font-size:12px;color:var(--tinta-2)}
   .importe{font-family:"Geist Mono",ui-monospace,monospace;font-weight:500}
-  .acciones-orden{grid-template-columns:repeat(2,minmax(0,1fr));min-width:196px}
+  .acciones-orden{grid-template-columns:repeat(3,minmax(0,1fr));min-width:240px}
   .rango-fila{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
   #rangoOrden{margin-top:14px}
   .rango-resumen{margin-top:10px;padding:10px 13px;border-radius:var(--r-m);
@@ -787,13 +787,32 @@ function pedidasDelLocal() {
   return { acrilicos: na, stickers: ns };
 }
 
-function codigosDelLocal() {
+// Si el negocio ya tiene una orden, esto no es un alta sino un cambio de tamaño:
+// se toman las libres que falten, o se sueltan las que sobren. Las que ya tiene y
+// siguen dentro no se tocan, así no se pisa su venta.
+function planDelLocal() {
   const p = pedidasDelLocal();
-  return {
-    acrilico: libresPorTipo("acrilico").slice(0, p.acrilicos),
-    sticker: libresPorTipo("sticker").slice(0, p.stickers),
-    pedidas: p,
-  };
+  const nombre = $("negocio").value.trim();
+  const base = locales().filter((x) => x.negocio === nombre)[0] || null;
+  const plan = { base: base, tomar: {}, soltar: {}, falta: [], pedidas: p };
+
+  [["acrilico", p.acrilicos, "acrílico", "acrílicos"],
+   ["sticker", p.stickers, "sticker", "stickers"]].forEach((fila) => {
+    const tipo = fila[0], quiere = fila[1];
+    const tiene = base ? base[tipo] : 0;
+    plan.tomar[tipo] = [];
+    plan.soltar[tipo] = [];
+    if (quiere > tiene) {
+      const libres = libresPorTipo(tipo);
+      plan.tomar[tipo] = libres.slice(0, quiere - tiene);
+      if (plan.tomar[tipo].length < quiere - tiene) {
+        plan.falta.push(fila[3] + ": solo quedan " + libres.length + " libres");
+      }
+    } else if (quiere < tiene) {
+      plan.soltar[tipo] = base.codigos[tipo].slice().sort().slice(quiere);
+    }
+  });
+  return plan;
 }
 
 function tramo(codigos) {
@@ -803,25 +822,45 @@ function tramo(codigos) {
     : codigos[0] + " → " + codigos[codigos.length - 1];
 }
 
+function nombreTipo(tipo, n) {
+  return tipo === "acrilico" ? plural(n, "acrílico", "acrílicos") : plural(n, "sticker", "stickers");
+}
+
 function pintarResumenLocal() {
-  const sel = codigosDelLocal();
+  const plan = planDelLocal();
   const caja = $("localResumen");
-  const faltan = [];
-  if (sel.acrilico.length < sel.pedidas.acrilicos) {
-    faltan.push("acrílicos: solo quedan " + libresPorTipo("acrilico").length + " libres");
-  }
-  if (sel.sticker.length < sel.pedidas.stickers) {
-    faltan.push("stickers: solo quedan " + libresPorTipo("sticker").length + " libres");
-  }
-  if (faltan.length) { caja.textContent = "No alcanza — " + faltan.join(" · "); return; }
-  if (!sel.acrilico.length && !sel.sticker.length) {
-    caja.textContent = "Escribe cuántos acrílicos y cuántos stickers lleva la orden.";
+
+  if (plan.falta.length) { caja.textContent = "No alcanza — " + plan.falta.join(" · "); return; }
+
+  const partes = [];
+  ["acrilico", "sticker"].forEach((tipo) => {
+    if (plan.tomar[tipo].length) {
+      partes.push((plan.base ? "+" : "") + nombreTipo(tipo, plan.tomar[tipo].length) +
+        " · " + tramo(plan.tomar[tipo]));
+    }
+    if (plan.soltar[tipo].length) {
+      partes.push("−" + nombreTipo(tipo, plan.soltar[tipo].length) +
+        " · " + tramo(plan.soltar[tipo]) + " quedan libres");
+    }
+  });
+
+  if (!partes.length) {
+    caja.textContent = plan.base
+      ? plan.base.negocio + " ya tiene esas piezas: " +
+        nombreTipo("acrilico", plan.base.acrilico) + " y " + nombreTipo("sticker", plan.base.sticker)
+      : "Escribe cuántos acrílicos y cuántos stickers lleva la orden.";
     return;
   }
-  const partes = [];
-  if (sel.acrilico.length) partes.push(sel.acrilico.length + " acrílicos · " + tramo(sel.acrilico));
-  if (sel.sticker.length) partes.push(sel.sticker.length + " stickers · " + tramo(sel.sticker));
-  caja.textContent = partes.join("   +   ");
+
+  let texto = partes.join("   ");
+  if (plan.base) {
+    texto = plan.base.negocio + ": de " + plan.base.acrilico + "+" + plan.base.sticker +
+      " a " + plan.pedidas.acrilicos + "+" + plan.pedidas.stickers + "   ·   " + texto;
+    if ($("fichaReview").value && $("fichaReview").value !== plan.base.destino) {
+      texto += "   ·   Ojo: el link cambió, pero solo lo llevan las tarjetas nuevas.";
+    }
+  }
+  caja.textContent = texto;
 }
 
 function codigosPorNumero() {
@@ -902,24 +941,28 @@ $("formTarjeta").onsubmit = async (e) => {
   boton.disabled = true;
   try {
     if (MODO === "local") {
-      const sel = codigosDelLocal();
-      if (sel.acrilico.length < sel.pedidas.acrilicos || sel.sticker.length < sel.pedidas.stickers) {
+      const plan = planDelLocal();
+      if (plan.falta.length) {
         avisar("aviso", "No hay tarjetas libres suficientes. Revisa el resumen.", false);
         return;
       }
-      if (!sel.acrilico.length && !sel.sticker.length) {
-        avisar("aviso", "Escribe cuántas piezas compra el local.", false);
+      const aTomar = plan.tomar.acrilico.length + plan.tomar.sticker.length;
+      const aSoltar = plan.soltar.acrilico.length + plan.soltar.sticker.length;
+      if (!aTomar && !aSoltar) {
+        avisar("aviso", plan.base
+          ? "Esa orden ya tiene esas piezas. Cambia las cantidades."
+          : "Escribe cuántas piezas lleva la orden.", false);
         return;
       }
-      // dos tandas de tipos distintos: el endpoint escribe un tipo por llamada
-      const grupos = [["acrilico", sel.acrilico], ["sticker", sel.sticker]];
+
+      const total = aTomar + aSoltar;
       let hechas = 0;
-      const total = sel.acrilico.length + sel.sticker.length;
-      for (const [tipo, codigos] of grupos) {
+      for (const tipo of ["acrilico", "sticker"]) {
+        const codigos = plan.tomar[tipo];
         for (let i = 0; i < codigos.length; i += TANDA) {
           const tanda = codigos.slice(i, i + TANDA);
           hechas += tanda.length;
-          boton.textContent = "Vinculando " + hechas + " de " + total + "…";
+          boton.textContent = "Guardando " + hechas + " de " + total + "…";
           await llamar("rango", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -932,10 +975,26 @@ $("formTarjeta").onsubmit = async (e) => {
           });
         }
       }
+      for (const tipo of ["acrilico", "sticker"]) {
+        const codigos = plan.soltar[tipo];
+        for (let i = 0; i < codigos.length; i += TANDA) {
+          const tanda = codigos.slice(i, i + TANDA);
+          hechas += tanda.length;
+          boton.textContent = "Liberando " + hechas + " de " + total + "…";
+          await llamar("desactivar", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ codigos: tanda, tipo: tipo }),
+          });
+        }
+      }
+
       cerrarTarjeta();
-      avisar("avisoPanel", "Orden de " + $("negocio").value + " creada · " + total + " tarjetas ocupadas: " +
-        plural(sel.acrilico.length, "acrílico", "acrílicos") + " y " +
-        plural(sel.sticker.length, "sticker", "stickers"), true);
+      const cola = [];
+      if (aTomar) cola.push(plural(aTomar, "tarjeta ocupada", "tarjetas ocupadas"));
+      if (aSoltar) cola.push(plural(aSoltar, "tarjeta liberada", "tarjetas liberadas"));
+      avisar("avisoPanel", (plan.base ? "Orden de " : "Orden de ") + $("negocio").value +
+        (plan.base ? " actualizada · " : " creada · ") + cola.join(" y "), true);
       await listar();
       return;
     }
@@ -1068,6 +1127,9 @@ $("desde").addEventListener("input", pintarResumenRango);
 $("hasta").addEventListener("input", pintarResumenRango);
 $("nAcrilicos").addEventListener("input", pintarResumenLocal);
 $("nStickers").addEventListener("input", pintarResumenLocal);
+$("negocio").addEventListener("input", () => {
+  if (MODO === "local") pintarResumenLocal();
+});
 
 function salirDeEdicion() {
   EDITANDO_CODIGO = "";
@@ -1118,6 +1180,29 @@ function cerrarTarjeta() {
 }
 
 $("abrirActivar").onclick = prepararNuevaTarjeta;
+
+function abrirOrden(negocio) {
+  salirDeEdicion();
+  llenarLocales();
+  const l = locales().filter((x) => x.negocio === negocio)[0];
+  $("tarjetaModalKicker").textContent = l ? "Orden de " + l.negocio : "Orden";
+  $("tarjetaModalTitulo").textContent = l ? "Cambiar las piezas" : "Nueva orden";
+  $("tarjetaModalSubtitulo").textContent = l
+    ? "Sube o baja cuántas lleva. Las que sobren quedan libres para otra orden."
+    : "Ocupa acrílicos y stickers libres y los apunta a la ficha del local. Queda pendiente hasta que la aceptes o la canceles.";
+  if (l) {
+    $("localExistente").value = l.negocio;
+    $("localExistente").dispatchEvent(new Event("change"));
+    $("nAcrilicos").value = l.acrilico;
+    $("nStickers").value = l.sticker;
+  }
+  pintarModo("local");
+  limpiarAviso("aviso");
+  focoTarjeta = document.activeElement;
+  $("modalTarjeta").hidden = false;
+  document.body.style.overflow = "hidden";
+  $("nAcrilicos").focus();
+}
 
 $("abrirLocal").onclick = () => {
   salirDeEdicion();
@@ -1527,8 +1612,9 @@ function pintarVentas() {
         ? "<div class='fila-num'>" + l.vendidas + " de " + piezas + " piezas</div>" : "") +
       "</td><td class='importe'>" + (aceptada ? dinero(l.importe) : "—") + "</td>" +
       "<td><div class='acciones acciones-orden'>" +
+      "<button type='button' class='accion-qr' data-piezas='" + escHtml(l.negocio) + "'>Piezas</button>" +
       "<button type='button' class='accion-editar' data-vender='" + escHtml(l.negocio) + "'>" +
-      (aceptada ? "Editar cobro" : "Aceptar") + "</button>" +
+      (aceptada ? "Cobro" : "Aceptar") + "</button>" +
       "<button type='button' class='accion-apagar' data-cancelar='" + escHtml(l.negocio) +
       "'>Cancelar</button></div></td></tr>";
   });
@@ -1563,6 +1649,9 @@ $("metricaVentas").addEventListener("click", (e) => {
 
 $("tablaLocales").addEventListener("click", async (e) => {
   if (e.target.closest("[data-local]")) { $("abrirLocal").click(); return; }
+
+  const pz = e.target.closest("[data-piezas]");
+  if (pz) { abrirOrden(pz.dataset.piezas); return; }
 
   const v = e.target.closest("[data-vender]");
   if (v) { abrirVenta(v.dataset.vender); return; }
