@@ -149,11 +149,14 @@ const ESTILOS = `
   /* ---------- campos ---------- */
   label{display:block;font-weight:600;font-size:13px;margin:16px 0 6px;letter-spacing:-.005em}
   label .suave{font-weight:400;color:var(--tinta-2)}
-  input{width:100%;padding:11px 13px;border:1px solid var(--linea);border-radius:var(--r-m);
-    background:var(--papel-2);font-size:13px;color:var(--tinta);
+  input,select{width:100%;padding:11px 13px;border:1px solid var(--linea);border-radius:var(--r-m);
+    background:var(--papel-2);font-size:13px;color:var(--tinta);font-family:inherit;
     transition:border-color var(--paso),box-shadow var(--paso),background var(--paso)}
+  select{cursor:pointer;appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%235b6779' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 13px center;padding-right:34px}
   input::placeholder{color:var(--tinta-3)}
-  input:focus{outline:none;background:var(--papel);border-color:var(--azul);
+  input:focus,select:focus{outline:none;background:var(--papel);border-color:var(--azul);
     box-shadow:0 0 0 3px var(--azul-piel)}
   input[readonly]{color:var(--tinta-2)}
 
@@ -695,6 +698,40 @@ function analizarMaps(crudo) {
   return { error: "No se encontró el identificador del negocio en esa URL. Abre su ficha en Google Maps (clic en el nombre del lugar) y copia la URL completa, o pega el Place ID del buscador." };
 }
 
+// Un local que ya está en el sistema tiene su link guardado. Volver a pegar la
+// URL de Maps para añadirle mesas es trabajo repetido, y una oportunidad de
+// equivocarse de negocio.
+function llenarLocales() {
+  const lista = locales();
+  let html = "<option value=''>Local nuevo — pego su URL abajo</option>";
+  lista.forEach((l) => {
+    html += "<option value='" + escHtml(l.negocio) + "'>" + escHtml(l.negocio) +
+      " · " + plural(l.acrilico + l.sticker, "pieza", "piezas") +
+      (l.vendidas ? " · cobrado" : " · pendiente") + "</option>";
+  });
+  // conserva lo elegido si el local sigue existiendo; si no, cae a "Local nuevo"
+  const previo = $("localExistente").value;
+  $("localExistente").innerHTML = html;
+  $("localExistente").value = previo;
+}
+
+$("localExistente").addEventListener("change", () => {
+  const elegido = $("localExistente").value;
+  if (!elegido) return;
+  const l = locales().filter((x) => x.negocio === elegido)[0];
+  if (!l) return;
+  $("negocio").value = l.negocio;
+  NOMBRE_AUTO = l.negocio;
+  $("maps").value = l.destino;
+  URL_LEIDA = l.destino;
+  $("fichaNombre").textContent = l.negocio;
+  $("fichaReview").value = l.destino;
+  const place = placeIdDeDestino(l.destino);
+  $("fichaMeta").textContent = place ? "Place ID: " + place : "";
+  $("ficha").hidden = false;
+  limpiarAviso("aviso");
+});
+
 $("analizar").onclick = () => {
   const r = analizarMaps($("maps").value);
   if (r.error) {
@@ -703,6 +740,7 @@ $("analizar").onclick = () => {
     return;
   }
   limpiarAviso("aviso");
+  $("localExistente").value = "";
   URL_LEIDA = $("maps").value.trim();
   $("fichaNombre").textContent = r.negocio || "Escribe abajo el nombre del negocio";
   $("fichaReview").value = r.review;
@@ -922,6 +960,8 @@ function editar(codigo) {
   pintarNumero(t.codigo);
   pintarTipo(tipoDe(t));
   VENTA_EDITADA = { vendida: t.vendida || "", precio: t.precio || 0 };
+  llenarLocales();
+  $("localExistente").value = t.negocio || "";
   pintarModo("una");
   $("fichaNombre").textContent = t.negocio || t.codigo;
   $("fichaMeta").textContent = placeIdDeDestino(t.destino)
@@ -976,6 +1016,7 @@ function salirDeEdicion() {
   $("numeroTarjeta").textContent = "";
   $("desde").value = $("hasta").value = "";
   $("nAcrilicos").value = $("nStickers").value = "";
+  if ($("localExistente").options.length) $("localExistente").value = "";
   VENTA_EDITADA = { vendida: "", precio: 0 };
 }
 
@@ -995,6 +1036,7 @@ function prepararNuevaTarjeta() {
 }
 
 function abrirTarjetaModal() {
+  llenarLocales();
   focoTarjeta = document.activeElement;
   $("modalTarjeta").hidden = false;
   document.body.style.overflow = "hidden";
@@ -1020,6 +1062,7 @@ $("abrirLocal").onclick = () => {
   $("tarjetaModalSubtitulo").textContent = "Ocupa acrílicos y stickers libres y los apunta a la ficha del local. Queda pendiente hasta que la aceptes o la canceles.";
   pintarModo("local");
   limpiarAviso("aviso");
+  llenarLocales();
   focoTarjeta = document.activeElement;
   $("modalTarjeta").hidden = false;
   document.body.style.overflow = "hidden";
@@ -1034,6 +1077,7 @@ $("abrirRango").onclick = () => {
   pintarTipo("sticker");
   pintarModo("rango");
   limpiarAviso("aviso");
+  llenarLocales();
   focoTarjeta = document.activeElement;
   $("modalTarjeta").hidden = false;
   document.body.style.overflow = "hidden";
@@ -1871,8 +1915,10 @@ export function vistaAdmin(origen) {
         <div class="rango-resumen" id="rangoResumen">Escribe un rango válido: del menor al mayor.</div>
       </div>
 
-      <label class="paso" for="maps"><span class="n n2">2</span>URL de Google Maps del negocio</label>
-      <p class="ayuda ayuda-alta">También sirve su <b>Place ID</b> o un link de reseña ya hecho.</p>
+      <label class="paso" for="localExistente"><span class="n n2">2</span>A qué local apunta</label>
+      <select id="localExistente" aria-label="Local ya registrado"></select>
+      <p class="ayuda ayuda-alta">Si el local ya está en el sistema, elígelo y se rellena su link.
+        Si es nuevo, pega abajo su URL de Google Maps — o su <b>Place ID</b>, o un link de reseña ya hecho.</p>
       <input class="c2" id="maps" placeholder="https://www.google.com/maps/place/…" autocomplete="off" required>
 
       <div class="modal-acciones acciones-izq">
