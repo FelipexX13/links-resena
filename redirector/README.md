@@ -143,9 +143,16 @@ es pendiente; con `vendida` es aceptada; sin destino la tarjeta está libre.**
 
 ## Editar un rango
 
-Un local que compra diez mesas necesita diez códigos distintos apuntando al mismo
-link. **Editar un rango** pide el número inicial y el final, el link y el negocio,
-y los escribe todos de una vez.
+**Editar un rango** escribe el mismo link en varias tarjetas de una vez. Las
+tarjetas se eligen de dos maneras:
+
+- **Por número** — del nº inicial al final. Para lotes recién impresos.
+- **De una orden** — todas las tarjetas de un local ya vinculado. Para cuando
+  cambia su ficha de Google y hay que repuntar lo que ya está en la calle.
+
+Al editar una orden el tipo no se elige: una orden mezcla acrílicos y stickers, y
+cada tanda del endpoint escribe un solo tipo. Se manda un grupo por tipo, porque
+mandarlos juntos le cambiaría el tipo a la mitad de las tarjetas.
 
 El panel parte el rango en tandas de 25. No es capricho: el plan gratuito corta a
 **50 subpeticiones por petición** y cada escritura en KV cuenta como una.

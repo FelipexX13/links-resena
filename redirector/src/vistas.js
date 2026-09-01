@@ -366,6 +366,7 @@ const ESTILOS = `
   .importe{font-family:"Geist Mono",ui-monospace,monospace;font-weight:500}
   .acciones-orden{grid-template-columns:repeat(2,minmax(0,1fr));min-width:196px}
   .rango-fila{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+  #rangoOrden{margin-top:14px}
   .rango-resumen{margin-top:10px;padding:10px 13px;border-radius:var(--r-m);
     background:var(--ambar-piel);border:1px solid var(--ambar-borde);
     color:var(--ambar-tinta);font-size:12.5px}
@@ -487,6 +488,7 @@ let PAGINA = 1;
 let TIPO = "acrilico";
 let FILTRO_TIPO = "";
 let MODO = "una";
+let ORIGEN_RANGO = "numero";
 let VENTA_EDITADA = { vendida: "", precio: 0 };
 let VISTA = "tarjetas";
 let METRICA = "unidades";
@@ -713,6 +715,16 @@ function llenarLocales() {
   const previo = $("localExistente").value;
   $("localExistente").innerHTML = html;
   $("localExistente").value = previo;
+
+  // el mismo listado, pero aquí responde a otra pregunta: qué tarjetas se tocan
+  let ordenes = "<option value=''>Elige la orden</option>";
+  lista.forEach((l) => {
+    ordenes += "<option value='" + escHtml(l.negocio) + "'>" + escHtml(l.negocio) +
+      " · " + plural(l.acrilico + l.sticker, "pieza", "piezas") + "</option>";
+  });
+  const antes = $("ordenRango").value;
+  $("ordenRango").innerHTML = ordenes;
+  $("ordenRango").value = antes;
 }
 
 $("localExistente").addEventListener("change", () => {
@@ -812,7 +824,7 @@ function pintarResumenLocal() {
   caja.textContent = partes.join("   +   ");
 }
 
-function codigosDelRango() {
+function codigosPorNumero() {
   const desde = parseInt($("desde").value, 10);
   const hasta = parseInt($("hasta").value, 10);
   if (!(desde >= 1) || !(hasta >= desde) || hasta > TOPE) return [];
@@ -821,15 +833,52 @@ function codigosDelRango() {
   return lista;
 }
 
+// Los códigos que hay que escribir, ya separados por tipo. Una orden mezcla
+// acrílicos y stickers, y cada tanda del endpoint escribe un solo tipo: si se
+// mandaran juntos, la mitad cambiaría de tipo sin querer.
+function gruposDelRango() {
+  if (ORIGEN_RANGO === "orden") {
+    const l = locales().filter((x) => x.negocio === $("ordenRango").value)[0];
+    if (!l) return [];
+    return [["acrilico", l.codigos.acrilico], ["sticker", l.codigos.sticker]]
+      .filter((g) => g[1].length);
+  }
+  const lista = codigosPorNumero();
+  return lista.length ? [[TIPO, lista]] : [];
+}
+
+function totalDeGrupos(grupos) {
+  return grupos.reduce((a, g) => a + g[1].length, 0);
+}
+
 function pintarResumenRango() {
-  const lista = codigosDelRango();
   const caja = $("rangoResumen");
-  if (!lista.length) {
-    caja.textContent = "Escribe un rango válido: del menor al mayor.";
+  const grupos = gruposDelRango();
+  const total = totalDeGrupos(grupos);
+
+  if (ORIGEN_RANGO === "orden") {
+    if (!$("ordenRango").value) { caja.textContent = "Elige la orden que vas a editar."; return; }
+    if (!total) { caja.textContent = "Esa orden ya no tiene tarjetas."; return; }
+    const partes = grupos.map((g) =>
+      plural(g[1].length, g[0] === "acrilico" ? "acrílico" : "sticker",
+        g[0] === "acrilico" ? "acrílicos" : "stickers") + " · " + tramo(g[1]));
+    caja.textContent = partes.join("   +   ");
     return;
   }
-  caja.textContent = lista.length + (lista.length === 1 ? " tarjeta · " : " tarjetas · ") +
-    lista[0] + " → " + lista[lista.length - 1];
+
+  if (!total) { caja.textContent = "Escribe un rango válido: del menor al mayor."; return; }
+  const lista = grupos[0][1];
+  caja.textContent = plural(total, "tarjeta", "tarjetas") + " · " + tramo(lista);
+}
+
+function pintarOrigenRango(valor) {
+  ORIGEN_RANGO = valor === "orden" ? "orden" : "numero";
+  marcarSegmento("origenRango", ORIGEN_RANGO);
+  $("rangoNumeros").hidden = ORIGEN_RANGO !== "numero";
+  $("rangoOrden").hidden = ORIGEN_RANGO !== "orden";
+  // en una orden el tipo lo trae cada tarjeta, no se elige
+  $("bloqueTipo").hidden = MODO === "local" || (MODO === "rango" && ORIGEN_RANGO === "orden");
+  pintarResumenRango();
 }
 
 $("formTarjeta").onsubmit = async (e) => {
@@ -892,28 +941,35 @@ $("formTarjeta").onsubmit = async (e) => {
     }
 
     if (MODO === "rango") {
-      const codigos = codigosDelRango();
-      if (!codigos.length) {
-        avisar("aviso", "El rango no es válido: el número final debe ser mayor o igual que el inicial.", false);
+      const grupos = gruposDelRango();
+      const total = totalDeGrupos(grupos);
+      if (!total) {
+        avisar("aviso", ORIGEN_RANGO === "orden"
+          ? "Elige una orden con tarjetas."
+          : "El rango no es válido: el número final debe ser mayor o igual que el inicial.", false);
         return;
       }
-      for (let i = 0; i < codigos.length; i += TANDA) {
-        const tanda = codigos.slice(i, i + TANDA);
-        boton.textContent = "Guardando " + Math.min(i + TANDA, codigos.length) + " de " + codigos.length + "…";
-        await llamar("rango", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            codigos: tanda,
-            negocio: $("negocio").value,
-            destino: destino,
-            tipo: TIPO,
-          }),
-        });
+      let hechas = 0;
+      for (const [tipo, codigos] of grupos) {
+        for (let i = 0; i < codigos.length; i += TANDA) {
+          const tanda = codigos.slice(i, i + TANDA);
+          hechas += tanda.length;
+          boton.textContent = "Guardando " + hechas + " de " + total + "…";
+          await llamar("rango", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              codigos: tanda,
+              negocio: $("negocio").value,
+              destino: destino,
+              tipo: tipo,
+            }),
+          });
+        }
       }
       cerrarTarjeta();
-      avisar("avisoPanel", codigos.length + " tarjetas apuntando a " + $("negocio").value +
-        " (" + codigos[0] + " → " + codigos[codigos.length - 1] + ")", true);
+      avisar("avisoPanel", plural(total, "tarjeta apuntando", "tarjetas apuntando") +
+        " a " + $("negocio").value, true);
       await listar();
       return;
     }
@@ -983,13 +1039,20 @@ function pintarModo(valor) {
   $("campoUna").hidden = MODO !== "una";
   $("campoRango").hidden = MODO !== "rango";
   $("campoLocal").hidden = MODO !== "local";
-  $("bloqueTipo").hidden = MODO === "local";   // en un local van los dos tipos
   $("guardar").textContent = MODO === "rango" ? "Aplicar al rango"
     : MODO === "local" ? "Crear la orden"
     : (EDITANDO_CODIGO ? "Guardar cambios" : "Activar tarjeta");
-  if (MODO === "rango") pintarResumenRango();
+  if (MODO === "rango") pintarOrigenRango(ORIGEN_RANGO);
+  else $("bloqueTipo").hidden = MODO === "local";   // en un local van los dos tipos
   if (MODO === "local") pintarResumenLocal();
 }
+
+$("origenRango").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-valor]");
+  if (b) pintarOrigenRango(b.dataset.valor);
+});
+
+$("ordenRango").addEventListener("change", pintarResumenRango);
 
 $("modoTarjeta").addEventListener("click", (e) => {
   const b = e.target.closest("[data-valor]");
@@ -1017,6 +1080,7 @@ function salirDeEdicion() {
   $("desde").value = $("hasta").value = "";
   $("nAcrilicos").value = $("nStickers").value = "";
   if ($("localExistente").options.length) $("localExistente").value = "";
+  if ($("ordenRango").options.length) $("ordenRango").value = "";
   VENTA_EDITADA = { vendida: "", precio: 0 };
 }
 
@@ -1904,13 +1968,23 @@ export function vistaAdmin(origen) {
       </div>
 
       <div id="campoRango" hidden>
-        <label class="paso" for="desde"><span class="n n1">1</span>Rango de tarjetas
-          <span class="suave">— por número</span></label>
+        <label class="paso"><span class="n n1">1</span>Qué tarjetas se editan</label>
+        <div class="segmento" id="origenRango" role="group" aria-label="Cómo se eligen las tarjetas">
+          <button type="button" class="activa" data-valor="numero">Por número</button>
+          <button type="button" data-valor="orden">De una orden</button>
+        </div>
+
+        <div id="rangoOrden" hidden>
+          <select id="ordenRango" aria-label="Orden que se va a editar"></select>
+        </div>
+
+        <div id="rangoNumeros">
         <div class="rango-fila">
           <div><div class="mini">Desde el nº</div>
             <input class="c1" id="desde" type="number" min="1" placeholder="101" autocomplete="off"></div>
           <div><div class="mini">Hasta el nº</div>
             <input class="c1" id="hasta" type="number" min="1" placeholder="110" autocomplete="off"></div>
+        </div>
         </div>
         <div class="rango-resumen" id="rangoResumen">Escribe un rango válido: del menor al mayor.</div>
       </div>
