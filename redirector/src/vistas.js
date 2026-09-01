@@ -132,15 +132,15 @@ const ESTILOS = `
 
   /* Tintados, no rellenos: con diez filas en pantalla hay treinta de estos, y
      treinta pastillas saturadas convierten la tabla en un semáforo. */
-  .acciones{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;min-width:210px}
+  .acciones{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;min-width:252px}
   .acciones button{width:100%;padding:7px 6px;font-size:12.5px;border:1px solid transparent}
   .accion-qr{background:var(--verde-piel);color:var(--verde-fuerte);border-color:var(--verde-borde)}
   .accion-qr:hover{background:var(--verde);color:#fff;border-color:var(--verde)}
   .accion-editar{background:var(--azul-piel);color:var(--azul-fuerte);border-color:var(--azul-borde)}
   .accion-editar:hover{background:var(--azul);color:#fff;border-color:var(--azul)}
-  .accion-borrar{background:var(--rojo-piel);color:var(--rojo-fuerte);border-color:var(--rojo-borde)}
-  .accion-borrar:hover{background:var(--rojo);color:#fff;border-color:var(--rojo)}
-  .accion-borrar.confirmando{background:var(--rojo);color:#fff;border-color:var(--rojo);
+  .accion-apagar{background:var(--rojo-piel);color:var(--rojo-fuerte);border-color:var(--rojo-borde)}
+  .accion-apagar:hover{background:var(--rojo);color:#fff;border-color:var(--rojo)}
+  .accion-apagar.confirmando{background:var(--rojo);color:#fff;border-color:var(--rojo);
     box-shadow:0 0 0 3px var(--rojo-piel)}
 
   /* ---------- campos ---------- */
@@ -1024,7 +1024,7 @@ function pintarTabla() {
       "</span></td><td><div class='acciones'>" +
       "<button type='button' class='accion-qr' data-qr='" + c + "'>QR</button>" +
       "<button type='button' class='accion-editar' data-editar='" + c + "'>Editar</button>" +
-      "<button type='button' class='accion-borrar' data-borrar='" + c + "'>Borrar</button>" +
+      "<button type='button' class='accion-apagar' data-apagar='" + c + "'>Desactivar</button>" +
       "</div></td></tr>";
   });
 
@@ -1072,12 +1072,15 @@ $("recargar").onclick = () => { CARGANDO = true; pintarTabla(); listar(); };
 // Antes esto era un confirm() del navegador: bloquea la página, no se puede
 // estilar y en móvil se ve como un aviso del sistema. El segundo toque sobre el
 // mismo botón dice lo mismo sin sacarte de la tabla.
+//
+// Desactivar no borra el registro: la tarjeta sigue impresa y su código sigue
+// existiendo, así que vuelve a la lista sin negocio, lista para reasignar.
 // Hay que devolver el botón anterior a su sitio: si no, al armar otra fila la
 // primera se queda diciendo "¿Seguro?" sin estarlo, y la tabla miente.
 function olvidarConfirmacion() {
   clearTimeout(RELOJ_CONFIRMA);
   if (BOTON_CONFIRMA && BOTON_CONFIRMA.isConnected) {
-    BOTON_CONFIRMA.textContent = "Borrar";
+    BOTON_CONFIRMA.textContent = "Desactivar";
     BOTON_CONFIRMA.classList.remove("confirmando");
   }
   BOTON_CONFIRMA = null;
@@ -1113,20 +1116,21 @@ $("tabla").addEventListener("click", async (e) => {
   const q = e.target.closest("[data-qr]");
   if (q) { abrirQR(q.dataset.qr); return; }
 
-  const b = e.target.closest("[data-borrar]");
+  const b = e.target.closest("[data-apagar]");
   if (!b) return;
-  const codigo = b.dataset.borrar;
+  const codigo = b.dataset.apagar;
   if (CONFIRMANDO !== codigo) { pedirConfirmacion(b, codigo); return; }
 
   olvidarConfirmacion();
   b.disabled = true;
   try {
-    await llamar("borrar", {
+    const t = TARJETAS.filter((x) => x.codigo === codigo)[0];
+    await llamar("desactivar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ codigo: codigo }),
+      body: JSON.stringify({ codigo: codigo, tipo: t ? tipoDe(t) : "" }),
     });
-    avisar("avisoPanel", "Tarjeta " + codigo + " borrada", true);
+    avisar("avisoPanel", "Tarjeta " + codigo + " desactivada. Queda libre para reasignar.", true);
     cerrarQR();
     await listar();
   } catch (err) {

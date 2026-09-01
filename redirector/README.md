@@ -12,7 +12,7 @@ cuando quieras, sin reimprimir nada.
 | `/A7K2` | 307 al formulario de reseñas del negocio | público |
 | `/admin` | Login y panel de tarjetas | público, pero sin datos hasta iniciar sesión |
 | `/api/login`, `/api/salir`, `/api/sesion` | Manejo de la sesión | público |
-| `/api/lista`, `/api/guardar`, `/api/rango`, `/api/borrar` | Leer y modificar tarjetas | **requiere sesión** |
+| `/api/lista`, `/api/guardar`, `/api/rango`, `/api/desactivar` | Leer y modificar tarjetas | **requiere sesión** |
 
 Los códigos son insensibles a mayúsculas: `/a7k2` y `/A7K2` llevan al mismo sitio.
 
@@ -144,8 +144,11 @@ eso las versiones sólidas se quedan en M: cada módulo imprime más grande.
 En el tag NFC va **ese mismo link**. Los tags grabados antes con `?n=1` al final
 siguen sirviendo: ese parámetro ya no se mira.
 
-Borrar una tarjeta no la rompe: vuelve a mostrar la página de "todavía no está
-activada", así que puedes reasignarla a otro negocio cuando quieras.
+**Desactivar** no borra nada: le quita el destino y el negocio, y la tarjeta
+vuelve a la lista como libre. Quien la escanee ve la página de "todavía no está
+activada". El registro se queda porque el plástico también: su código está
+impreso y va a existir igual, así que tiene que seguir apareciendo en el panel
+para poder reasignarlo.
 
 ---
 

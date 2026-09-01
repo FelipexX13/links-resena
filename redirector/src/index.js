@@ -11,7 +11,7 @@
  *   GET  /api/lista    listado de tarjetas          (sesión)
  *   POST /api/guardar  {codigo, destino, negocio, tipo}        (sesión)
  *   POST /api/rango    {codigos[], destino, negocio, tipo}     (sesión)
- *   POST /api/borrar   {codigo}                                (sesión)
+ *   POST /api/desactivar {codigo, tipo}                         (sesión)
  *
  * Secreto obligatorio:  ADMIN_PASSWORD
  *
@@ -162,12 +162,22 @@ async function api(request, env, accion, url, ctx) {
     return json({ ok: true, total: codigos.length });
   }
 
-  if (accion === "borrar" && request.method === "POST") {
+  // Desactivar, no borrar: la tarjeta existe en plástico y su código está
+  // impreso. Se le quita el destino y vuelve a la lista como libre, lista para
+  // reasignar. Borrar la clave la haría desaparecer del panel sin dejar de
+  // existir en el mundo.
+  if (accion === "desactivar" && request.method === "POST") {
     const cuerpo = await request.json().catch(() => ({}));
     const codigo = normalizar(cuerpo.codigo);
     if (!codigo) return json({ error: "Código inválido" }, 400);
-    await env.TARJETAS.delete("c:" + codigo);
-    await olvidarTarjeta(codigo);
+
+    const registro = {
+      destino: "",
+      negocio: "",
+      tipo: tipoValido(cuerpo.tipo),
+      actualizado: new Date().toISOString(),
+    };
+    await escribir(env, codigo, registro);
     return json({ ok: true });
   }
 
