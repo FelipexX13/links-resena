@@ -9,15 +9,16 @@
  *   POST /api/salir    cierra la sesión
  *   GET  /api/sesion   ¿hay sesión activa?
  *   GET  /api/lista    listado de tarjetas          (sesión)
- *   POST /api/guardar  {codigo, destino, negocio, tipo}        (sesión)
- *   POST /api/rango    {codigos[], destino, negocio, tipo}     (sesión)
+ *   POST /api/guardar  {codigo, destino, negocio, tipo, vendida, precio}  (sesión)
+ *   POST /api/rango    {codigos[], ...los mismos campos}                (sesión)
  *   POST /api/desactivar {codigo, tipo}                         (sesión)
  *
  * Secreto obligatorio:  ADMIN_PASSWORD
  *
  * Datos en KV (binding TARJETAS):
  *   "c:A7K2"        {"destino":"https://...","negocio":"...","tipo":"acrilico",
- *                    "actualizado":"..."}
+ *                    "vendida":"2026-09-01","precio":25000,"actualizado":"..."}
+ *                   vendida vacía = vinculada pero todavía no cobrada
  *                   + la misma info como metadata, para listar en una sola llamada
  *   "intentos:<ip>" contador de logins fallidos, expira solo a los 15 minutos
  */
@@ -78,6 +79,19 @@ function tipoValido(valor) {
   return TIPOS.has(t) ? t : "acrilico";
 }
 
+// La tarjeta ES la unidad de venta: cada acrílico y cada sticker es un registro.
+// Por eso la venta vive aquí y no en una entidad aparte que habría que mantener
+// sincronizada. vendida vacía = vinculada al local pero todavía no cobrada.
+function fechaValida(valor) {
+  const f = String(valor || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(f) ? f : "";
+}
+
+function precioValido(valor) {
+  const n = Number(valor);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n) : 0;
+}
+
 function registroDe(cuerpo) {
   const destino = urlDestino(cuerpo.destino);
   if (!destino) return { error: "El destino debe ser una URL http:// o https://" };
@@ -88,6 +102,8 @@ function registroDe(cuerpo) {
       destino: destino,
       negocio: negocio,
       tipo: tipoValido(cuerpo.tipo),
+      vendida: fechaValida(cuerpo.vendida),
+      precio: precioValido(cuerpo.precio),
       actualizado: new Date().toISOString(),
     },
   };
@@ -175,6 +191,8 @@ async function api(request, env, accion, url, ctx) {
       destino: "",
       negocio: "",
       tipo: tipoValido(cuerpo.tipo),
+      vendida: "",
+      precio: 0,
       actualizado: new Date().toISOString(),
     };
     await escribir(env, codigo, registro);

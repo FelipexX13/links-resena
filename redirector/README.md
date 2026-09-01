@@ -102,6 +102,29 @@ El tipo se guarda en el registro. Las tarjetas viejas no lo traen, así que se
 deduce del número: de la 101 en adelante, sticker. El formulario lo cambia cuando
 haga falta, el número solo decide el valor por defecto.
 
+## Vincular un local y cobrarlo
+
+El panel tiene dos vistas: **Tarjetas** y **Locales**.
+
+**Vincular un local** pide cuántos acrílicos y cuántos stickers compra, y toma
+las primeras tarjetas **libres** de cada tipo — las que ya están impresas pero no
+apuntan a ningún sitio. No hay que saber qué códigos quedan sueltos.
+
+**Registrar la venta** pone fecha y precio por unidad. Vincular y cobrar son dos
+pasos distintos a propósito: primero se deja el link funcionando, y se cobra
+después.
+
+### Por qué no hay tabla de ventas
+
+La tarjeta **es** la unidad vendida: cada acrílico y cada sticker es un registro.
+Así que la venta vive en la propia tarjeta (`vendida` y `precio`), y la lista de
+locales sale de agrupar las tarjetas por negocio.
+
+Una entidad "venta" aparte habría que mantenerla sincronizada: reasignar una
+tarjeta, desactivarla o cambiarle el negocio dejaría la venta apuntando a algo que
+ya no existe. Agrupando, eso no puede pasar. La gráfica diaria es un `GROUP BY`
+sobre la fecha, y sale gratis.
+
 ## Editar un rango
 
 Un local que compra diez mesas necesita diez códigos distintos apuntando al mismo

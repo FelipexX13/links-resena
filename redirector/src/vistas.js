@@ -338,7 +338,30 @@ const ESTILOS = `
   .tipo-sticker{background:var(--ambar-piel);color:var(--ambar-tinta);border-color:var(--ambar-borde)}
 
   .filtros{margin-top:12px}
-  .rango-fila{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .mini{font-size:11.5px;font-weight:500;color:var(--tinta-2);margin:0 0 5px}
+
+  /* ---- ventas: tarjeta de gráfica al estilo mono, con la paleta del panel ---- */
+  .grafica{padding:20px}
+  .grafica-alto{display:flex;align-items:flex-start;justify-content:space-between;
+    gap:14px;flex-wrap:wrap;margin-bottom:14px}
+  .cejilla{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--tinta-3);margin:0 0 5px}
+  .metrica{font-size:23px;font-weight:700;letter-spacing:-.03em;line-height:1}
+  .metrica .unidad{font-size:12px;font-weight:400;opacity:.65;margin-left:5px}
+  .pozo{background:var(--papel-2);border-radius:14px;padding:14px 12px 8px}
+  .pozo svg{display:block;width:100%;height:auto}
+  .grafica-pie{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    margin-top:14px;padding-top:12px;border-top:1px solid var(--linea-suave);
+    font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;color:var(--tinta-3)}
+  .grafica-pie b{font-weight:500;color:var(--tinta)}
+
+  .estado{display:inline-block;font-size:11px;font-weight:500;border-radius:999px;
+    padding:2px 9px;border:1px solid transparent}
+  .estado-vendido{background:var(--verde-piel);color:var(--verde-fuerte);border-color:var(--verde-borde)}
+  .estado-pendiente{background:var(--papel-2);color:var(--tinta-2);border-color:var(--linea)}
+  .piezas{font-family:"Geist Mono",ui-monospace,monospace;font-size:12px;color:var(--tinta-2)}
+  .importe{font-family:"Geist Mono",ui-monospace,monospace;font-weight:500}
+  .rango-fila{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
   .rango-resumen{margin-top:10px;padding:10px 13px;border-radius:var(--r-m);
     background:var(--ambar-piel);border:1px solid var(--ambar-borde);
     color:var(--ambar-tinta);font-size:12.5px}
@@ -448,6 +471,7 @@ let TARJETAS = [];
 let CARGANDO = true;
 let focoPrevio = null;
 let focoTarjeta = null;
+let focoVenta = null;
 let NOMBRE_AUTO = "";
 let URL_LEIDA = "";
 let EDITANDO_CODIGO = "";
@@ -458,6 +482,11 @@ let PAGINA = 1;
 let TIPO = "acrilico";
 let FILTRO_TIPO = "";
 let MODO = "una";
+let VENTA_EDITADA = { vendida: "", precio: 0 };
+let VISTA = "tarjetas";
+let METRICA = "unidades";
+let LOCAL_VENTA = null;
+const DIAS_GRAFICA = 14;
 const POR_PAGINA = 10;
 // tandas de 25: el plan gratuito corta a 50 subpeticiones y cada escritura cuenta
 const TANDA = 25;
@@ -692,6 +721,57 @@ $("analizar").onclick = () => {
 
 /* ---------- alta de tarjetas ---------- */
 
+// Las tarjetas ya impresas que todavía no apuntan a ningún sitio. Se reparten en
+// orden, así se agotan los códigos bajos antes de tocar los altos.
+function libresPorTipo(tipo) {
+  return TARJETAS.filter((t) => !t.destino && tipoDe(t) === tipo)
+    .map((t) => t.codigo)
+    .sort();
+}
+
+function pedidasDelLocal() {
+  const na = Math.max(0, parseInt($("nAcrilicos").value, 10) || 0);
+  const ns = Math.max(0, parseInt($("nStickers").value, 10) || 0);
+  return { acrilicos: na, stickers: ns };
+}
+
+function codigosDelLocal() {
+  const p = pedidasDelLocal();
+  return {
+    acrilico: libresPorTipo("acrilico").slice(0, p.acrilicos),
+    sticker: libresPorTipo("sticker").slice(0, p.stickers),
+    pedidas: p,
+  };
+}
+
+function tramo(codigos) {
+  if (!codigos.length) return "";
+  return codigos.length === 1
+    ? codigos[0]
+    : codigos[0] + " → " + codigos[codigos.length - 1];
+}
+
+function pintarResumenLocal() {
+  const sel = codigosDelLocal();
+  const caja = $("localResumen");
+  const faltan = [];
+  if (sel.acrilico.length < sel.pedidas.acrilicos) {
+    faltan.push("acrílicos: solo quedan " + libresPorTipo("acrilico").length + " libres");
+  }
+  if (sel.sticker.length < sel.pedidas.stickers) {
+    faltan.push("stickers: solo quedan " + libresPorTipo("sticker").length + " libres");
+  }
+  if (faltan.length) { caja.textContent = "No alcanza — " + faltan.join(" · "); return; }
+  if (!sel.acrilico.length && !sel.sticker.length) {
+    caja.textContent = "Escribe cuántos acrílicos y cuántos stickers compra el local.";
+    return;
+  }
+  const partes = [];
+  if (sel.acrilico.length) partes.push(sel.acrilico.length + " acrílicos · " + tramo(sel.acrilico));
+  if (sel.sticker.length) partes.push(sel.sticker.length + " stickers · " + tramo(sel.sticker));
+  caja.textContent = partes.join("   +   ");
+}
+
 function codigosDelRango() {
   const desde = parseInt($("desde").value, 10);
   const hasta = parseInt($("hasta").value, 10);
@@ -732,6 +812,45 @@ $("formTarjeta").onsubmit = async (e) => {
   const etiqueta = boton.textContent;
   boton.disabled = true;
   try {
+    if (MODO === "local") {
+      const sel = codigosDelLocal();
+      if (sel.acrilico.length < sel.pedidas.acrilicos || sel.sticker.length < sel.pedidas.stickers) {
+        avisar("aviso", "No hay tarjetas libres suficientes. Revisa el resumen.", false);
+        return;
+      }
+      if (!sel.acrilico.length && !sel.sticker.length) {
+        avisar("aviso", "Escribe cuántas piezas compra el local.", false);
+        return;
+      }
+      // dos tandas de tipos distintos: el endpoint escribe un tipo por llamada
+      const grupos = [["acrilico", sel.acrilico], ["sticker", sel.sticker]];
+      let hechas = 0;
+      const total = sel.acrilico.length + sel.sticker.length;
+      for (const [tipo, codigos] of grupos) {
+        for (let i = 0; i < codigos.length; i += TANDA) {
+          const tanda = codigos.slice(i, i + TANDA);
+          hechas += tanda.length;
+          boton.textContent = "Vinculando " + hechas + " de " + total + "…";
+          await llamar("rango", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              codigos: tanda,
+              negocio: $("negocio").value,
+              destino: destino,
+              tipo: tipo,
+            }),
+          });
+        }
+      }
+      cerrarTarjeta();
+      avisar("avisoPanel", total + " tarjetas vinculadas a " + $("negocio").value + " · " +
+        plural(sel.acrilico.length, "acrílico", "acrílicos") + " y " +
+        plural(sel.sticker.length, "sticker", "stickers"), true);
+      await listar();
+      return;
+    }
+
     if (MODO === "rango") {
       const codigos = codigosDelRango();
       if (!codigos.length) {
@@ -768,6 +887,8 @@ $("formTarjeta").onsubmit = async (e) => {
         negocio: $("negocio").value,
         destino: destino,
         tipo: TIPO,
+        vendida: VENTA_EDITADA.vendida,
+        precio: VENTA_EDITADA.precio,
       }),
     });
     const editaba = Boolean(EDITANDO_CODIGO);
@@ -798,6 +919,7 @@ function editar(codigo) {
   URL_LEIDA = t.destino;
   pintarNumero(t.codigo);
   pintarTipo(tipoDe(t));
+  VENTA_EDITADA = { vendida: t.vendida || "", precio: t.precio || 0 };
   pintarModo("una");
   $("fichaNombre").textContent = t.negocio || t.codigo;
   $("fichaMeta").textContent = placeIdDeDestino(t.destino)
@@ -814,14 +936,17 @@ function editar(codigo) {
 }
 
 function pintarModo(valor) {
-  MODO = valor === "rango" ? "rango" : "una";
+  MODO = valor === "rango" || valor === "local" ? valor : "una";
   marcarSegmento("modoTarjeta", MODO);
-  $("campoUna").hidden = MODO === "rango";
-  $("campoRango").hidden = MODO === "una";
-  $("guardar").textContent = MODO === "rango"
-    ? "Aplicar al rango"
+  $("campoUna").hidden = MODO !== "una";
+  $("campoRango").hidden = MODO !== "rango";
+  $("campoLocal").hidden = MODO !== "local";
+  $("bloqueTipo").hidden = MODO === "local";   // en un local van los dos tipos
+  $("guardar").textContent = MODO === "rango" ? "Aplicar al rango"
+    : MODO === "local" ? "Vincular al local"
     : (EDITANDO_CODIGO ? "Guardar cambios" : "Activar tarjeta");
   if (MODO === "rango") pintarResumenRango();
+  if (MODO === "local") pintarResumenLocal();
 }
 
 $("modoTarjeta").addEventListener("click", (e) => {
@@ -836,6 +961,8 @@ $("tipoTarjeta").addEventListener("click", (e) => {
 
 $("desde").addEventListener("input", pintarResumenRango);
 $("hasta").addEventListener("input", pintarResumenRango);
+$("nAcrilicos").addEventListener("input", pintarResumenLocal);
+$("nStickers").addEventListener("input", pintarResumenLocal);
 
 function salirDeEdicion() {
   EDITANDO_CODIGO = "";
@@ -846,6 +973,8 @@ function salirDeEdicion() {
   URL_LEIDA = "";
   $("numeroTarjeta").textContent = "";
   $("desde").value = $("hasta").value = "";
+  $("nAcrilicos").value = $("nStickers").value = "";
+  VENTA_EDITADA = { vendida: "", precio: 0 };
 }
 
 function prepararNuevaTarjeta() {
@@ -882,6 +1011,19 @@ function cerrarTarjeta() {
 
 $("abrirActivar").onclick = prepararNuevaTarjeta;
 
+$("abrirLocal").onclick = () => {
+  salirDeEdicion();
+  $("tarjetaModalKicker").textContent = "Vincular";
+  $("tarjetaModalTitulo").textContent = "Vincular un local";
+  $("tarjetaModalSubtitulo").textContent = "Le asigna acrílicos y stickers libres, todos apuntando a su ficha de Google.";
+  pintarModo("local");
+  limpiarAviso("aviso");
+  focoTarjeta = document.activeElement;
+  $("modalTarjeta").hidden = false;
+  document.body.style.overflow = "hidden";
+  $("nAcrilicos").focus();
+};
+
 $("abrirRango").onclick = () => {
   salirDeEdicion();
   $("tarjetaModalKicker").textContent = "Varias tarjetas";
@@ -914,6 +1056,7 @@ async function listar() {
     CARGANDO = false;
     pintarResumen();
     pintarTabla();
+    pintarVentas();
   } catch (e) {
     CARGANDO = false;
     pintarTabla();
@@ -1142,6 +1285,269 @@ $("tabla").addEventListener("click", async (e) => {
   }
 });
 
+/* ---------- locales y ventas ---------- */
+
+// No hay entidad "venta": la tarjeta es la unidad vendida, así que el listado de
+// locales sale de agrupar las tarjetas por negocio. Nada que sincronizar.
+function locales() {
+  const mapa = {};
+  TARJETAS.forEach((t) => {
+    const nombre = String(t.negocio || "").trim();
+    if (!nombre || !t.destino) return;
+    if (!mapa[nombre]) {
+      mapa[nombre] = { negocio: nombre, destino: t.destino, acrilico: 0, sticker: 0,
+        vendidas: 0, importe: 0, fecha: "", codigos: { acrilico: [], sticker: [] } };
+    }
+    const g = mapa[nombre];
+    const tipo = tipoDe(t);
+    g[tipo]++;
+    g.codigos[tipo].push(t.codigo);
+    if (t.vendida) {
+      g.vendidas++;
+      g.importe += Number(t.precio) || 0;
+      if (t.vendida > g.fecha) g.fecha = t.vendida;
+    }
+  });
+  return Object.keys(mapa).map((k) => mapa[k])
+    .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || "") || a.negocio.localeCompare(b.negocio));
+}
+
+function hoyISO() {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+function plural(n, uno, varios) {
+  return n + " " + (n === 1 ? uno : varios);
+}
+
+function dinero(n) {
+  return "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
+}
+
+function ventasPorDia(dias) {
+  const serie = [];
+  const indice = {};
+  const base = new Date(hoyISO() + "T00:00:00");
+  for (let i = dias - 1; i >= 0; i--) {
+    const d = new Date(base);
+    d.setDate(d.getDate() - i);
+    const clave = d.toISOString().slice(0, 10);
+    indice[clave] = serie.length;
+    serie.push({ fecha: clave, dia: d.getDate(), unidades: 0, ingresos: 0 });
+  }
+  TARJETAS.forEach((t) => {
+    const i = indice[t.vendida];
+    if (i === undefined) return;
+    serie[i].unidades += 1;
+    serie[i].ingresos += Number(t.precio) || 0;
+  });
+  return serie;
+}
+
+// Barras pill, rejilla punteada solo horizontal, sin líneas de eje: el SVG se
+// dibuja a mano porque aquí no hay librería de gráficas ni hace falta.
+function svgBarras(serie, campo) {
+  const ancho = 660, alto = 150, pieAlto = 18;
+  const tope = Math.max(1, Math.max.apply(null, serie.map((p) => p[campo])));
+  const paso = ancho / serie.length;
+  const grosor = Math.max(7, Math.min(18, paso - 7));
+  let piezas = "";
+  for (let g = 1; g <= 3; g++) {
+    const y = (alto / 3) * (3 - g);
+    piezas += "<line x1='0' y1='" + y + "' x2='" + ancho + "' y2='" + y +
+      "' stroke='rgba(22,32,46,.06)' stroke-width='1' stroke-dasharray='2 3'></line>";
+  }
+  serie.forEach((p, i) => {
+    const x = i * paso + (paso - grosor) / 2;
+    if (p[campo] > 0) {
+      const h = Math.max(grosor, (p[campo] / tope) * alto);
+      piezas += "<rect x='" + x.toFixed(1) + "' y='" + (alto - h).toFixed(1) +
+        "' width='" + grosor.toFixed(1) + "' height='" + h.toFixed(1) +
+        "' rx='8' fill='var(--tinta)'></rect>";
+    }
+    const cada = serie.length > 20 ? 5 : (serie.length > 10 ? 2 : 1);
+    if (i % cada === 0 || i === serie.length - 1) {
+      piezas += "<text x='" + (i * paso + paso / 2).toFixed(1) + "' y='" + (alto + 13) +
+        "' text-anchor='middle' font-size='10' fill='var(--tinta-3)'>" + p.dia + "</text>";
+    }
+  });
+  return "<svg viewBox='0 0 " + ancho + " " + (alto + pieAlto) + "' role='img' " +
+    "aria-label='Ventas por día'>" + piezas + "</svg>";
+}
+
+function pintarVentas() {
+  const serie = ventasPorDia(DIAS_GRAFICA);
+  const campo = METRICA;
+  const suma = serie.reduce((a, p) => a + p[campo], 0);
+  $("graficaMetrica").innerHTML = (campo === "ingresos" ? dinero(suma) : suma) +
+    "<span class='unidad'>" + (campo === "ingresos" ? "en " : "unidades en ") + DIAS_GRAFICA + " días</span>";
+  $("pozoGrafica").innerHTML = svgBarras(serie, campo);
+
+  const lista = locales();
+  const vendidos = lista.filter((l) => l.vendidas).length;
+  const total = TARJETAS.reduce((a, t) => a + (t.vendida ? Number(t.precio) || 0 : 0), 0);
+  $("graficaPie").innerHTML = "<span>" + vendidos + " de " + lista.length +
+    " locales cobrados</span><span>Acumulado <b>" + dinero(total) + "</b></span>";
+
+  if (!lista.length) {
+    $("tablaLocales").innerHTML = "<div class='vacio'><h2>Todavía no hay locales</h2>" +
+      "<p>Vincula acrílicos y stickers a un negocio y aparecerá aquí para cobrarlo.</p>" +
+      "<button type='button' data-local>Vincular un local</button></div>";
+    return;
+  }
+
+  let filas = "";
+  lista.forEach((l) => {
+    const cobrado = l.vendidas > 0;
+    const piezas = l.acrilico + l.sticker;
+    filas += "<tr><td class='negocio'>" + escHtml(l.negocio) + "</td>" +
+      "<td class='piezas'>" + plural(l.acrilico, "acrílico", "acrílicos") + "<br>" +
+      plural(l.sticker, "sticker", "stickers") + "</td>" +
+      "<td><span class='estado " + (cobrado ? "estado-vendido'>Cobrado " + l.fecha : "estado-pendiente'>Sin cobrar") +
+      "</span>" + (cobrado && l.vendidas < piezas
+        ? "<div class='fila-num'>" + l.vendidas + " de " + piezas + " piezas</div>" : "") +
+      "</td><td class='importe'>" + (cobrado ? dinero(l.importe) : "—") + "</td>" +
+      "<td><div class='acciones'><button type='button' class='accion-editar' data-vender='" +
+      escHtml(l.negocio) + "'>" + (cobrado ? "Editar cobro" : "Registrar venta") + "</button></div></td></tr>";
+  });
+  $("tablaLocales").innerHTML =
+    "<table><thead><tr><th>Local</th><th>Piezas</th><th>Estado</th><th>Importe</th><th></th>" +
+    "</tr></thead><tbody>" + filas + "</tbody></table>";
+}
+
+function pintarVista(valor) {
+  VISTA = valor === "locales" ? "locales" : "tarjetas";
+  marcarSegmento("vistaPanel", VISTA);
+  $("vistaTarjetas").hidden = VISTA !== "tarjetas";
+  $("vistaLocales").hidden = VISTA !== "locales";
+  $("tarjetaGrafica").hidden = VISTA !== "locales";
+  if (VISTA === "locales") pintarVentas();
+}
+
+$("vistaPanel").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-valor]");
+  if (b) pintarVista(b.dataset.valor);
+});
+
+$("metricaVentas").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-valor]");
+  if (!b) return;
+  METRICA = b.dataset.valor;
+  marcarSegmento("metricaVentas", METRICA);
+  pintarVentas();
+});
+
+/* ---------- registrar la venta de un local ---------- */
+
+$("tablaLocales").addEventListener("click", (e) => {
+  if (e.target.closest("[data-local]")) { $("abrirLocal").click(); return; }
+  const b = e.target.closest("[data-vender]");
+  if (b) abrirVenta(b.dataset.vender);
+});
+
+function abrirVenta(negocio) {
+  const l = locales().filter((x) => x.negocio === negocio)[0];
+  if (!l) return;
+  LOCAL_VENTA = l;
+  $("ventaTitulo").textContent = l.vendidas ? "Editar el cobro" : "Registrar la venta";
+  $("ventaSubtitulo").textContent = l.negocio + " · " +
+    plural(l.acrilico, "acrílico", "acrílicos") + " y " + plural(l.sticker, "sticker", "stickers");
+  $("ventaFecha").value = l.fecha || hoyISO();
+  const unitario = (tipo) => {
+    const t = TARJETAS.filter((x) => x.negocio === l.negocio && tipoDe(x) === tipo && x.precio)[0];
+    return t ? t.precio : "";
+  };
+  $("precioAcrilico").value = unitario("acrilico");
+  $("precioSticker").value = unitario("sticker");
+  $("guardarVenta").textContent = l.vendidas ? "Guardar el cobro" : "Registrar venta";
+  limpiarAviso("avisoVenta");
+  pintarResumenVenta();
+  focoVenta = document.activeElement;
+  $("modalVenta").hidden = false;
+  document.body.style.overflow = "hidden";
+  $("precioAcrilico").focus();
+}
+
+function pintarResumenVenta() {
+  if (!LOCAL_VENTA) return;
+  const pa = Number($("precioAcrilico").value) || 0;
+  const ps = Number($("precioSticker").value) || 0;
+  const total = pa * LOCAL_VENTA.acrilico + ps * LOCAL_VENTA.sticker;
+  $("ventaResumen").textContent = LOCAL_VENTA.acrilico + " × " + dinero(pa) + "   +   " +
+    LOCAL_VENTA.sticker + " × " + dinero(ps) + "   =   " + dinero(total);
+}
+
+$("precioAcrilico").addEventListener("input", pintarResumenVenta);
+$("precioSticker").addEventListener("input", pintarResumenVenta);
+
+function cerrarVenta() {
+  if ($("modalVenta").hidden) return;
+  $("modalVenta").hidden = true;
+  document.body.style.overflow = "";
+  if (focoVenta && focoVenta.focus) focoVenta.focus();
+  focoVenta = null;
+  LOCAL_VENTA = null;
+}
+
+$("cerrarVenta").onclick = cerrarVenta;
+$("cancelarVenta").onclick = cerrarVenta;
+$("modalVenta").addEventListener("click", (e) => {
+  if (e.target.hasAttribute("data-cerrar-venta")) cerrarVenta();
+});
+
+$("formVenta").onsubmit = async (e) => {
+  e.preventDefault();
+  if (!LOCAL_VENTA) return;
+  const fecha = $("ventaFecha").value;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    avisar("avisoVenta", "Falta la fecha de la venta.", false);
+    return;
+  }
+  const l = LOCAL_VENTA;
+  const precios = {
+    acrilico: Math.max(0, Number($("precioAcrilico").value) || 0),
+    sticker: Math.max(0, Number($("precioSticker").value) || 0),
+  };
+  const boton = $("guardarVenta");
+  const etiqueta = boton.textContent;
+  boton.disabled = true;
+  try {
+    const total = l.acrilico + l.sticker;
+    let hechas = 0;
+    for (const tipo of ["acrilico", "sticker"]) {
+      const codigos = l.codigos[tipo];
+      for (let i = 0; i < codigos.length; i += TANDA) {
+        const tanda = codigos.slice(i, i + TANDA);
+        hechas += tanda.length;
+        boton.textContent = "Cobrando " + hechas + " de " + total + "…";
+        await llamar("rango", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            codigos: tanda,
+            negocio: l.negocio,
+            destino: l.destino,
+            tipo: tipo,
+            vendida: fecha,
+            precio: precios[tipo],
+          }),
+        });
+      }
+    }
+    const importe = precios.acrilico * l.acrilico + precios.sticker * l.sticker;
+    cerrarVenta();
+    avisar("avisoPanel", "Venta de " + l.negocio + " registrada · " + dinero(importe), true);
+    await listar();
+    pintarVentas();
+  } catch (err) {
+    avisar("avisoVenta", err.message, false);
+  } finally {
+    boton.disabled = false;
+    boton.textContent = etiqueta;
+  }
+};
+
 /* ---------- QR de la tarjeta ---------- */
 
 // Solo estos caracteres caben en el modo alfanumérico del estándar QR, que es
@@ -1235,7 +1641,8 @@ $("modalQR").addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  if (!$("modalTarjeta").hidden) cerrarTarjeta();
+  if (!$("modalVenta").hidden) cerrarVenta();
+  else if (!$("modalTarjeta").hidden) cerrarTarjeta();
   else cerrarQR();
 });
 
@@ -1308,16 +1715,36 @@ export function vistaAdmin(origen) {
       </div>
     </section>
 
+    <section class="lamina grafica" id="tarjetaGrafica" hidden aria-label="Ventas por día">
+      <div class="grafica-alto">
+        <div>
+          <p class="cejilla">Ventas por día</p>
+          <div class="metrica" id="graficaMetrica">—</div>
+        </div>
+        <div class="segmento" id="metricaVentas" role="group" aria-label="Qué se mide">
+          <button type="button" class="activa" data-valor="unidades">Unidades</button>
+          <button type="button" data-valor="ingresos">Ingresos</button>
+        </div>
+      </div>
+      <div class="pozo" id="pozoGrafica"></div>
+      <div class="grafica-pie" id="graficaPie"></div>
+    </section>
+
     <section class="lamina panel">
       <div class="panel-barra">
-        <h2>Tarjetas</h2>
+        <div class="segmento" id="vistaPanel" role="group" aria-label="Qué se lista">
+          <button type="button" class="activa" data-valor="tarjetas">Tarjetas</button>
+          <button type="button" data-valor="locales">Locales</button>
+        </div>
         <div class="cabecera-acciones">
-          <button type="button" id="abrirRango">Editar un rango</button>
+          <button type="button" id="abrirLocal">Vincular un local</button>
+          <button type="button" class="fantasma" id="abrirRango">Editar un rango</button>
           <button type="button" class="fantasma" id="recargar">Refrescar</button>
         </div>
       </div>
       <div class="aviso" id="avisoPanel" role="status"></div>
 
+      <div id="vistaTarjetas">
       <div class="busca">
         <div class="busca-campo">
           <svg class="busca-lupa" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -1338,6 +1765,11 @@ export function vistaAdmin(origen) {
 
       <div id="tabla"></div>
       <div class="contador" id="contador"></div>
+      </div>
+
+      <div id="vistaLocales" hidden>
+        <div id="tablaLocales"></div>
+      </div>
     </section>
   </main>
 </div>
@@ -1351,9 +1783,27 @@ export function vistaAdmin(origen) {
     <p class="modal-subtitulo" id="tarjetaModalSubtitulo">Apunta el código impreso al link de reseña de un negocio.</p>
 
     <form id="formTarjeta">
-      <div class="segmento" id="modoTarjeta" role="group" aria-label="Una tarjeta o un rango">
+      <div class="segmento" id="modoTarjeta" role="group" aria-label="Qué se va a editar">
         <button type="button" class="activa" data-valor="una">Una tarjeta</button>
+        <button type="button" data-valor="local">Un local</button>
         <button type="button" data-valor="rango">Un rango</button>
+      </div>
+
+      <div id="campoLocal" hidden>
+        <label class="paso"><span class="n n1">1</span>Qué compra el local</label>
+        <div class="rango-fila">
+          <div>
+            <div class="mini">Acrílicos de mesa</div>
+            <input class="c1" id="nAcrilicos" type="number" min="0" placeholder="2"
+                   aria-label="Cuántos acrílicos" autocomplete="off">
+          </div>
+          <div>
+            <div class="mini">Stickers de mesa</div>
+            <input class="c1" id="nStickers" type="number" min="0" placeholder="10"
+                   aria-label="Cuántos stickers" autocomplete="off">
+          </div>
+        </div>
+        <div class="rango-resumen" id="localResumen">Escribe cuántos acrílicos y cuántos stickers compra el local.</div>
       </div>
 
       <div id="campoUna">
@@ -1366,8 +1816,10 @@ export function vistaAdmin(origen) {
         <label class="paso" for="desde"><span class="n n1">1</span>Rango de tarjetas
           <span class="suave">— por número</span></label>
         <div class="rango-fila">
-          <input class="c1" id="desde" type="number" min="1" placeholder="Desde el nº 101" autocomplete="off">
-          <input class="c1" id="hasta" type="number" min="1" placeholder="Hasta el nº 110" autocomplete="off">
+          <div><div class="mini">Desde el nº</div>
+            <input class="c1" id="desde" type="number" min="1" placeholder="101" autocomplete="off"></div>
+          <div><div class="mini">Hasta el nº</div>
+            <input class="c1" id="hasta" type="number" min="1" placeholder="110" autocomplete="off"></div>
         </div>
         <div class="rango-resumen" id="rangoResumen">Escribe un rango válido: del menor al mayor.</div>
       </div>
@@ -1394,13 +1846,15 @@ export function vistaAdmin(origen) {
       <label class="paso" for="negocio"><span class="n n3">3</span>Nombre del negocio</label>
       <input class="c3" id="negocio" placeholder="Mercacentro Av. Guabinal" autocomplete="off" required>
 
-      <label class="paso"><span class="n n4">4</span>Tipo de tarjeta</label>
-      <div class="segmento" id="tipoTarjeta" role="group" aria-label="Tipo de tarjeta">
-        <button type="button" class="activa" data-valor="acrilico">Acrílico</button>
-        <button type="button" data-valor="sticker">Sticker</button>
+      <div id="bloqueTipo">
+        <label class="paso"><span class="n n4">4</span>Tipo de tarjeta</label>
+        <div class="segmento" id="tipoTarjeta" role="group" aria-label="Tipo de tarjeta">
+          <button type="button" class="activa" data-valor="acrilico">Acrílico</button>
+          <button type="button" data-valor="sticker">Sticker</button>
+        </div>
+        <p class="ayuda">Acrílico: pieza de mesa, un solo local. Sticker: se pega en las
+          mesas y el mismo lote se reparte entre varios locales.</p>
       </div>
-      <p class="ayuda">Acrílico: pieza de mesa, un solo local. Sticker: se pega en las
-        mesas y el mismo lote se reparte entre varios locales.</p>
 
       <div class="modal-acciones">
         <span class="obligatorios">Los tres campos son obligatorios</span>
@@ -1409,6 +1863,35 @@ export function vistaAdmin(origen) {
       </div>
 
       <div class="aviso" id="aviso" role="alert"></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="modalVenta" hidden>
+  <div class="modal-fondo" data-cerrar-venta></div>
+  <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="ventaTitulo">
+    <button type="button" class="modal-cerrar" id="cerrarVenta" aria-label="Cerrar">✕</button>
+    <div class="modal-kicker">Venta</div>
+    <h1 id="ventaTitulo">Registrar la venta</h1>
+    <p class="modal-subtitulo" id="ventaSubtitulo"></p>
+
+    <form id="formVenta">
+      <label class="mini" for="ventaFecha">Fecha de la venta</label>
+      <input id="ventaFecha" type="date">
+
+      <div class="rango-fila">
+        <div><label class="mini" for="precioAcrilico">Precio por acrílico</label>
+          <input id="precioAcrilico" type="number" min="0" step="100" placeholder="0" autocomplete="off"></div>
+        <div><label class="mini" for="precioSticker">Precio por sticker</label>
+          <input id="precioSticker" type="number" min="0" step="100" placeholder="0" autocomplete="off"></div>
+      </div>
+      <div class="rango-resumen" id="ventaResumen"></div>
+
+      <div class="modal-acciones">
+        <button type="button" class="fantasma" id="cancelarVenta">Cancelar</button>
+        <button type="submit" id="guardarVenta">Registrar venta</button>
+      </div>
+      <div class="aviso" id="avisoVenta" role="alert"></div>
     </form>
   </div>
 </div>
