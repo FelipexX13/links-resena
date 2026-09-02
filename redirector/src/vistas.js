@@ -367,6 +367,14 @@ const ESTILOS = `
   .acciones-orden{grid-template-columns:repeat(3,minmax(0,1fr));min-width:240px}
   .rango-fila{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
   #rangoOrden{margin-top:14px}
+  button.alerta{background:var(--ambar);color:#4a3400}
+  button.alerta:hover{background:#e09b00;color:#3a2900}
+  .banner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    background:var(--ambar-piel);border:1px solid var(--ambar-borde);
+    color:var(--ambar-tinta);border-radius:var(--r-l);padding:12px 16px;
+    font-size:13px;margin-bottom:20px}
+  .banner b{font-weight:600}
+  .banner button{margin-left:auto}
   .par{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .mini2{font-size:10.5px;color:var(--tinta-3);margin:0 0 4px}
   .rango-resumen{margin-top:10px;padding:10px 13px;border-radius:var(--r-m);
@@ -428,6 +436,15 @@ const ESTILOS = `
     min-height:100vh;min-height:100dvh;padding:24px}
   .publica-caja{width:100%;max-width:470px;padding:36px 32px 32px}
   .publica-caja .g{width:34px;height:34px;margin-bottom:16px}
+  .prueba-codigo{font-family:"Geist Mono",ui-monospace,monospace;font-weight:500;
+    font-size:clamp(46px,15vw,74px);letter-spacing:.1em;line-height:1;margin:14px 0 4px}
+  .prueba-numero{font-family:"Geist Mono",ui-monospace,monospace;font-size:14px;
+    color:var(--tinta-3);margin-bottom:20px}
+  .prueba-datos{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:22px}
+  .prueba-datos div{background:var(--papel-2);border:1px solid var(--linea);
+    border-radius:var(--r-m);padding:10px 12px;text-align:left}
+  .prueba-datos span{display:block;font-size:11px;color:var(--tinta-3);margin-bottom:2px}
+  .prueba-datos b{font-size:13.5px;font-weight:500;overflow-wrap:anywhere}
   .codigo-grande{display:inline-block;background:var(--ambar-piel);border:1px solid var(--ambar-borde);
     color:var(--ambar-tinta);border-radius:var(--r-m);padding:7px 15px;font-size:19px;
     font-weight:500;letter-spacing:.14em;
@@ -452,6 +469,36 @@ export function vistaInicio(host) {
     <p>Cada tarjeta lleva a la ficha de reseñas del negocio que la tiene. Escanea
     su QR, acércala al teléfono, o entra con su código:</p>
     <p class="nota-mono">${esc(host)}/TUCODIGO</p>
+  </div>
+</main>`;
+}
+
+// Mientras el modo pruebas está puesto, la tarjeta enseña quién es en vez de
+// mandar a Google: es lo que permite casar el plástico impreso con el registro.
+export function vistaPrueba(codigo, tarjeta) {
+  let n = 0;
+  for (const c of codigo) n = n * 26 + (c.charCodeAt(0) - 65);
+  const numero = /^[A-Z]{4}$/.test(codigo) ? n + 1 : 0;
+  const tipo = tarjeta.tipo === "sticker" ? "Sticker" : "Acrílico";
+
+  return `<!doctype html>${CABEZA}
+<meta name="robots" content="noindex,nofollow">
+<title>${esc(codigo)} · prueba</title><style>${ESTILOS}</style>
+<div class="grano"></div>
+<main class="publica">
+  <div class="lamina franja publica-caja centrado">
+    <p class="cejilla">Modo pruebas</p>
+    <div class="prueba-codigo">${esc(codigo)}</div>
+    ${numero ? `<div class="prueba-numero">tarjeta nº ${numero}</div>` : ""}
+    <div class="prueba-datos">
+      <div><span>Negocio</span><b>${esc(tarjeta.negocio || "sin asignar")}</b></div>
+      <div><span>Tipo</span><b>${tipo}</b></div>
+    </div>
+    ${tarjeta.destino
+      ? `<a class="boton" href="${esc(tarjeta.destino)}">Ir a la reseña de verdad</a>`
+      : `<p class="ayuda centrado">Esta tarjeta todavía no está vinculada a ningún local.</p>`}
+    <p class="ayuda centrado">Con las pruebas puestas ningún escaneo sale a Google.
+    Apágalas en el panel cuando termines de revisar las impresiones.</p>
   </div>
 </main>`;
 }
@@ -493,6 +540,7 @@ let MODO = "una";
 let ORIGEN_RANGO = "numero";
 let VENTA_EDITADA = { vendida: "", precio: 0 };
 let VISTA = "tarjetas";
+let PRUEBAS = false;
 let METRICA = "unidades";
 let LOCAL_VENTA = null;
 const DIAS_GRAFICA = 14;
@@ -529,7 +577,12 @@ async function llamar(ruta, opciones) {
 function mostrar(dentro) {
   $("pantallaPanel").hidden = !dentro;
   $("pantallaLogin").hidden = dentro;
-  if (dentro) { CARGANDO = true; pintarTabla(); listar(); }
+  if (dentro) {
+    CARGANDO = true;
+    pintarTabla();
+    listar();
+    llamar("modo").then((r) => pintarPruebas(r.prueba)).catch(() => {});
+  }
   else { cerrarQR(); cerrarTarjeta(); $("clave").focus(); }
 }
 
@@ -1661,6 +1714,33 @@ function pintarVentas() {
     "</tr></thead><tbody>" + filas + "</tbody></table>";
 }
 
+function pintarPruebas(activo) {
+  PRUEBAS = Boolean(activo);
+  const b = $("togglePruebas");
+  b.textContent = PRUEBAS ? "Pruebas activas" : "Modo pruebas";
+  b.className = PRUEBAS ? "alerta" : "fantasma";
+  $("bannerPruebas").hidden = !PRUEBAS;
+}
+
+async function cambiarPruebas(valor) {
+  try {
+    const r = await llamar("modo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prueba: valor }),
+    });
+    pintarPruebas(r.prueba);
+    avisar("avisoPanel", r.prueba
+      ? "Modo pruebas activado. Los escaneos enseñan el código en vez de ir a Google."
+      : "Modo pruebas apagado. Las tarjetas vuelven a redirigir.", true);
+  } catch (e) {
+    avisar("avisoPanel", e.message, false);
+  }
+}
+
+$("togglePruebas").onclick = () => cambiarPruebas(!PRUEBAS);
+$("apagarPruebas").onclick = () => cambiarPruebas(false);
+
 function pintarVista(valor) {
   VISTA = valor === "locales" ? "locales" : "tarjetas";
   marcarSegmento("vistaPanel", VISTA);
@@ -1971,6 +2051,7 @@ export function vistaAdmin(origen) {
       </div>
       <nav class="cabecera-acciones" aria-label="Acciones de la sesión">
         <button type="button" id="abrirActivar">Activar tarjeta</button>
+        <button type="button" class="fantasma" id="togglePruebas">Modo pruebas</button>
         <a class="boton fantasma" href="https://www.google.com/maps" target="_blank" rel="noopener">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
                stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1982,6 +2063,12 @@ export function vistaAdmin(origen) {
   </header>
 
   <main id="principal" class="envoltorio contenido">
+    <div class="banner" id="bannerPruebas" hidden role="status">
+      <span><b>Modo pruebas activo.</b> Ningún escaneo llega a Google: cada tarjeta
+      enseña su código y su número.</span>
+      <button type="button" class="fantasma" id="apagarPruebas">Apagar</button>
+    </div>
+
     <section class="lamina resumen" aria-label="Resumen">
       <div class="dato">
         <div class="dato-valor" id="datoTarjetas">—</div>

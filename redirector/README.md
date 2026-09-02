@@ -90,6 +90,27 @@ crea el namespace KV en **Storage & Databases → KV**, enlázalo en
 
 ---
 
+## Modo pruebas
+
+Para revisar un lote impreso hace falta lo contrario de lo normal: que el QR **no**
+se vaya a Google, y diga en cambio qué tarjeta es. El botón **Modo pruebas** de la
+cabecera lo enciende para todo el dominio.
+
+Con las pruebas puestas, cualquier código enseña una página con su **código**, su
+**número**, el negocio y el tipo, más un botón para ir a la reseña de verdad si
+está vinculada. Funciona también con tarjetas libres, así que se revisa una
+impresión sin tener que asignarla a nadie.
+
+Es un interruptor global y no puede ser otra cosa: el QR impreso no lleva
+parámetros que distingan una prueba de un cliente. Por eso el panel enseña una
+franja ámbar mientras está puesto — con un cliente real en la calle, ese cliente
+vería la página de prueba.
+
+La bandera vive en KV bajo `modo:prueba` y se lee por la misma caché del borde que
+las tarjetas, así que un escaneo no gasta una lectura de más. Apagarlo desde el
+panel borra esa caché al instante; cambiarlo a mano con `wrangler` tarda hasta 60
+segundos en notarse.
+
 ## Acrílico y sticker
 
 Cada tarjeta es de un tipo, y el panel filtra por él:

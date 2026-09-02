@@ -8,6 +8,8 @@
  *   POST /api/login    {clave} → cookie de sesión firmada
  *   POST /api/salir    cierra la sesión
  *   GET  /api/sesion   ¿hay sesión activa?
+ *   GET  /api/modo     ¿está el modo pruebas activo?          (público)
+ *   POST /api/modo     {prueba}                               (sesión)
  *   GET  /api/lista    listado de tarjetas          (sesión)
  *   POST /api/guardar  {codigo, destino, negocio, tipo, vendida, precio}  (sesión)
  *   POST /api/rango    {codigos[], ...los mismos campos}                (sesión)
@@ -23,7 +25,7 @@
  *   "intentos:<ip>" contador de logins fallidos, expira solo a los 15 minutos
  */
 
-import { vistaInicio, vistaSinConfigurar, vistaAdmin } from "./vistas.js";
+import { vistaInicio, vistaSinConfigurar, vistaAdmin, vistaPrueba } from "./vistas.js";
 
 const RESERVADAS = new Set(["admin", "api", "favicon.ico", "robots.txt"]);
 const FORMATO_CODIGO = /^[A-Z0-9]{3,12}$/;
@@ -31,6 +33,7 @@ const COOKIE = "sesion";
 const DURACION_SESION = 8 * 60 * 60 * 1000; // 8 horas
 const MAX_INTENTOS = 8;
 const TIPOS = new Set(["acrilico", "sticker"]);
+const LLAVE_MODO = "modo:prueba";
 // El plan gratuito corta a 50 subpeticiones por petición, y cada escritura en KV
 // cuenta como una. El panel parte los rangos largos en tandas de este tamaño.
 const MAX_RANGO = 25;
@@ -50,6 +53,12 @@ export default {
     if (!codigo) return html(vistaSinConfigurar(ruta), 404);
 
     const tarjeta = await leerTarjeta(env, ctx, codigo);
+
+    // Con las pruebas puestas nadie sale del dominio: la tarjeta enseña su código
+    // para casar el plástico impreso con el registro. Va antes de exigir destino,
+    // así se revisa una impresión sin tener que vincularla a ningún negocio.
+    if (await enPruebas(env, ctx)) return html(vistaPrueba(codigo, tarjeta || {}));
+
     if (!tarjeta || !tarjeta.destino) return html(vistaSinConfigurar(codigo), 404);
 
     // Salto directo, sin pantalla de por medio. El destino es el formulario de
@@ -133,7 +142,19 @@ async function api(request, env, accion, url, ctx) {
 
   if (accion === "sesion" && request.method === "GET") return json({ activa: sesionOk });
 
+  if (accion === "modo" && request.method === "GET") {
+    return json({ prueba: (await env.TARJETAS.get(LLAVE_MODO)) === "1" });
+  }
+
   if (!sesionOk) return json({ error: "Sesión expirada o inexistente" }, 401);
+
+  if (accion === "modo" && request.method === "POST") {
+    const cuerpo = await request.json().catch(() => ({}));
+    const prueba = Boolean(cuerpo.prueba);
+    await env.TARJETAS.put(LLAVE_MODO, prueba ? "1" : "0");
+    try { await caches.default.delete(new Request(LLAVE_CACHE_MODO)); } catch (e) {}
+    return json({ ok: true, prueba: prueba });
+  }
 
   if (accion === "lista" && request.method === "GET") {
     const { keys } = await env.TARJETAS.list({ prefix: "c:" });
@@ -205,6 +226,26 @@ async function api(request, env, accion, url, ctx) {
   }
 
   return json({ error: "Ruta no encontrada" }, 404);
+}
+
+/* ---------- modo pruebas ---------- */
+
+// Se lee en cada visita, así que va por la misma caché del borde que las
+// tarjetas: si no, cada escaneo gastaría una lectura de KV de más.
+const LLAVE_CACHE_MODO = "https://tarjetas.interno/__modo";
+
+async function enPruebas(env, ctx) {
+  const cache = caches.default;
+  const llave = new Request(LLAVE_CACHE_MODO);
+  const guardada = await cache.match(llave);
+  if (guardada) return (await guardada.text()) === "1";
+
+  const valor = (await env.TARJETAS.get(LLAVE_MODO)) === "1";
+  const copia = new Response(valor ? "1" : "0", {
+    headers: { "Cache-Control": "max-age=" + CACHE_TARJETA },
+  });
+  if (ctx) ctx.waitUntil(cache.put(llave, copia.clone()));
+  return valor;
 }
 
 /* ---------- lectura de tarjetas con caché de borde ---------- */
