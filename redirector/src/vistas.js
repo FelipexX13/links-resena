@@ -542,8 +542,16 @@ const ESTILOS = `
       padding:9px 14px;font-size:12.5px}
 
     .envoltorio{padding:0 16px}
-    .contenido{padding-top:20px;padding-bottom:56px}
-    .panel{padding:18px 16px}
+    .contenido{padding-top:18px;padding-bottom:56px}
+    .panel{padding:16px 14px}
+    /* En 390px se llegaba a la primera tarjeta en el pixel 439: media pantalla
+       de mandos. Los tres del panel pasan a rejilla —reparten el ancho en vez
+       de envolverse 2+1— y los aires de alrededor se aprietan. */
+    .panel-barra{padding-bottom:12px}
+    .panel-barra .cabecera-acciones{display:grid;gap:6px;
+      grid-template-columns:repeat(auto-fit,minmax(88px,1fr))}
+    .panel-barra .cabecera-acciones button{width:100%;padding:9px 6px;font-size:12px}
+    .busca{margin-top:12px}
 
     /* menos de 16px y iOS hace zoom al enfocar el campo */
     input{font-size:16px}
@@ -2777,8 +2785,8 @@ export function vistaAdmin(origen) {
                stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
             <circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/>
           </svg>
-          <input id="buscar" type="search" placeholder="Buscar por código o por negocio"
-                 aria-label="Buscar por código o por negocio" autocomplete="off">
+          <input id="buscar" type="search" placeholder="Buscar por código o negocio"
+                 aria-label="Buscar por código o negocio" autocomplete="off">
         </div>
         <button type="button" class="fantasma" id="limpiarBusca" hidden>Limpiar</button>
         <div class="segmento filtros" id="filtroTipo" role="group" aria-label="Filtrar por tipo">
