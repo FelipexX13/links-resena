@@ -22,7 +22,7 @@
  *                    "vendida":"2026-09-01","precio":25000,"actualizado":"..."}
  *                   vendida vacía = vinculada pero todavía no cobrada
  *                   + la misma info como metadata, para listar en una sola llamada
- *   "intentos:<ip>" contador de logins fallidos, expira solo a los 15 minutos
+ *   "intentos:<ip>" contador de logins fallidos, expira solo a las 24 horas
  */
 
 import { vistaInicio, vistaSinConfigurar, vistaAdmin, vistaPrueba } from "./vistas.js";
@@ -31,13 +31,14 @@ const RESERVADAS = new Set(["admin", "api", "favicon.ico", "robots.txt"]);
 const FORMATO_CODIGO = /^[A-Z0-9]{3,12}$/;
 const COOKIE = "sesion";
 const DURACION_SESION = 8 * 60 * 60 * 1000; // 8 horas
-const MAX_INTENTOS = 8;
+const MAX_INTENTOS = 3;
 const TIPOS = new Set(["acrilico", "sticker"]);
 const LLAVE_MODO = "modo:prueba";
 // El plan gratuito corta a 50 subpeticiones por petición, y cada escritura en KV
 // cuenta como una. El panel parte los rangos largos en tandas de este tamaño.
 const MAX_RANGO = 25;
-const VENTANA_INTENTOS = 900; // segundos
+const VENTANA_INTENTOS = 24 * 60 * 60; // segundos: un día entero de bloqueo
+const HORAS_BLOQUEO = VENTANA_INTENTOS / 3600;
 
 export default {
   async fetch(request, env, ctx) {
@@ -296,7 +297,8 @@ async function login(request, env, url) {
   const fallidos = parseInt((await env.TARJETAS.get(llaveIntentos)) || "0", 10);
 
   if (fallidos >= MAX_INTENTOS) {
-    return json({ error: "Demasiados intentos fallidos. Espera 15 minutos." }, 429);
+    return json({ error: "Demasiados intentos fallidos. Bloqueado " + HORAS_BLOQUEO +
+      " horas desde el último intento." }, 429);
   }
 
   const cuerpo = await request.json().catch(() => ({}));
@@ -307,7 +309,10 @@ async function login(request, env, url) {
       expirationTtl: VENTANA_INTENTOS,
     });
     const quedan = MAX_INTENTOS - fallidos - 1;
-    return json({ error: "Contraseña incorrecta. Te quedan " + quedan + " intentos." }, 401);
+    return json({ error: quedan
+      ? "Contraseña incorrecta. Te queda" + (quedan === 1 ? "" : "n") + " " + quedan +
+        " intento" + (quedan === 1 ? "" : "s") + " antes del bloqueo."
+      : "Contraseña incorrecta. Bloqueado " + HORAS_BLOQUEO + " horas." }, 401);
   }
 
   await env.TARJETAS.delete(llaveIntentos);

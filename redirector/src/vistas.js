@@ -344,7 +344,8 @@ const ESTILOS = `
   .mini{font-size:11.5px;font-weight:500;color:var(--tinta-2);margin:0 0 5px}
 
   /* ---- ventas: tarjeta de gráfica al estilo mono, con la paleta del panel ---- */
-  .grafica{padding:20px}
+  /* dentro del panel, no es otra tarjeta: solo un bloque con su separador */
+  .grafica{padding:18px 0 20px;margin-bottom:4px;border-bottom:1px solid var(--linea-suave)}
   .grafica-alto{display:flex;align-items:flex-start;justify-content:space-between;
     gap:14px;flex-wrap:wrap;margin-bottom:14px}
   .cejilla{font-size:11px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
@@ -1746,7 +1747,6 @@ function pintarVista(valor) {
   marcarSegmento("vistaPanel", VISTA);
   $("vistaTarjetas").hidden = VISTA !== "tarjetas";
   $("vistaLocales").hidden = VISTA !== "locales";
-  $("tarjetaGrafica").hidden = VISTA !== "locales";
   if (VISTA === "locales") pintarVentas();
 }
 
@@ -2084,21 +2084,6 @@ export function vistaAdmin(origen) {
       </div>
     </section>
 
-    <section class="lamina grafica" id="tarjetaGrafica" hidden aria-label="Ventas por día">
-      <div class="grafica-alto">
-        <div>
-          <p class="cejilla">Ventas por día</p>
-          <div class="metrica" id="graficaMetrica">—</div>
-        </div>
-        <div class="segmento" id="metricaVentas" role="group" aria-label="Qué se mide">
-          <button type="button" class="activa" data-valor="unidades">Unidades</button>
-          <button type="button" data-valor="ingresos">Ingresos</button>
-        </div>
-      </div>
-      <div class="pozo" id="pozoGrafica"></div>
-      <div class="grafica-pie" id="graficaPie"></div>
-    </section>
-
     <section class="lamina panel">
       <div class="panel-barra">
         <div class="segmento" id="vistaPanel" role="group" aria-label="Qué se lista">
@@ -2137,6 +2122,20 @@ export function vistaAdmin(origen) {
       </div>
 
       <div id="vistaLocales" hidden>
+      <div class="grafica" aria-label="Ventas por día">
+        <div class="grafica-alto">
+          <div>
+            <p class="cejilla">Ventas por día</p>
+            <div class="metrica" id="graficaMetrica">—</div>
+          </div>
+          <div class="segmento" id="metricaVentas" role="group" aria-label="Qué se mide">
+            <button type="button" class="activa" data-valor="unidades">Unidades</button>
+            <button type="button" data-valor="ingresos">Ingresos</button>
+          </div>
+        </div>
+        <div class="pozo" id="pozoGrafica"></div>
+        <div class="grafica-pie" id="graficaPie"></div>
+      </div>
         <div id="tablaLocales"></div>
       </div>
     </section>

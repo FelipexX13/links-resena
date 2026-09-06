@@ -259,9 +259,19 @@ tarjetas vive en `/api/*` y responde **401** sin una sesión válida.
 - La cookie lleva su propia fecha de vencimiento **dentro de la firma**, así que
   no sirve de nada editarla: cambiar la fecha invalida la firma.
 - Las comparaciones de contraseña y de firma son en **tiempo constante**.
-- **Ocho intentos fallidos por IP** bloquean el login 15 minutos. El bloqueo no
-  afecta la redirección de las tarjetas: aunque alguien esté martillando el login,
-  los QR impresos siguen funcionando.
+- **Tres intentos fallidos por IP** bloquean el login **24 horas**, contadas desde
+  el último intento. El bloqueo no afecta la redirección de las tarjetas: aunque
+  alguien esté martillando el login, los QR impresos siguen funcionando.
+
+  El contador vive en KV como `intentos:<ip>`. Si te bloqueas tú mismo y no
+  quieres esperar el día, se quita a mano:
+
+  ```bash
+  npx wrangler kv key put --binding TARJETAS "intentos:TU.IP" "0" --remote
+  ```
+
+  KV tarda hasta **60 segundos** en propagar ese cambio. Poner el contador a cero
+  funciona mejor que borrar la clave, porque el borrado falla en Windows.
 
 Si alguna vez sospechas que la contraseña se filtró, cámbiala con
 `wrangler secret put ADMIN_PASSWORD`: como la firma de las sesiones se deriva de
