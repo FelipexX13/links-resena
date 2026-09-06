@@ -163,14 +163,6 @@ const ESTILOS = `
     box-shadow:0 0 0 3px var(--azul-piel)}
   input[readonly]{color:var(--tinta-2)}
 
-  /* ---------- resumen ---------- */
-  .resumen{display:flex;flex-wrap:wrap;gap:0;padding:2px 0}
-  .dato{flex:1 1 150px;padding:15px 24px;border-left:1px solid var(--linea)}
-  .dato:first-child{border-left:0;padding-left:24px}
-  .dato-valor{font-size:27px;font-weight:600;letter-spacing:-.035em;line-height:1.05}
-  .dato-valor.cod{font-size:24px;letter-spacing:.02em;color:var(--ambar-tinta)}
-  .dato-pie{font-size:12px;color:var(--tinta-2);margin-top:3px}
-
   /* ---------- panel de tarjetas ---------- */
   .panel{padding:24px}
   .panel-barra{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
@@ -221,17 +213,6 @@ const ESTILOS = `
 
     .envoltorio{padding:0 16px}
     .contenido{padding-top:20px;padding-bottom:56px}
-    /* Envuelto a 2+1 el tercero heredaba un borde izquierdo suelto. Apilado sin
-       más subía a 214px; con número y etiqueta enfrentados baja a una línea. */
-    .resumen{display:block}
-    .dato{display:flex;align-items:baseline;justify-content:space-between;gap:12px;
-      border-left:0;border-top:1px solid var(--linea);padding:11px 16px}
-    .dato:first-child{border-top:0}
-    .dato-valor{font-size:21px}
-    .dato-valor.cod{font-size:19px}
-    .dato-pie{margin-top:0;text-align:right}
-    .dato-valor{font-size:23px}
-    .dato-valor.cod{font-size:20px}
     .panel{padding:18px 16px}
 
     /* menos de 16px y iOS hace zoom al enfocar el campo */
@@ -1436,7 +1417,6 @@ async function listar() {
     const datos = await llamar("lista");
     TARJETAS = datos.tarjetas;
     CARGANDO = false;
-    pintarResumen();
     pintarTabla();
     pintarVentas();
   } catch (e) {
@@ -1444,22 +1424,6 @@ async function listar() {
     pintarTabla();
     avisar("avisoPanel", e.message, false);
   }
-}
-
-function pintarResumen() {
-  const negocios = {};
-  TARJETAS.forEach((t) => { const n = String(t.negocio || "").trim(); if (n) negocios[n] = 1; });
-  const sig = siguienteCodigo();
-  const activas = TARJETAS.filter((t) => t.destino).length;
-  $("datoTarjetas").textContent = activas;
-  $("datoTarjetasPie").textContent = activas === TARJETAS.length
-    ? "Tarjetas activas"
-    : "Activas de " + TARJETAS.length + " impresas";
-  $("datoNegocios").textContent = Object.keys(negocios).length;
-  $("datoSiguiente").textContent = sig.codigo || "—";
-  $("datoSiguientePie").textContent = sig.numero
-    ? "Siguiente código libre · nº " + sig.numero
-    : "Secuencia completa";
 }
 
 function filtradas() {
@@ -1844,7 +1808,6 @@ $("apagarPruebas").onclick = () => cambiarPruebas(false);
 // no ayuda, sino que pisa el dato bueno con el viejo y parece que no se guardó.
 // Por eso lo recién guardado se aplica en local, que además es instantáneo.
 function repintarTodo() {
-  pintarResumen();
   pintarTabla();
   pintarVentas();
   pintarCuentas();
@@ -2676,21 +2639,6 @@ export function vistaAdmin(origen) {
       enseña su código y su número.</span>
       <button type="button" class="fantasma" id="apagarPruebas">Apagar</button>
     </div>
-
-    <section class="lamina resumen" aria-label="Resumen">
-      <div class="dato">
-        <div class="dato-valor" id="datoTarjetas">—</div>
-        <div class="dato-pie" id="datoTarjetasPie">Tarjetas activas</div>
-      </div>
-      <div class="dato">
-        <div class="dato-valor" id="datoNegocios">—</div>
-        <div class="dato-pie">Negocios distintos</div>
-      </div>
-      <div class="dato">
-        <div class="dato-valor cod" id="datoSiguiente">—</div>
-        <div class="dato-pie" id="datoSiguientePie">Siguiente código libre</div>
-      </div>
-    </section>
 
     <section class="lamina panel">
       <div class="panel-barra">
