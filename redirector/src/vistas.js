@@ -72,7 +72,18 @@ const ESTILOS = `
 
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
-  body{margin:0;padding:0;background:var(--fondo);color:var(--tinta);
+  /* Una malla con los cuatro colores de la marca, muy diluida y anclada a la
+     pantalla: las tarjetas siguen siendo blancas encima, así que el texto no
+     pierde contraste y el fondo deja de ser un gris muerto. */
+  body{margin:0;padding:0;color:var(--tinta);
+    background-color:var(--fondo);
+    background-image:
+      radial-gradient(62% 52% at 10% -4%,rgba(66,133,244,.20),transparent 68%),
+      radial-gradient(52% 46% at 92% 2%,rgba(234,67,53,.16),transparent 68%),
+      radial-gradient(50% 44% at 84% 98%,rgba(52,168,83,.17),transparent 68%),
+      radial-gradient(50% 44% at 4% 96%,rgba(251,188,5,.18),transparent 68%);
+    background-repeat:no-repeat;
+    background-attachment:fixed;
     font-family:"Geist","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
     font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;
     font-variant-numeric:tabular-nums}
