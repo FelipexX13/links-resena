@@ -538,8 +538,13 @@ const ESTILOS = `
        pantalla para la barra. A su ancho natural caben dos por fila y la
        cabecera baja de 250px a poco más de 150. */
     .cabecera-acciones{width:100%;gap:8px}
-    .cabecera-acciones button,.cabecera-acciones a.boton{flex:0 1 auto;
-      padding:9px 14px;font-size:12.5px}
+    .cabecera-acciones button,.cabecera-acciones a.boton{padding:9px 14px;font-size:12.5px}
+    /* A su ancho natural quedaban dos filas dentadas con cien pixeles muertos a
+       la derecha. En rejilla de dos los cuatro miden lo mismo y los cantos
+       cuadran con el borde de la lámina de abajo. */
+    .cabecera .cabecera-acciones{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+    .cabecera .cabecera-acciones button,
+    .cabecera .cabecera-acciones a.boton{width:100%;justify-content:center}
 
     .envoltorio{padding:0 16px}
     .contenido{padding-top:18px;padding-bottom:56px}
