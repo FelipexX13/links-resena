@@ -90,6 +90,35 @@ crea el namespace KV en **Storage & Databases → KV**, enlázalo en
 
 ---
 
+## Cuentas: gastos, reparto e inventario
+
+Tercera vista del panel, junto a Tarjetas y Órdenes. Sale de dos fuentes que ya
+existían más una nueva:
+
+- **Ingresos** — de las tarjetas vendidas, como la gráfica de Órdenes.
+- **Gastos** — registros nuevos con clave `g:<id>` en KV.
+- **Inventario** — no se lleva aparte: es la suma de lo que trajo cada compra.
+  Lo recibido y lo que viene en camino van separados, y las piezas dañadas se
+  descuentan de lo útil.
+
+### El reparto entre socios
+
+El negocio es de dos, así que cada gasto lleva **quién puso la plata**: Felipe,
+Nicolás o compartido a medias. De ahí salen tres números por socio — lo que ha
+puesto, lo que le tocaría poner (la mitad del total) y lo que gana o pierde — y
+una línea de saldo que dice quién le debe a quién para quedar iguales.
+
+Un gasto compartido cuenta mitad para cada uno, así que con todo compartido el
+saldo queda en cero y la línea dice que están en paz.
+
+### Por qué el inventario no tiene su propia tabla
+
+Igual que con las ventas: un inventario aparte habría que mantenerlo
+sincronizado con las compras, y cualquier corrección en un gasto lo dejaría
+mintiendo. Sumando lo que trajo cada compra eso no puede pasar. Cada gasto
+admite hasta ocho cosas, y el gasto entero cabe en la metadata de KV, así que el
+listado es una sola llamada.
+
 ## Modo pruebas
 
 Para revisar un lote impreso hace falta lo contrario de lo normal: que el QR **no**

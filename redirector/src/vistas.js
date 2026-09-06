@@ -177,6 +177,8 @@ const ESTILOS = `
   .busca-lupa{position:absolute;left:13px;top:50%;transform:translateY(-50%);
     width:15px;height:15px;color:var(--tinta-3);pointer-events:none}
 
+  /* una tabla ancha scrollea dentro de su caja; la página nunca */
+  #tabla,#tablaLocales,#tablaGastos,#tablaInventario{overflow-x:auto}
   table{width:100%;border-collapse:collapse;margin-top:18px;font-size:13.5px}
   th{text-align:left;font-size:12px;font-weight:500;color:var(--tinta-2);
     border-bottom:1px solid var(--linea);padding:0 10px 9px}
@@ -376,6 +378,24 @@ const ESTILOS = `
     font-size:13px;margin-bottom:20px}
   .banner b{font-weight:600}
   .banner button{margin-left:auto}
+  /* ---- cuentas ---- */
+  .socios{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;
+    margin:18px 0 4px}
+  .socio{border:1px solid var(--linea);border-radius:var(--r-l);padding:14px 16px}
+  .socio h3{margin:0 0 10px;font-size:14px;font-weight:600;letter-spacing:-.01em}
+  .socio-linea{display:flex;justify-content:space-between;gap:10px;font-size:13px;
+    padding:4px 0;color:var(--tinta-2)}
+  .socio-linea b{color:var(--tinta);font-weight:500;
+    font-family:"Geist Mono",ui-monospace,monospace}
+  .saldo{margin-top:12px;padding:11px 14px;border-radius:var(--r-m);font-size:13px;
+    background:var(--verde-piel);border:1px solid var(--verde-borde);color:var(--verde-fuerte)}
+  .saldo.debe{background:var(--ambar-piel);border-color:var(--ambar-borde);color:var(--ambar-tinta)}
+  .bloque-titulo{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    flex-wrap:wrap;margin:26px 0 0;padding-top:20px;border-top:1px solid var(--linea-suave)}
+  .inv{font-family:"Geist Mono",ui-monospace,monospace;font-size:13px}
+  .inv-malos{color:var(--rojo-fuerte)}
+  .items-fila{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-top:8px}
+  .sin-aire{margin-top:0}
   .par{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .mini2{font-size:10.5px;color:var(--tinta-3);margin:0 0 4px}
   .rango-resumen{margin-top:10px;padding:10px 13px;border-radius:var(--r-m);
@@ -542,6 +562,11 @@ let ORIGEN_RANGO = "numero";
 let VENTA_EDITADA = { vendida: "", precio: 0 };
 let VISTA = "tarjetas";
 let PRUEBAS = false;
+let GASTOS = [];
+let METRICA_DINERO = "gastos";
+let GASTO_EDITADO = "";
+const DIAS_DINERO = 30;
+const SOCIO_NOMBRE = { felipe: "Felipe", nicolas: "Nicolás", ambos: "Compartido" };
 let METRICA = "unidades";
 let LOCAL_VENTA = null;
 const DIAS_GRAFICA = 14;
@@ -583,6 +608,7 @@ function mostrar(dentro) {
     pintarTabla();
     listar();
     llamar("modo").then((r) => pintarPruebas(r.prueba)).catch(() => {});
+    cargarGastos();
   }
   else { cerrarQR(); cerrarTarjeta(); $("clave").focus(); }
 }
@@ -1742,12 +1768,183 @@ async function cambiarPruebas(valor) {
 $("togglePruebas").onclick = () => cambiarPruebas(!PRUEBAS);
 $("apagarPruebas").onclick = () => cambiarPruebas(false);
 
+/* ---------- cuentas: gastos, reparto e inventario ---------- */
+
+async function cargarGastos() {
+  try {
+    GASTOS = (await llamar("gastos")).gastos;
+    pintarCuentas();
+  } catch (e) {
+    avisar("avisoPanel", e.message, false);
+  }
+}
+
+// El negocio es de dos, así que lo que importa no es solo cuánto se gastó sino
+// quién lo puso: de ahí sale el saldo entre ellos.
+function cuentas() {
+  const puesto = { felipe: 0, nicolas: 0 };
+  let gastos = 0;
+  GASTOS.forEach((g) => {
+    const m = Number(g.monto) || 0;
+    gastos += m;
+    if (g.paga === "felipe") puesto.felipe += m;
+    else if (g.paga === "nicolas") puesto.nicolas += m;
+    else { puesto.felipe += m / 2; puesto.nicolas += m / 2; }
+  });
+  const ingresos = TARJETAS.reduce((a, t) => a + (t.vendida ? Number(t.precio) || 0 : 0), 0);
+  const justo = gastos / 2;
+  return {
+    gastos: gastos,
+    ingresos: ingresos,
+    utilidad: ingresos - gastos,
+    puesto: puesto,
+    justo: justo,
+    // positivo = Felipe puso de más y Nicolás le debe
+    saldo: puesto.felipe - justo,
+  };
+}
+
+function dineroPorDia(dias) {
+  const serie = [];
+  const indice = {};
+  const base = new Date(hoyISO() + "T00:00:00");
+  for (let i = dias - 1; i >= 0; i--) {
+    const d = new Date(base);
+    d.setDate(d.getDate() - i);
+    const clave = d.toISOString().slice(0, 10);
+    indice[clave] = serie.length;
+    serie.push({ fecha: clave, dia: d.getDate(), gastos: 0, ingresos: 0 });
+  }
+  GASTOS.forEach((g) => {
+    const i = indice[g.fecha];
+    if (i !== undefined) serie[i].gastos += Number(g.monto) || 0;
+  });
+  TARJETAS.forEach((t) => {
+    const i = indice[t.vendida];
+    if (i !== undefined) serie[i].ingresos += Number(t.precio) || 0;
+  });
+  return serie;
+}
+
+// El inventario no se lleva aparte: sale de sumar lo que trajo cada compra. Lo
+// recibido y lo que viene en camino van separados porque media compra sigue fuera.
+function inventario() {
+  const mapa = {};
+  GASTOS.forEach((g) => {
+    (g.items || []).forEach((it) => {
+      const clave = it.que.toLowerCase();
+      if (!mapa[clave]) mapa[clave] = { que: it.que, recibido: 0, malos: 0, pedido: 0 };
+      if (g.estado === "entregado") {
+        mapa[clave].recibido += it.cuantos;
+        mapa[clave].malos += it.malos || 0;
+      } else {
+        mapa[clave].pedido += it.cuantos;
+      }
+    });
+  });
+  return Object.keys(mapa).map((k) => mapa[k])
+    .sort((a, b) => (b.recibido + b.pedido) - (a.recibido + a.pedido));
+}
+
+function pintarCuentas() {
+  const c = cuentas();
+  const serie = dineroPorDia(DIAS_DINERO);
+  const suma = serie.reduce((a, punto) => a + punto[METRICA_DINERO], 0);
+
+  $("dineroMetrica").innerHTML = dinero(suma) +
+    "<span class='unidad'>en " + DIAS_DINERO + " días</span>";
+  $("pozoDinero").innerHTML = svgBarras(serie, METRICA_DINERO);
+  $("dineroPie").innerHTML = "<span>Ingresos <b>" + dinero(c.ingresos) +
+    "</b> · Gastos <b>" + dinero(c.gastos) + "</b></span><span>" +
+    (c.utilidad >= 0 ? "Utilidad " : "Va perdiendo ") + "<b>" +
+    dinero(Math.abs(c.utilidad)) + "</b></span>";
+
+  $("socios").innerHTML = ["felipe", "nicolas"].map((k) =>
+    "<div class='socio'><h3>" + SOCIO_NOMBRE[k] + "</h3>" +
+    "<div class='socio-linea'><span>Ha puesto</span><b>" + dinero(c.puesto[k]) + "</b></div>" +
+    "<div class='socio-linea'><span>Le toca poner</span><b>" + dinero(c.justo) + "</b></div>" +
+    "<div class='socio-linea'><span>" + (c.utilidad >= 0 ? "Gana" : "Pierde") +
+    "</span><b>" + dinero(Math.abs(c.utilidad) / 2) + "</b></div></div>").join("");
+
+  const saldo = Math.round(c.saldo);
+  const caja = $("saldo");
+  if (!saldo) {
+    caja.className = "saldo";
+    caja.textContent = c.gastos
+      ? "Entre ustedes están en paz: cada uno ha puesto lo mismo."
+      : "Todavía no hay gastos registrados.";
+  } else {
+    caja.className = "saldo debe";
+    const deudor = saldo > 0 ? "Nicolás" : "Felipe";
+    const acreedor = saldo > 0 ? "Felipe" : "Nicolás";
+    caja.textContent = deudor + " le debe " + dinero(Math.abs(saldo)) + " a " + acreedor +
+      " para quedar a la mitad.";
+  }
+
+  if (!GASTOS.length) {
+    $("tablaGastos").innerHTML = "<div class='vacio'><h2>Sin gastos</h2>" +
+      "<p>Apunta lo que se ha comprado y aquí sale el reparto entre los dos.</p>" +
+      "<button type='button' data-gasto-nuevo>Anotar el primero</button></div>";
+    $("tablaInventario").innerHTML = "";
+    return;
+  }
+
+  let filas = "";
+  GASTOS.forEach((g) => {
+    const llego = g.estado === "entregado";
+    filas += "<tr><td class='piezas'>" + escHtml(g.fecha) +
+      (llego && g.entrega ? "<div class='fila-num'>llegó " + escHtml(g.entrega) + "</div>" : "") +
+      "</td><td class='negocio'>" + escHtml(g.proveedor) +
+      "<div class='fila-num'>" + escHtml(g.descripcion || "—") + "</div>" +
+      (g.notas ? "<div class='fila-num'>" + escHtml(g.notas) + "</div>" : "") +
+      "</td><td><span class='tipo tipo-" + (g.paga === "ambos" ? "sticker" : "acrilico") + "'>" +
+      SOCIO_NOMBRE[g.paga] + "</span></td>" +
+      "<td><span class='estado " + (llego ? "estado-vendido'>Entregado" : "estado-pendiente'>En camino") +
+      "</span></td><td class='importe'>" + dinero(g.monto) + "</td>" +
+      "<td><div class='acciones acciones-orden'>" +
+      "<button type='button' class='accion-editar' data-gasto='" + escHtml(g.id) + "'>Editar</button>" +
+      "<button type='button' class='accion-apagar' data-gasto-borrar='" + escHtml(g.id) + "'>Borrar</button>" +
+      "</div></td></tr>";
+  });
+  $("tablaGastos").innerHTML =
+    "<table><thead><tr><th>Fecha</th><th>De dónde</th><th>Quién puso</th>" +
+    "<th>Estado</th><th>Monto</th><th></th></tr></thead><tbody>" + filas + "</tbody></table>";
+
+  const inv = inventario();
+  if (!inv.length) {
+    $("tablaInventario").innerHTML = "<p class='ayuda'>Ningún gasto trae piezas apuntadas.</p>";
+    return;
+  }
+  let invFilas = "";
+  inv.forEach((i) => {
+    const util = i.recibido - i.malos;
+    invFilas += "<tr><td class='negocio'>" + escHtml(i.que) + "</td>" +
+      "<td class='inv'>" + util +
+      (i.malos ? " <span class='inv-malos'>(" + i.malos + " malos)</span>" : "") + "</td>" +
+      "<td class='inv'>" + (i.pedido ? i.pedido : "—") + "</td>" +
+      "<td class='inv'>" + (util + i.pedido) + "</td></tr>";
+  });
+  $("tablaInventario").innerHTML =
+    "<table><thead><tr><th>Cosa</th><th>Útiles</th><th>En camino</th><th>Total</th>" +
+    "</tr></thead><tbody>" + invFilas + "</tbody></table>";
+}
+
+$("metricaDinero").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-valor]");
+  if (!b) return;
+  METRICA_DINERO = b.dataset.valor;
+  marcarSegmento("metricaDinero", METRICA_DINERO);
+  pintarCuentas();
+});
+
 function pintarVista(valor) {
-  VISTA = valor === "locales" ? "locales" : "tarjetas";
+  VISTA = valor === "locales" || valor === "cuentas" ? valor : "tarjetas";
   marcarSegmento("vistaPanel", VISTA);
   $("vistaTarjetas").hidden = VISTA !== "tarjetas";
   $("vistaLocales").hidden = VISTA !== "locales";
+  $("vistaCuentas").hidden = VISTA !== "cuentas";
   if (VISTA === "locales") pintarVentas();
+  if (VISTA === "cuentas") pintarCuentas();
 }
 
 $("vistaPanel").addEventListener("click", (e) => {
@@ -1910,6 +2107,154 @@ $("formVenta").onsubmit = async (e) => {
   }
 };
 
+/* ---------- alta y edición de un gasto ---------- */
+
+let PAGA = "ambos";
+let ESTADO_GASTO = "entregado";
+let focoGasto = null;
+
+function pintarPaga(valor) {
+  PAGA = SOCIO_NOMBRE[valor] ? valor : "ambos";
+  marcarSegmento("pagaGasto", PAGA);
+}
+
+function pintarEstadoGasto(valor) {
+  ESTADO_GASTO = valor === "pendiente" ? "pendiente" : "entregado";
+  marcarSegmento("estadoGasto", ESTADO_GASTO);
+  $("bloqueEntrega").hidden = ESTADO_GASTO !== "entregado";
+}
+
+$("pagaGasto").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-valor]");
+  if (b) pintarPaga(b.dataset.valor);
+});
+
+$("estadoGasto").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-valor]");
+  if (b) pintarEstadoGasto(b.dataset.valor);
+});
+
+function itemsDelFormulario() {
+  const lista = [];
+  for (let i = 0; i < 3; i++) {
+    lista.push({
+      que: $("item" + i).value,
+      cuantos: $("cuantos" + i).value,
+      malos: $("malos" + i).value,
+    });
+  }
+  return lista;
+}
+
+function abrirGasto(id) {
+  const g = GASTOS.filter((x) => x.id === id)[0] || null;
+  GASTO_EDITADO = g ? g.id : "";
+
+  $("gastoKicker").textContent = g ? "Gasto del " + g.fecha : "Nuevo gasto";
+  $("gastoTitulo").textContent = g ? "Editar el gasto" : "Anotar un gasto";
+  $("guardarGasto").textContent = g ? "Guardar cambios" : "Anotar el gasto";
+
+  $("gastoFecha").value = g ? g.fecha : hoyISO();
+  $("gastoProveedor").value = g ? g.proveedor : "";
+  $("gastoDescripcion").value = g ? g.descripcion || "" : "";
+  $("gastoMonto").value = g ? g.monto : "";
+  $("gastoEntrega").value = g && g.entrega ? g.entrega : hoyISO();
+  $("gastoNotas").value = g ? g.notas || "" : "";
+  pintarPaga(g ? g.paga : "ambos");
+  pintarEstadoGasto(g ? g.estado : "entregado");
+
+  const items = (g && g.items) || [];
+  for (let i = 0; i < 3; i++) {
+    $("item" + i).value = items[i] ? items[i].que : "";
+    $("cuantos" + i).value = items[i] ? items[i].cuantos : "";
+    $("malos" + i).value = items[i] && items[i].malos ? items[i].malos : "";
+  }
+
+  limpiarAviso("avisoGasto");
+  focoGasto = document.activeElement;
+  $("modalGasto").hidden = false;
+  document.body.style.overflow = "hidden";
+  $("gastoProveedor").focus();
+}
+
+function cerrarGasto() {
+  if ($("modalGasto").hidden) return;
+  $("modalGasto").hidden = true;
+  document.body.style.overflow = "";
+  if (focoGasto && focoGasto.focus) focoGasto.focus();
+  focoGasto = null;
+  GASTO_EDITADO = "";
+}
+
+$("abrirGasto").onclick = () => abrirGasto("");
+$("cerrarGasto").onclick = cerrarGasto;
+$("cancelarGasto").onclick = cerrarGasto;
+$("modalGasto").addEventListener("click", (e) => {
+  if (e.target.hasAttribute("data-cerrar-gasto")) cerrarGasto();
+});
+
+$("formGasto").onsubmit = async (e) => {
+  e.preventDefault();
+  const boton = $("guardarGasto");
+  const etiqueta = boton.textContent;
+  boton.disabled = true;
+  boton.textContent = "Guardando…";
+  try {
+    await llamar("gasto", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: GASTO_EDITADO,
+        fecha: $("gastoFecha").value,
+        proveedor: $("gastoProveedor").value,
+        descripcion: $("gastoDescripcion").value,
+        monto: $("gastoMonto").value,
+        paga: PAGA,
+        estado: ESTADO_GASTO,
+        entrega: $("gastoEntrega").value,
+        notas: $("gastoNotas").value,
+        items: itemsDelFormulario(),
+      }),
+    });
+    const editaba = Boolean(GASTO_EDITADO);
+    cerrarGasto();
+    avisar("avisoPanel", editaba ? "Gasto actualizado" : "Gasto anotado", true);
+    await cargarGastos();
+  } catch (err) {
+    avisar("avisoGasto", err.message, false);
+  } finally {
+    boton.disabled = false;
+    boton.textContent = etiqueta;
+  }
+};
+
+$("tablaGastos").addEventListener("click", async (e) => {
+  if (e.target.closest("[data-gasto-nuevo]")) { abrirGasto(""); return; }
+
+  const ed = e.target.closest("[data-gasto]");
+  if (ed) { abrirGasto(ed.dataset.gasto); return; }
+
+  const b = e.target.closest("[data-gasto-borrar]");
+  if (!b) return;
+  const id = b.dataset.gastoBorrar;
+  if (CONFIRMANDO !== id) { pedirConfirmacion(b, id); return; }
+
+  olvidarConfirmacion();
+  b.disabled = true;
+  try {
+    await llamar("gasto-borrar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: id }),
+    });
+    avisar("avisoPanel", "Gasto borrado", true);
+    await cargarGastos();
+  } catch (err) {
+    avisar("avisoPanel", err.message, false);
+    pintarCuentas();
+  }
+});
+
 /* ---------- QR de la tarjeta ---------- */
 
 // Solo estos caracteres caben en el modo alfanumérico del estándar QR, que es
@@ -2003,7 +2348,8 @@ $("modalQR").addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  if (!$("modalVenta").hidden) cerrarVenta();
+  if (!$("modalGasto").hidden) cerrarGasto();
+  else if (!$("modalVenta").hidden) cerrarVenta();
   else if (!$("modalTarjeta").hidden) cerrarTarjeta();
   else cerrarQR();
 });
@@ -2089,6 +2435,7 @@ export function vistaAdmin(origen) {
         <div class="segmento" id="vistaPanel" role="group" aria-label="Qué se lista">
           <button type="button" class="activa" data-valor="tarjetas">Tarjetas</button>
           <button type="button" data-valor="locales">Órdenes</button>
+          <button type="button" data-valor="cuentas">Cuentas</button>
         </div>
         <div class="cabecera-acciones">
           <button type="button" id="abrirLocal">Nueva orden</button>
@@ -2119,6 +2466,35 @@ export function vistaAdmin(origen) {
 
       <div id="tabla"></div>
       <div class="contador" id="contador"></div>
+      </div>
+
+      <div id="vistaCuentas" hidden>
+        <div class="grafica" aria-label="Dinero por día">
+          <div class="grafica-alto">
+            <div>
+              <p class="cejilla">Dinero por día</p>
+              <div class="metrica" id="dineroMetrica">—</div>
+            </div>
+            <div class="segmento" id="metricaDinero" role="group" aria-label="Qué se mide">
+              <button type="button" class="activa" data-valor="gastos">Gastos</button>
+              <button type="button" data-valor="ingresos">Ingresos</button>
+            </div>
+          </div>
+          <div class="pozo" id="pozoDinero"></div>
+          <div class="grafica-pie" id="dineroPie"></div>
+        </div>
+
+        <div class="socios" id="socios"></div>
+        <div class="saldo" id="saldo"></div>
+
+        <div class="bloque-titulo">
+          <h2>Gastos</h2>
+          <button type="button" id="abrirGasto">Nuevo gasto</button>
+        </div>
+        <div id="tablaGastos"></div>
+
+        <div class="bloque-titulo"><h2>Inventario</h2></div>
+        <div id="tablaInventario"></div>
       </div>
 
       <div id="vistaLocales" hidden>
@@ -2257,6 +2633,75 @@ export function vistaAdmin(origen) {
       </div>
 
       <div class="aviso" id="aviso" role="alert"></div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="modalGasto" hidden>
+  <div class="modal-fondo" data-cerrar-gasto></div>
+  <div class="modal-caja modal-tarjeta franja" role="dialog" aria-modal="true" aria-labelledby="gastoTitulo">
+    <button type="button" class="modal-cerrar" id="cerrarGasto" aria-label="Cerrar">✕</button>
+    <div class="modal-kicker" id="gastoKicker">Nuevo gasto</div>
+    <h1 id="gastoTitulo">Anotar un gasto</h1>
+    <p class="modal-subtitulo">Lo que se compró, cuánto costó y quién puso la plata.</p>
+
+    <form id="formGasto">
+      <div class="rango-fila sin-aire">
+        <div><label class="mini" for="gastoFecha">Fecha de la compra</label>
+          <input id="gastoFecha" type="date" required></div>
+        <div><label class="mini" for="gastoMonto">Monto en pesos</label>
+          <input id="gastoMonto" type="number" min="0" step="1" placeholder="23687" required></div>
+      </div>
+
+      <label class="mini" for="gastoProveedor">De dónde</label>
+      <input id="gastoProveedor" placeholder="Amazon, Graficortes…" autocomplete="off" required>
+
+      <label class="mini" for="gastoDescripcion">Qué se compró</label>
+      <input id="gastoDescripcion" placeholder="70 chips NFC" autocomplete="off">
+
+      <label class="mini">Quién puso la plata</label>
+      <div class="segmento" id="pagaGasto" role="group" aria-label="Quién puso la plata">
+        <button type="button" data-valor="felipe">Felipe</button>
+        <button type="button" data-valor="nicolas">Nicolás</button>
+        <button type="button" class="activa" data-valor="ambos">Compartido</button>
+      </div>
+
+      <label class="mini">Estado del pedido</label>
+      <div class="segmento" id="estadoGasto" role="group" aria-label="Estado del pedido">
+        <button type="button" data-valor="pendiente">En camino</button>
+        <button type="button" class="activa" data-valor="entregado">Entregado</button>
+      </div>
+
+      <div id="bloqueEntrega">
+        <label class="mini" for="gastoEntrega">Cuándo llegó</label>
+        <input id="gastoEntrega" type="date">
+      </div>
+
+      <label class="mini">Qué trajo, para el inventario</label>
+      <div class="items-fila">
+        <input id="item0" placeholder="Chips NFC" autocomplete="off" aria-label="Cosa 1">
+        <input id="cuantos0" type="number" min="0" placeholder="cuántos" aria-label="Cuántos de la cosa 1">
+        <input id="malos0" type="number" min="0" placeholder="malos" aria-label="Cuántos malos de la cosa 1">
+      </div>
+      <div class="items-fila">
+        <input id="item1" placeholder="Acrílicos" autocomplete="off" aria-label="Cosa 2">
+        <input id="cuantos1" type="number" min="0" placeholder="cuántos" aria-label="Cuántos de la cosa 2">
+        <input id="malos1" type="number" min="0" placeholder="malos" aria-label="Cuántos malos de la cosa 2">
+      </div>
+      <div class="items-fila">
+        <input id="item2" placeholder="Vinilos de mesa" autocomplete="off" aria-label="Cosa 3">
+        <input id="cuantos2" type="number" min="0" placeholder="cuántos" aria-label="Cuántos de la cosa 3">
+        <input id="malos2" type="number" min="0" placeholder="malos" aria-label="Cuántos malos de la cosa 3">
+      </div>
+
+      <label class="mini" for="gastoNotas">Notas</label>
+      <input id="gastoNotas" placeholder="26 acrílicos llegaron dañados" autocomplete="off">
+
+      <div class="modal-acciones">
+        <button type="button" class="fantasma" id="cancelarGasto">Cancelar</button>
+        <button type="submit" id="guardarGasto">Anotar el gasto</button>
+      </div>
+      <div class="aviso" id="avisoGasto" role="alert"></div>
     </form>
   </div>
 </div>

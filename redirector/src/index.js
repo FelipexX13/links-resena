@@ -14,6 +14,9 @@
  *   POST /api/guardar  {codigo, destino, negocio, tipo, vendida, precio}  (sesión)
  *   POST /api/rango    {codigos[], ...los mismos campos}                (sesión)
  *   POST /api/desactivar {codigos[], tipo}                       (sesión)
+ *   GET  /api/gastos   listado de gastos                          (sesión)
+ *   POST /api/gasto    {id?, fecha, proveedor, monto, paga, ...}  (sesión)
+ *   POST /api/gasto-borrar {id}                                   (sesión)
  *
  * Secreto obligatorio:  ADMIN_PASSWORD
  *
@@ -22,6 +25,7 @@
  *                    "vendida":"2026-09-01","precio":25000,"actualizado":"..."}
  *                   vendida vacía = vinculada pero todavía no cobrada
  *                   + la misma info como metadata, para listar en una sola llamada
+ *   "g:<id>"        un gasto: qué se compró, cuánto costó, quién puso y si llegó
  *   "intentos:<ip>" contador de logins fallidos, expira solo a las 24 horas
  */
 
@@ -34,6 +38,10 @@ const DURACION_SESION = 8 * 60 * 60 * 1000; // 8 horas
 const MAX_INTENTOS = 3;
 const TIPOS = new Set(["acrilico", "sticker"]);
 const LLAVE_MODO = "modo:prueba";
+const SOCIOS = new Set(["felipe", "nicolas", "ambos"]);
+const ESTADOS_GASTO = new Set(["pendiente", "entregado"]);
+const MAX_ITEMS = 8;
+const FORMATO_ID = /^[a-z0-9]{1,24}$/;
 // El plan gratuito corta a 50 subpeticiones por petición, y cada escritura en KV
 // cuenta como una. El panel parte los rangos largos en tandas de este tamaño.
 const MAX_RANGO = 25;
@@ -124,6 +132,47 @@ async function escribir(env, codigo, registro) {
   await olvidarTarjeta(codigo);
 }
 
+/* ---------- gastos ---------- */
+
+// El gasto entero cabe en la metadata de KV (tope 1024 bytes), así que el listado
+// del panel es una sola llamada a list() en vez de una lectura por gasto.
+function gastoDe(cuerpo) {
+  const fecha = fechaValida(cuerpo.fecha);
+  if (!fecha) return { error: "La fecha del gasto va en formato AAAA-MM-DD" };
+
+  const monto = Number(cuerpo.monto);
+  if (!Number.isFinite(monto) || monto < 0) return { error: "El monto no es válido" };
+
+  const proveedor = String(cuerpo.proveedor || "").trim().slice(0, 60);
+  if (!proveedor) return { error: "Falta de dónde salió el gasto" };
+
+  const paga = SOCIOS.has(String(cuerpo.paga)) ? String(cuerpo.paga) : "ambos";
+  const estado = ESTADOS_GASTO.has(String(cuerpo.estado)) ? String(cuerpo.estado) : "pendiente";
+
+  const items = (Array.isArray(cuerpo.items) ? cuerpo.items : [])
+    .slice(0, MAX_ITEMS)
+    .map((it) => ({
+      que: String(it.que || "").trim().slice(0, 40),
+      cuantos: Math.max(0, Math.round(Number(it.cuantos) || 0)),
+      malos: Math.max(0, Math.round(Number(it.malos) || 0)),
+    }))
+    .filter((it) => it.que && it.cuantos);
+
+  return {
+    gasto: {
+      fecha: fecha,
+      proveedor: proveedor,
+      descripcion: String(cuerpo.descripcion || "").trim().slice(0, 120),
+      monto: Math.round(monto),
+      paga: paga,
+      estado: estado,
+      entrega: estado === "entregado" ? fechaValida(cuerpo.entrega) : "",
+      notas: String(cuerpo.notas || "").trim().slice(0, 200),
+      items: items,
+    },
+  };
+}
+
 /* ---------- API ---------- */
 
 async function api(request, env, accion, url, ctx) {
@@ -204,6 +253,33 @@ async function api(request, env, accion, url, ctx) {
   // impreso. Se le quita el destino y vuelve a la lista como libre, lista para
   // reasignar. Borrar la clave la haría desaparecer del panel sin dejar de
   // existir en el mundo.
+  if (accion === "gastos" && request.method === "GET") {
+    const { keys } = await env.TARJETAS.list({ prefix: "g:" });
+    const gastos = keys.map((k) => Object.assign({ id: k.name.slice(2) }, k.metadata || {}));
+    gastos.sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+    return json({ gastos });
+  }
+
+  if (accion === "gasto" && request.method === "POST") {
+    const cuerpo = await request.json().catch(() => ({}));
+    const hecho = gastoDe(cuerpo);
+    if (hecho.error) return json({ error: hecho.error }, 400);
+
+    const id = FORMATO_ID.test(String(cuerpo.id || ""))
+      ? String(cuerpo.id)
+      : Date.now().toString(36);
+    await env.TARJETAS.put("g:" + id, JSON.stringify(hecho.gasto), { metadata: hecho.gasto });
+    return json(Object.assign({ ok: true, id: id }, hecho.gasto));
+  }
+
+  if (accion === "gasto-borrar" && request.method === "POST") {
+    const cuerpo = await request.json().catch(() => ({}));
+    const id = String(cuerpo.id || "");
+    if (!FORMATO_ID.test(id)) return json({ error: "Identificador inválido" }, 400);
+    await env.TARJETAS.delete("g:" + id);
+    return json({ ok: true });
+  }
+
   if (accion === "desactivar" && request.method === "POST") {
     const cuerpo = await request.json().catch(() => ({}));
     const codigos = (Array.isArray(cuerpo.codigos) ? cuerpo.codigos : [])
