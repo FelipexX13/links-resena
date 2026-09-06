@@ -532,9 +532,14 @@ const ESTILOS = `
 
     /* 132px de cabecera fija en una pantalla de 844 es peaje permanente */
     .cabecera{position:static}
-    .cabecera-fila{padding:14px 0;gap:12px}
-    .cabecera-acciones{width:100%}
-    .cabecera-acciones button,.cabecera-acciones a.boton{flex:1 1 0;justify-content:center}
+    .cabecera-fila{padding:12px 0;gap:10px}
+    .marca .g{width:26px;height:26px}
+    /* Estirados a media fila salían cuatro pastillas de 310x74: un cuarto de la
+       pantalla para la barra. A su ancho natural caben dos por fila y la
+       cabecera baja de 250px a poco más de 150. */
+    .cabecera-acciones{width:100%;gap:8px}
+    .cabecera-acciones button,.cabecera-acciones a.boton{flex:0 1 auto;
+      padding:9px 14px;font-size:12.5px}
 
     .envoltorio{padding:0 16px}
     .contenido{padding-top:20px;padding-bottom:56px}
