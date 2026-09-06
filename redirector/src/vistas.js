@@ -65,27 +65,43 @@ const ESTILOS = `
     /* radios: contenedor suave, interior apretado */
     --r-xl:24px; --r-l:16px; --r-m:11px; --r-s:8px;
 
+    /* la barra de mando: azul de tinta, no negro */
+    --barra-alta:#111b2c; --barra-baja:#0b1220;
+    --barra-tinta:#e9eff8; --barra-tinta-2:#93a6c0;
+    /* filo de luz en el canto de arriba de cada superficie */
+    --filo:inset 0 1px 0 rgba(255,255,255,.9);
+
     --ancho:1120px;
     --z-grano:5; --z-modal:100; --z-tostada:200;
     --paso:.16s cubic-bezier(.2,.7,.3,1);
+    /* salida exponencial: arranca rápido y se posa, sin rebote */
+    --paso-l:.34s cubic-bezier(.16,1,.3,1);
   }
 
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
-  /* Una malla con los cuatro colores de la marca, muy diluida y anclada a la
-     pantalla: las tarjetas siguen siendo blancas encima, así que el texto no
-     pierde contraste y el fondo deja de ser un gris muerto. */
+  /* El fondo son tres capas, de arriba abajo: una retícula de 1px, un velo
+     blanco y la malla de color de la marca. Todo anclado a la pantalla, así que
+     al hacer scroll la retícula se queda quieta y el contenido pasa por encima.
+     Las láminas siguen siendo blancas: el texto nunca se lee sobre el color. */
   body{margin:0;padding:0;color:var(--tinta);
     background-color:var(--fondo);
     background-image:
-      /* el velo blanco va primero, así pinta encima y deja el centro tranquilo:
-         el color vive en los bordes, donde no hay nada que leer */
+      /* retícula técnica: casi invisible de cerca, da escala al vacío */
+      linear-gradient(rgba(22,32,46,.05) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(22,32,46,.05) 1px,transparent 1px),
+      /* el velo mantiene tranquilo el centro: el color vive en los bordes,
+         donde no hay nada que leer */
       radial-gradient(58% 50% at 50% 48%,rgba(255,255,255,.62),transparent 76%),
+      /* horizonte: sostiene la barra oscura por debajo */
+      radial-gradient(120% 44% at 50% -14%,rgba(66,133,244,.20),transparent 72%),
       radial-gradient(66% 56% at 6% -8%,rgba(66,133,244,.30),transparent 66%),
       radial-gradient(56% 50% at 96% -2%,rgba(234,67,53,.26),transparent 66%),
       radial-gradient(58% 50% at 92% 102%,rgba(52,168,83,.28),transparent 66%),
       radial-gradient(58% 50% at 2% 100%,rgba(251,188,5,.30),transparent 66%);
-    background-repeat:no-repeat;
+    background-size:44px 44px,44px 44px,auto,auto,auto,auto,auto,auto;
+    background-repeat:repeat,repeat,no-repeat,no-repeat,no-repeat,no-repeat,
+      no-repeat,no-repeat;
     background-attachment:fixed;
     font-family:"Geist","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
     font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;
@@ -107,8 +123,10 @@ const ESTILOS = `
   a{color:var(--azul)}
 
   /* ---------- superficies ---------- */
+  /* El filo claro de arriba las despega del fondo: sin él, sobre la malla de
+     color, las láminas parecían recortadas y pegadas. */
   .lamina{background:var(--papel);border:1px solid var(--linea);border-radius:var(--r-xl);
-    box-shadow:var(--sombra-1);position:relative;overflow:hidden}
+    box-shadow:var(--sombra-1),var(--filo);position:relative;overflow:hidden}
   .franja::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;z-index:1;
     background:linear-gradient(90deg,var(--logo-azul) 0 25%,var(--logo-rojo) 25% 50%,
       var(--logo-amarillo) 50% 75%,var(--logo-verde) 75% 100%)}
@@ -117,10 +135,15 @@ const ESTILOS = `
 
   /* ---------- cabecera de la aplicación ---------- */
   .envoltorio{max-width:var(--ancho);margin:0 auto;padding:0 22px}
-  .cabecera{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.94);
-    -webkit-backdrop-filter:blur(16px) saturate(1.4);
-    backdrop-filter:blur(16px) saturate(1.4);
-    box-shadow:0 1px 0 var(--linea),0 8px 24px -18px rgba(22,32,46,.5)}
+  /* Oscura a propósito: sobre un fondo claro y con color, una barra blanca se
+     disolvía. Esta ancla la página por arriba y deja que lo único claro sea el
+     contenido, que es lo que se lee. Translúcida porque es fija: el panel pasa
+     desenfocado por debajo y se nota que hay página detrás. */
+  .cabecera{position:sticky;top:0;z-index:10;color:var(--barra-tinta);
+    background:linear-gradient(180deg,rgba(17,27,44,.93),rgba(11,18,32,.95));
+    -webkit-backdrop-filter:blur(18px) saturate(1.5);
+    backdrop-filter:blur(18px) saturate(1.5);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 20px 44px -32px rgba(8,14,26,.95)}
   /* la franja de la marca cierra la barra por abajo */
   .cabecera::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;
     background:linear-gradient(90deg,var(--logo-azul) 0 25%,var(--logo-rojo) 25% 50%,
@@ -131,7 +154,19 @@ const ESTILOS = `
   .marca-texto{display:flex;flex-direction:column;line-height:1.25;min-width:0}
   .marca-texto strong{font-size:15px;font-weight:600;letter-spacing:-.015em}
   .marca-host{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;color:var(--tinta-3)}
+  .cabecera .marca-texto strong{color:#fff}
+  .cabecera .marca-host{color:var(--barra-tinta-2)}
+  .cabecera :focus-visible{outline-color:#fff}
   .cabecera-acciones{display:flex;gap:9px;flex-wrap:wrap}
+  /* los fantasmas se dibujan con luz, no con línea gris */
+  .cabecera-acciones .fantasma{background:rgba(255,255,255,.06);color:#d7e1f0;
+    border-color:rgba(255,255,255,.17)}
+  .cabecera-acciones .fantasma:hover{background:rgba(255,255,255,.14);color:#fff;
+    border-color:rgba(255,255,255,.32)}
+  /* la acción principal es la única pieza clara de la barra: se ve primero */
+  .cabecera-acciones button:not(.fantasma):not(.alerta){background:#fff;color:var(--tinta)}
+  .cabecera-acciones button:not(.fantasma):not(.alerta):hover{background:var(--azul-piel);
+    color:var(--azul-fuerte)}
 
   .contenido{padding-top:34px;padding-bottom:80px}
   section+section{margin-top:20px}
@@ -196,7 +231,9 @@ const ESTILOS = `
   /* una tabla ancha scrollea dentro de su caja; la página nunca */
   #tabla,#tablaLocales,#tablaGastos,#tablaInventario{overflow-x:auto}
   table{width:100%;border-collapse:collapse;margin-top:18px;font-size:13.5px}
-  th{text-align:left;font-size:12px;font-weight:500;color:var(--tinta-2);
+  /* mismo tono que .cejilla: rótulos de instrumento, no frases */
+  th{text-align:left;font-family:"Geist Mono",ui-monospace,monospace;font-size:10.5px;
+    font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--tinta-3);
     border-bottom:1px solid var(--linea);padding:0 10px 9px}
   td{padding:11px 10px;border-bottom:1px solid var(--linea-suave);vertical-align:middle}
   tbody tr{transition:background var(--paso)}
@@ -278,11 +315,13 @@ const ESTILOS = `
   /* ---------- ventanas modales ---------- */
   .modal{position:fixed;inset:0;z-index:var(--z-modal);display:flex;align-items:center;
     justify-content:center;padding:22px}
-  .modal-fondo{position:absolute;inset:0;background:rgba(13,20,36,.52);backdrop-filter:blur(3px)}
+  .modal-fondo{position:absolute;inset:0;background:rgba(9,15,28,.58);
+    -webkit-backdrop-filter:blur(5px) saturate(.9);backdrop-filter:blur(5px) saturate(.9)}
   .modal-caja{position:relative;background:var(--papel);border-radius:var(--r-xl);width:100%;
-    max-width:540px;max-height:88vh;overflow:auto;padding:30px;box-shadow:var(--sombra-3);
-    animation:entra .22s cubic-bezier(.2,.7,.3,1)}
-  @keyframes entra{from{opacity:0;transform:translateY(10px) scale(.985)}}
+    max-width:540px;max-height:88vh;overflow:auto;padding:30px;
+    box-shadow:var(--sombra-3),var(--filo);
+    animation:entra var(--paso-l) cubic-bezier(.16,1,.3,1)}
+  @keyframes entra{from{opacity:0;transform:translateY(14px) scale(.982)}}
   .modal-cerrar{position:absolute;top:16px;right:16px;z-index:3;padding:0;width:32px;height:32px;
     border-radius:50%;background:var(--papel-2);color:var(--tinta-2);font-size:14px;line-height:1;
     border:1px solid var(--linea)}
@@ -340,7 +379,12 @@ const ESTILOS = `
     color:var(--tinta-3);margin:0 0 5px}
   .metrica{font-size:23px;font-weight:700;letter-spacing:-.03em;line-height:1}
   .metrica .unidad{font-size:12px;font-weight:400;opacity:.65;margin-left:5px}
-  .pozo{background:var(--papel-2);border-radius:14px;padding:14px 12px 8px}
+  /* la misma retícula del fondo, aquí sí visible: las barras se leen contra
+     ella como sobre papel milimetrado */
+  .pozo{background:var(--papel-2);border:1px solid var(--linea-suave);border-radius:14px;
+    padding:14px 12px 8px;
+    background-image:linear-gradient(rgba(22,32,46,.045) 1px,transparent 1px);
+    background-size:100% 22px}
   .pozo svg{display:block;width:100%;height:auto}
   .grafica-pie{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
     margin-top:14px;padding-top:12px;border-top:1px solid var(--linea-suave);
@@ -403,7 +447,7 @@ const ESTILOS = `
   .vacio-marca .m4{background:var(--logo-verde)}
 
   .ficha{margin-top:18px;padding:15px 16px;border-radius:var(--r-l);background:var(--verde-piel);
-    border:1px solid var(--verde-borde);border-left:3px solid var(--verde);font-size:13px}
+    border:1px solid var(--verde-borde);font-size:13px}
   .ficha b{display:block;font-size:15px;font-weight:600;margin-bottom:2px;color:var(--verde-fuerte);
     letter-spacing:-.015em}
   .ficha label{margin-top:12px;color:var(--verde-fuerte)}
