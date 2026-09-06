@@ -271,10 +271,21 @@ const ESTILOS = `
   .contador{font-size:12px;color:var(--tinta-3);margin-top:11px}
 
   /* ---------- avisos ---------- */
-  .aviso{margin-top:14px;padding:11px 14px;border-radius:var(--r-m);font-size:13px;display:none;
-    border:1px solid transparent}
-  .aviso.ok{display:block;background:var(--verde-piel);color:var(--verde-fuerte);border-color:var(--verde-borde)}
-  .aviso.mal{display:block;background:var(--rojo-piel);color:var(--rojo-fuerte);border-color:var(--rojo-borde)}
+  /* Se ceñía al ancho del panel: una caja de mil píxeles para tres palabras.
+     Ahora se ajusta al texto y lleva su icono, para que se lea como respuesta a
+     algo y no como un bloque suelto de la página. */
+  .aviso{display:none;align-items:flex-start;gap:9px;margin-top:14px;
+    padding:9px 15px 9px 12px;border-radius:999px;font-size:13px;line-height:1.45;
+    font-weight:500;border:1px solid transparent;max-width:100%;
+    animation:aviso-entra .18s cubic-bezier(.2,.7,.3,1)}
+  .aviso.ok,.aviso.mal{display:inline-flex}
+  .aviso::before{content:"";width:16px;height:16px;flex:0 0 auto;margin-top:1px;
+    background-repeat:no-repeat;background-position:center;background-size:16px 16px}
+  .aviso.ok{background:var(--verde-piel);color:var(--verde-fuerte);border-color:var(--verde-borde)}
+  .aviso.ok::before{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23166b2e' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E")}
+  .aviso.mal{background:var(--rojo-piel);color:var(--rojo-fuerte);border-color:var(--rojo-borde)}
+  .aviso.mal::before{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b3261e' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7.5v5.5M12 16.4v.01'/%3E%3C/svg%3E")}
+  @keyframes aviso-entra{from{opacity:0;transform:translateY(-4px)}}
 
   .ayuda{font-size:12px;line-height:1.5;color:var(--tinta-2);margin:9px 0 0;max-width:62ch}
   .ayuda-alta{margin:0 0 8px}
@@ -308,6 +319,8 @@ const ESTILOS = `
   .modal-kicker{display:inline-block;font-size:11.5px;font-weight:600;color:var(--azul-fuerte);
     background:var(--azul-piel);border-radius:999px;padding:4px 12px;margin-bottom:12px}
   .modal-acciones{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:24px}
+  .modal-caja .aviso{border-radius:var(--r-m);display:none}
+  .modal-caja .aviso.ok,.modal-caja .aviso.mal{display:flex}
   /* radial y no lineal: un degradado recto de lado a lado se lee como plantilla */
   .modal-tarjeta::after{content:"";position:absolute;top:0;left:0;right:0;height:190px;
     pointer-events:none;z-index:0;
@@ -583,10 +596,15 @@ function escHtml(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+let RELOJ_AVISO = null;
+
 function avisar(caja, texto, ok) {
   const a = $(caja);
   a.textContent = texto;
   a.className = "aviso " + (ok ? "ok" : "mal");
+  clearTimeout(RELOJ_AVISO);
+  // lo que salió bien se va solo; un error se queda hasta que se arregle
+  if (ok) RELOJ_AVISO = setTimeout(() => limpiarAviso(caja), 6000);
 }
 
 function limpiarAviso(caja) { $(caja).className = "aviso"; }
