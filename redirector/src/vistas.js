@@ -2136,6 +2136,52 @@ $("estadoGasto").addEventListener("click", (e) => {
   if (b) pintarEstadoGasto(b.dataset.valor);
 });
 
+// Las opciones salen de los gastos que ya existen, así la lista se mantiene sola
+// y no hay un catálogo que actualizar cada vez que aparece un proveedor nuevo.
+const OTRO = "__otro";
+
+function llenarListasGasto() {
+  const proveedores = [];
+  const cosas = [];
+  GASTOS.forEach((g) => {
+    if (g.proveedor && proveedores.indexOf(g.proveedor) < 0) proveedores.push(g.proveedor);
+    (g.items || []).forEach((it) => {
+      if (it.que && cosas.indexOf(it.que) < 0) cosas.push(it.que);
+    });
+  });
+  proveedores.sort();
+  cosas.sort();
+
+  $("gastoProveedor").innerHTML =
+    proveedores.map((x) => "<option value='" + escHtml(x) + "'>" + escHtml(x) + "</option>").join("") +
+    "<option value='" + OTRO + "'>Otro sitio…</option>";
+  $("listaCosas").innerHTML =
+    cosas.map((x) => "<option value='" + escHtml(x) + "'></option>").join("");
+}
+
+function pintarProveedor(valor) {
+  const sel = $("gastoProveedor");
+  const conocido = [].some.call(sel.options, (o) => o.value === valor);
+  if (valor && !conocido) {
+    sel.value = OTRO;
+    $("proveedorOtro").value = valor;
+  } else {
+    sel.value = valor || (sel.options.length ? sel.options[0].value : OTRO);
+    $("proveedorOtro").value = "";
+  }
+  $("bloqueProveedorOtro").hidden = sel.value !== OTRO;
+}
+
+function proveedorElegido() {
+  const sel = $("gastoProveedor");
+  return sel.value === OTRO ? $("proveedorOtro").value : sel.value;
+}
+
+$("gastoProveedor").addEventListener("change", () => {
+  $("bloqueProveedorOtro").hidden = $("gastoProveedor").value !== OTRO;
+  if (!$("bloqueProveedorOtro").hidden) $("proveedorOtro").focus();
+});
+
 function itemsDelFormulario() {
   const lista = [];
   for (let i = 0; i < 3; i++) {
@@ -2157,7 +2203,8 @@ function abrirGasto(id) {
   $("guardarGasto").textContent = g ? "Guardar cambios" : "Anotar el gasto";
 
   $("gastoFecha").value = g ? g.fecha : hoyISO();
-  $("gastoProveedor").value = g ? g.proveedor : "";
+  llenarListasGasto();
+  pintarProveedor(g ? g.proveedor : "");
   $("gastoDescripcion").value = g ? g.descripcion || "" : "";
   $("gastoMonto").value = g ? g.monto : "";
   $("gastoEntrega").value = g && g.entrega ? g.entrega : hoyISO();
@@ -2176,7 +2223,7 @@ function abrirGasto(id) {
   focoGasto = document.activeElement;
   $("modalGasto").hidden = false;
   document.body.style.overflow = "hidden";
-  $("gastoProveedor").focus();
+  $("gastoMonto").focus();
 }
 
 function cerrarGasto() {
@@ -2208,7 +2255,7 @@ $("formGasto").onsubmit = async (e) => {
       body: JSON.stringify({
         id: GASTO_EDITADO,
         fecha: $("gastoFecha").value,
-        proveedor: $("gastoProveedor").value,
+        proveedor: proveedorElegido(),
         descripcion: $("gastoDescripcion").value,
         monto: $("gastoMonto").value,
         paga: PAGA,
@@ -2656,7 +2703,11 @@ export function vistaAdmin(origen) {
       </div>
 
       <label class="mini" for="gastoProveedor">De dónde</label>
-      <input id="gastoProveedor" placeholder="Amazon, Graficortes…" autocomplete="off" required>
+      <select id="gastoProveedor"></select>
+      <div id="bloqueProveedorOtro" hidden>
+        <label class="mini" for="proveedorOtro">Nombre del sitio nuevo</label>
+        <input id="proveedorOtro" placeholder="Ferretería del barrio" autocomplete="off">
+      </div>
 
       <label class="mini" for="gastoDescripcion">Qué se compró</label>
       <input id="gastoDescripcion" placeholder="70 chips NFC" autocomplete="off">
@@ -2681,20 +2732,22 @@ export function vistaAdmin(origen) {
 
       <label class="mini">Qué trajo, para el inventario</label>
       <div class="items-fila">
-        <input id="item0" placeholder="Chips NFC" autocomplete="off" aria-label="Cosa 1">
+        <input id="item0" list="listaCosas" placeholder="Chips NFC" autocomplete="off" aria-label="Cosa 1">
         <input id="cuantos0" type="number" min="0" placeholder="cuántos" aria-label="Cuántos de la cosa 1">
         <input id="malos0" type="number" min="0" placeholder="malos" aria-label="Cuántos malos de la cosa 1">
       </div>
       <div class="items-fila">
-        <input id="item1" placeholder="Acrílicos" autocomplete="off" aria-label="Cosa 2">
+        <input id="item1" list="listaCosas" placeholder="Acrílicos" autocomplete="off" aria-label="Cosa 2">
         <input id="cuantos1" type="number" min="0" placeholder="cuántos" aria-label="Cuántos de la cosa 2">
         <input id="malos1" type="number" min="0" placeholder="malos" aria-label="Cuántos malos de la cosa 2">
       </div>
       <div class="items-fila">
-        <input id="item2" placeholder="Vinilos de mesa" autocomplete="off" aria-label="Cosa 3">
+        <input id="item2" list="listaCosas" placeholder="Vinilos de mesa" autocomplete="off" aria-label="Cosa 3">
         <input id="cuantos2" type="number" min="0" placeholder="cuántos" aria-label="Cuántos de la cosa 3">
         <input id="malos2" type="number" min="0" placeholder="malos" aria-label="Cuántos malos de la cosa 3">
       </div>
+
+      <datalist id="listaCosas"></datalist>
 
       <label class="mini" for="gastoNotas">Notas</label>
       <input id="gastoNotas" placeholder="26 acrílicos llegaron dañados" autocomplete="off">
