@@ -1524,7 +1524,7 @@ function paginacion(actual, total) {
 
 $("buscar").addEventListener("input", () => { PAGINA = 1; pintarTabla(); });
 $("limpiarBusca").onclick = () => { $("buscar").value = ""; PAGINA = 1; pintarTabla(); $("buscar").focus(); };
-$("recargar").onclick = () => { CARGANDO = true; pintarTabla(); listar(); };
+$("recargar").onclick = () => { CARGANDO = true; pintarTabla(); listar(); cargarGastos(); };
 
 /* ---------- borrado en dos toques ---------- */
 
@@ -1943,6 +1943,8 @@ function pintarVista(valor) {
   $("vistaTarjetas").hidden = VISTA !== "tarjetas";
   $("vistaLocales").hidden = VISTA !== "locales";
   $("vistaCuentas").hidden = VISTA !== "cuentas";
+  $("abrirLocal").hidden = VISTA === "cuentas";
+  $("abrirRango").hidden = VISTA === "cuentas";
   if (VISTA === "locales") pintarVentas();
   if (VISTA === "cuentas") pintarCuentas();
 }
