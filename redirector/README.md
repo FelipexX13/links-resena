@@ -131,6 +131,18 @@ tiene en memoria, con lo que acaba de mandar. Sale instantáneo y no depende de
 la propagación. **Refrescar** sí vuelve a preguntar, y ahí sí puede tardar hasta
 un minuto en reflejar algo recién escrito.
 
+## El chip NFC de cada tarjeta
+
+Grabar el chip es trabajo manual, plástico por plástico, y no se ve en ningún
+sitio. El botón **NFC** de cada fila lo marca: amarillo relleno si ya está
+grabado, apagado si falta.
+
+Vive en su propia clave, `n:<codigo>`, y no dentro del registro de la tarjeta.
+Es un hecho **físico del plástico**: el chip lleva grabada la URL de su propio
+código, que no cambia nunca. Sigue siendo verdad aunque la tarjeta se reasigne a
+otro negocio o se desactive — y dentro del registro, cualquiera de esas
+escrituras lo habría borrado.
+
 ## Modo pruebas
 
 Para revisar un lote impreso hace falta lo contrario de lo normal: que el QR **no**

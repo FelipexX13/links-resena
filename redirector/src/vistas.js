@@ -190,44 +190,6 @@ const ESTILOS = `
     text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
   @media (max-width:820px){.col-destino{display:none}}
 
-  /* ---------- teléfono ---------- */
-  @media (max-width:640px){
-    /* Sin esto la fila reparte 230px a los botones y deja el nombre del negocio
-       en 72px. Una tabla de 4 columnas no cabe: cada fila pasa a ser un bloque. */
-    table,tbody,tr,td{display:block;width:auto}
-    thead{display:none}
-    table{margin-top:10px}
-    tr{padding:14px 0;border-bottom:1px solid var(--linea-suave)}
-    tr:hover{background:transparent}
-    td{border:0;padding:0}
-    td:last-child{width:auto;white-space:normal;padding-top:11px}
-    .negocio{font-size:15px;margin-top:2px}
-    .acciones{grid-template-columns:repeat(3,minmax(0,1fr));min-width:0}
-    .acciones button{padding:9px 6px}
-
-    /* 132px de cabecera fija en una pantalla de 844 es peaje permanente */
-    .cabecera{position:static}
-    .cabecera-fila{padding:14px 0;gap:12px}
-    .cabecera-acciones{width:100%}
-    .cabecera-acciones button,.cabecera-acciones a.boton{flex:1 1 0;justify-content:center}
-
-    .envoltorio{padding:0 16px}
-    .contenido{padding-top:20px;padding-bottom:56px}
-    .panel{padding:18px 16px}
-
-    /* menos de 16px y iOS hace zoom al enfocar el campo */
-    input{font-size:16px}
-
-    .modal{padding:12px}
-    .modal-caja{padding:24px 18px;max-height:92vh}
-    .qr-negocio{margin-left:8px;margin-right:34px}
-    .qr-pair{grid-template-columns:1fr;justify-items:center}
-    .rango-fila{grid-template-columns:1fr}
-    .segmento{display:flex;width:100%}
-    .segmento button{flex:1 1 0;padding:8px 6px}
-    .modal-acciones button{flex:1 1 auto}
-    .obligatorios{width:100%;margin-bottom:2px}
-  }
 
   /* ---------- carga, vacío ---------- */
   .hueso{display:block;height:11px;border-radius:999px;
@@ -329,7 +291,6 @@ const ESTILOS = `
   .c1:focus{border-color:var(--azul);box-shadow:0 0 0 3px var(--azul-piel)}
   .c2:focus{border-color:var(--rojo);box-shadow:0 0 0 3px var(--rojo-piel)}
   .c3:focus{border-color:var(--verde);box-shadow:0 0 0 3px var(--verde-piel)}
-  .obligatorios{margin-right:auto;font-size:12px;color:var(--tinta-3)}
   .n4{background:var(--ambar);color:#4a3400}
 
   /* ---- segmentados: tipo de tarjeta, modo del formulario, filtro ---- */
@@ -371,6 +332,11 @@ const ESTILOS = `
   .estado-pendiente{background:var(--ambar-piel);color:var(--ambar-tinta);border-color:var(--ambar-borde)}
   .piezas{font-family:"Geist Mono",ui-monospace,monospace;font-size:12px;color:var(--tinta-2)}
   .importe{font-family:"Geist Mono",ui-monospace,monospace;font-weight:500}
+  .acciones-tarjeta{grid-template-columns:repeat(4,max-content);min-width:0}
+  .accion-nfc{background:var(--papel-2);color:var(--tinta-3);border-color:var(--linea)}
+  .accion-nfc:hover{background:var(--ambar-piel);color:var(--ambar-tinta);border-color:var(--ambar-borde)}
+  .accion-nfc.puesto{background:var(--ambar);color:#4a3400;border-color:var(--ambar)}
+  .accion-nfc.puesto:hover{background:#e09b00;color:#3a2900;border-color:#e09b00}
   .acciones-orden{grid-template-columns:repeat(3,minmax(0,1fr));min-width:240px}
   .rango-fila{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
   #rangoOrden{margin-top:14px}
@@ -476,6 +442,47 @@ const ESTILOS = `
     font-family:"Geist Mono",ui-monospace,monospace}
 
   [hidden]{display:none !important}
+  /* ---------- teléfono ---------- */
+  /* Va al final del CSS a propósito: una media query solo gana a lo que tiene
+     encima, y a mitad de hoja estas reglas las pisaba todo lo definido después. */
+  @media (max-width:640px){
+    /* Sin esto la fila reparte 230px a los botones y deja el nombre del negocio
+       en 72px. Una tabla de 4 columnas no cabe: cada fila pasa a ser un bloque. */
+    table,tbody,tr,td{display:block;width:auto}
+    thead{display:none}
+    table{margin-top:10px}
+    tr{padding:14px 0;border-bottom:1px solid var(--linea-suave)}
+    tr:hover{background:transparent}
+    td{border:0;padding:0}
+    td:last-child{width:auto;white-space:normal;padding-top:11px}
+    .negocio{font-size:15px;margin-top:2px}
+    .acciones{grid-template-columns:repeat(3,minmax(0,1fr));min-width:0}
+    /* son cuatro: con tres columnas caían 3+1 */
+    .acciones-tarjeta{grid-template-columns:repeat(4,max-content)}
+    .acciones button{padding:9px 6px}
+
+    /* 132px de cabecera fija en una pantalla de 844 es peaje permanente */
+    .cabecera{position:static}
+    .cabecera-fila{padding:14px 0;gap:12px}
+    .cabecera-acciones{width:100%}
+    .cabecera-acciones button,.cabecera-acciones a.boton{flex:1 1 0;justify-content:center}
+
+    .envoltorio{padding:0 16px}
+    .contenido{padding-top:20px;padding-bottom:56px}
+    .panel{padding:18px 16px}
+
+    /* menos de 16px y iOS hace zoom al enfocar el campo */
+    input{font-size:16px}
+
+    .modal{padding:12px}
+    .modal-caja{padding:24px 18px;max-height:92vh}
+    .qr-negocio{margin-left:8px;margin-right:34px}
+    .qr-pair{grid-template-columns:1fr;justify-items:center}
+    .rango-fila{grid-template-columns:1fr}
+    .segmento{display:flex;width:100%}
+    .segmento button{flex:1 1 0;padding:8px 6px}
+    .modal-acciones button{flex:1 1 auto}
+  }
   @media (prefers-reduced-motion:reduce){
     *{animation-duration:.01ms !important;transition-duration:.01ms !important}
     html{scroll-behavior:auto}
@@ -567,6 +574,7 @@ let VENTA_EDITADA = { vendida: "", precio: 0 };
 let VISTA = "tarjetas";
 let PRUEBAS = false;
 let GASTOS = [];
+let NFC = {};
 let METRICA_DINERO = "gastos";
 let GASTO_EDITADO = "";
 const DIAS_DINERO = 30;
@@ -1416,6 +1424,8 @@ async function listar() {
   try {
     const datos = await llamar("lista");
     TARJETAS = datos.tarjetas;
+    NFC = {};
+    (datos.nfc || []).forEach((c) => { NFC[c] = 1; });
     CARGANDO = false;
     pintarTabla();
     pintarVentas();
@@ -1513,7 +1523,10 @@ function pintarTabla() {
       "<div class='tipo tipo-" + tipo + "'>" + TIPO_NOMBRE[tipo] + "</div>" +
       "</td><td class='col-destino'><span class='place' title='" + escHtml(t.destino) + "'>" +
       (place ? escHtml(place) : escHtml(t.destino)) +
-      "</span></td><td><div class='acciones'>" +
+      "</span></td><td><div class='acciones acciones-tarjeta'>" +
+      "<button type='button' class='accion-nfc" + (NFC[c] ? " puesto" : "") +
+      "' data-nfc='" + c + "' aria-pressed='" + (NFC[c] ? "true" : "false") +
+      "'>NFC</button>" +
       "<button type='button' class='accion-qr' data-qr='" + c + "'>QR</button>" +
       "<button type='button' class='accion-editar' data-editar='" + c + "'>Editar</button>" +
       "<button type='button' class='accion-apagar' data-apagar='" + c + "'>Desactivar</button>" +
@@ -1602,6 +1615,9 @@ $("tabla").addEventListener("click", async (e) => {
 
   const pg = e.target.closest("[data-pagina]");
   if (pg && !pg.disabled) { PAGINA = parseInt(pg.dataset.pagina, 10) || 1; pintarTabla(); return; }
+
+  const n = e.target.closest("[data-nfc]");
+  if (n) { marcarNFC(n, n.dataset.nfc); return; }
 
   const ed = e.target.closest("[data-editar]");
   if (ed) { editar(ed.dataset.editar); return; }
@@ -2478,6 +2494,29 @@ $("formActivar").onsubmit = async (e) => {
     boton.textContent = etiqueta;
   }
 };
+
+/* ---------- el chip NFC de cada tarjeta ---------- */
+
+// Grabar el chip es trabajo manual, tarjeta por tarjeta, y no se ve en ningún
+// sitio: este botón es la única forma de saber cuáles faltan.
+async function marcarNFC(boton, codigo) {
+  const listo = !NFC[codigo];
+  boton.disabled = true;
+  try {
+    await llamar("nfc", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ codigo: codigo, listo: listo }),
+    });
+    if (listo) NFC[codigo] = 1; else delete NFC[codigo];
+    boton.classList.toggle("puesto", listo);
+    boton.setAttribute("aria-pressed", listo ? "true" : "false");
+  } catch (err) {
+    avisar("avisoPanel", err.message, false);
+  } finally {
+    boton.disabled = false;
+  }
+}
 
 /* ---------- QR de la tarjeta ---------- */
 

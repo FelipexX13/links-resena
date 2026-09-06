@@ -14,6 +14,7 @@
  *   POST /api/guardar  {codigo, destino, negocio, tipo, vendida, precio}  (sesión)
  *   POST /api/rango    {codigos[], ...los mismos campos}                (sesión)
  *   POST /api/desactivar {codigos[], tipo}                       (sesión)
+ *   POST /api/nfc      {codigo, listo}  marca el chip como grabado    (sesión)
  *   GET  /api/gastos   listado de gastos                          (sesión)
  *   POST /api/gasto    {id?, fecha, proveedor, monto, paga, ...}  (sesión)
  *   POST /api/gasto-borrar {id}                                   (sesión)
@@ -25,6 +26,7 @@
  *                    "vendida":"2026-09-01","precio":25000,"actualizado":"..."}
  *                   vendida vacía = vinculada pero todavía no cobrada
  *                   + la misma info como metadata, para listar en una sola llamada
+ *   "n:A7K2"        existe = el chip NFC de esa tarjeta ya está grabado
  *   "g:<id>"        un gasto: qué se compró, cuánto costó, quién puso y si llegó
  *   "intentos:<ip>" contador de logins fallidos, expira solo a las 24 horas
  */
@@ -210,7 +212,22 @@ async function api(request, env, accion, url, ctx) {
     const { keys } = await env.TARJETAS.list({ prefix: "c:" });
     const tarjetas = keys.map((k) => Object.assign({ codigo: k.name.slice(2) }, k.metadata || {}));
     tarjetas.sort((a, b) => a.codigo.localeCompare(b.codigo));
-    return json({ tarjetas });
+
+    // El chip grabado es un hecho físico del plástico: sigue siendo verdad
+    // aunque la tarjeta se reasigne o se desactive. Por eso vive en su propia
+    // clave y no dentro del registro, donde cualquier escritura lo pisaría.
+    const grabados = await env.TARJETAS.list({ prefix: "n:" });
+    const nfc = grabados.keys.map((k) => k.name.slice(2));
+    return json({ tarjetas, nfc });
+  }
+
+  if (accion === "nfc" && request.method === "POST") {
+    const cuerpo = await request.json().catch(() => ({}));
+    const codigo = normalizar(cuerpo.codigo);
+    if (!codigo) return json({ error: "Código inválido" }, 400);
+    if (cuerpo.listo) await env.TARJETAS.put("n:" + codigo, "1");
+    else await env.TARJETAS.delete("n:" + codigo);
+    return json({ ok: true, codigo: codigo, listo: Boolean(cuerpo.listo) });
   }
 
   if (accion === "guardar" && request.method === "POST") {
