@@ -278,6 +278,9 @@ const ESTILOS = `
 
   .ayuda{font-size:12px;line-height:1.5;color:var(--tinta-2);margin:9px 0 0;max-width:62ch}
   .ayuda-alta{margin:0 0 8px}
+  .enlace-mini{align-self:center;font-size:12px;color:var(--azul);text-decoration:none}
+  .enlace-mini:hover{text-decoration:underline}
+  .sobre-buscador{margin-top:8px}
   .ayuda code{background:var(--papel-2);border:1px solid var(--linea);border-radius:5px;
     padding:1px 5px;font-size:11px}
 
@@ -785,8 +788,9 @@ function analizarMaps(crudo) {
 // Un local que ya está en el sistema tiene su link guardado. Volver a pegar la
 // URL de Maps para añadirle mesas es trabajo repetido, y una oportunidad de
 // equivocarse de negocio.
-function llenarLocales() {
-  const lista = locales();
+function llenarLocales(filtro) {
+  const busca = sinTildes(String(filtro || ""));
+  const lista = locales().filter((l) => !busca || sinTildes(l.negocio).includes(busca));
   let html = "<option value=''>Local nuevo — pego su URL abajo</option>";
   lista.forEach((l) => {
     html += "<option value='" + escHtml(l.negocio) + "'>" + escHtml(l.negocio) +
@@ -808,6 +812,8 @@ function llenarLocales() {
   $("ordenRango").innerHTML = ordenes;
   $("ordenRango").value = antes;
 }
+
+$("buscarLocal").addEventListener("input", () => llenarLocales($("buscarLocal").value));
 
 $("localExistente").addEventListener("change", () => {
   const elegido = $("localExistente").value;
@@ -836,7 +842,7 @@ $("analizar").onclick = () => {
   limpiarAviso("aviso");
   $("localExistente").value = "";
   URL_LEIDA = $("maps").value.trim();
-  $("fichaNombre").textContent = r.negocio || "Escribe abajo el nombre del negocio";
+  $("fichaNombre").textContent = r.negocio || "Link listo";
   $("fichaReview").value = r.review;
   const bits = [];
   if (r.placeId) bits.push("Place ID: " + r.placeId);
@@ -1258,6 +1264,7 @@ function salirDeEdicion() {
   $("numeroTarjeta").textContent = "";
   $("desde").value = $("hasta").value = "";
   $("nAcrilicos").value = $("nStickers").value = "";
+  $("buscarLocal").value = "";
   $("desdeAcrilico").value = $("desdeSticker").value = "";
   if ($("localExistente").options.length) $("localExistente").value = "";
   if ($("ordenRango").options.length) $("ordenRango").value = "";
@@ -2609,8 +2616,6 @@ export function vistaAdmin(origen) {
           </div>
         </div>
         <div class="rango-resumen" id="localResumen">Escribe cuántos acrílicos y cuántos stickers lleva la orden.</div>
-        <p class="ayuda">El número inicial viene puesto con la primera tarjeta libre de cada
-          tipo. Cámbialo si vas a entregar otras: el bloque tiene que estar libre entero.</p>
       </div>
 
       <div id="campoUna">
@@ -2641,25 +2646,22 @@ export function vistaAdmin(origen) {
         <div class="rango-resumen" id="rangoResumen">Escribe un rango válido: del menor al mayor.</div>
       </div>
 
-      <label class="paso" for="localExistente"><span class="n n2">2</span>A qué local apunta</label>
-      <select id="localExistente" aria-label="Local ya registrado"></select>
-      <p class="ayuda ayuda-alta">Si el local ya está en el sistema, elígelo y se rellena su link.
-        Si es nuevo, pega abajo su URL de Google Maps — o su <b>Place ID</b>, o un link de reseña ya hecho.</p>
+      <label class="paso" for="buscarLocal"><span class="n n2">2</span>A qué local apunta</label>
+      <input id="buscarLocal" type="search" placeholder="Buscar local" autocomplete="off"
+             aria-label="Buscar entre los locales registrados">
+      <select id="localExistente" class="sobre-buscador" size="1" aria-label="Local ya registrado"></select>
       <input class="c2" id="maps" placeholder="https://www.google.com/maps/place/…" autocomplete="off" required>
 
       <div class="modal-acciones acciones-izq">
         <button type="button" class="leer" id="analizar">Leer la URL</button>
+        <a class="enlace-mini" target="_blank" rel="noopener"
+           href="https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder">Buscador de Place ID</a>
       </div>
-      <p class="ayuda">El panel saca el <b>Place ID</b> solo a partir de la URL de Maps. Si esa URL
-        no lo trae, búscalo por nombre y ciudad en el
-        <a href="https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder"
-           target="_blank" rel="noopener">buscador de Place ID</a> y pega aquí el <code>ChIJ…</code>.</p>
 
       <div class="ficha" id="ficha" hidden>
         <b id="fichaNombre"></b>
-        <label for="fichaReview">Link de reseña que va a quedar en la tarjeta</label>
-        <input id="fichaReview" readonly>
         <div class="meta" id="fichaMeta"></div>
+        <input id="fichaReview" type="hidden">
       </div>
 
       <label class="paso" for="negocio"><span class="n n3">3</span>Nombre del negocio</label>
@@ -2671,12 +2673,9 @@ export function vistaAdmin(origen) {
           <button type="button" class="activa" data-valor="acrilico">Acrílico</button>
           <button type="button" data-valor="sticker">Sticker</button>
         </div>
-        <p class="ayuda">Acrílico: pieza de mesa, un solo local. Sticker: se pega en las
-          mesas y el mismo lote se reparte entre varios locales.</p>
       </div>
 
       <div class="modal-acciones">
-        <span class="obligatorios">Los tres campos son obligatorios</span>
         <button type="button" class="fantasma" id="cancelarTarjeta">Cancelar</button>
         <button type="submit" id="guardar">Activar tarjeta</button>
       </div>
