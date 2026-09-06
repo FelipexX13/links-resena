@@ -66,8 +66,8 @@ const ESTILOS = `
     --r-xl:24px; --r-l:16px; --r-m:11px; --r-s:8px;
 
     /* la barra de mando: azul de tinta, no negro */
-    --barra-alta:#111b2c; --barra-baja:#0b1220;
-    --barra-tinta:#e9eff8; --barra-tinta-2:#93a6c0;
+    --barra-alta:#31456a; --barra-baja:#243350;
+    --barra-tinta:#eef3fa; --barra-tinta-2:#b3c5e0;
     /* filo de luz en el canto de arriba de cada superficie */
     --filo:inset 0 1px 0 rgba(255,255,255,.9);
 
@@ -80,28 +80,21 @@ const ESTILOS = `
 
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
-  /* El fondo son tres capas, de arriba abajo: una retícula de 1px, un velo
-     blanco y la malla de color de la marca. Todo anclado a la pantalla, así que
-     al hacer scroll la retícula se queda quieta y el contenido pasa por encima.
-     Las láminas siguen siendo blancas: el texto nunca se lee sobre el color. */
+  /* Una malla con los cuatro colores de la marca, diluida y anclada a la
+     pantalla. El velo blanco va listado primero, así que pinta por encima y deja
+     el centro tranquilo: el color vive en los bordes, donde no hay nada que
+     leer, y las láminas van blancas encima sin perder contraste. */
   body{margin:0;padding:0;color:var(--tinta);
     background-color:var(--fondo);
     background-image:
-      /* retícula técnica: casi invisible de cerca, da escala al vacío */
-      linear-gradient(rgba(22,32,46,.05) 1px,transparent 1px),
-      linear-gradient(90deg,rgba(22,32,46,.05) 1px,transparent 1px),
-      /* el velo mantiene tranquilo el centro: el color vive en los bordes,
-         donde no hay nada que leer */
       radial-gradient(58% 50% at 50% 48%,rgba(255,255,255,.62),transparent 76%),
-      /* horizonte: sostiene la barra oscura por debajo */
-      radial-gradient(120% 44% at 50% -14%,rgba(66,133,244,.20),transparent 72%),
+      /* horizonte: sostiene la barra por debajo */
+      radial-gradient(122% 46% at 50% -14%,rgba(66,133,244,.22),transparent 72%),
       radial-gradient(66% 56% at 6% -8%,rgba(66,133,244,.30),transparent 66%),
       radial-gradient(56% 50% at 96% -2%,rgba(234,67,53,.26),transparent 66%),
       radial-gradient(58% 50% at 92% 102%,rgba(52,168,83,.28),transparent 66%),
       radial-gradient(58% 50% at 2% 100%,rgba(251,188,5,.30),transparent 66%);
-    background-size:44px 44px,44px 44px,auto,auto,auto,auto,auto,auto;
-    background-repeat:repeat,repeat,no-repeat,no-repeat,no-repeat,no-repeat,
-      no-repeat,no-repeat;
+    background-repeat:no-repeat;
     background-attachment:fixed;
     font-family:"Geist","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
     font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;
@@ -140,10 +133,10 @@ const ESTILOS = `
      contenido, que es lo que se lee. Translúcida porque es fija: el panel pasa
      desenfocado por debajo y se nota que hay página detrás. */
   .cabecera{position:sticky;top:0;z-index:10;color:var(--barra-tinta);
-    background:linear-gradient(180deg,rgba(17,27,44,.93),rgba(11,18,32,.95));
+    background:linear-gradient(180deg,var(--barra-alta),var(--barra-baja));
     -webkit-backdrop-filter:blur(18px) saturate(1.5);
     backdrop-filter:blur(18px) saturate(1.5);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 20px 44px -32px rgba(8,14,26,.95)}
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 20px 44px -34px rgba(20,32,54,.9)}
   /* la franja de la marca cierra la barra por abajo */
   .cabecera::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;
     background:linear-gradient(90deg,var(--logo-azul) 0 25%,var(--logo-rojo) 25% 50%,
@@ -159,13 +152,13 @@ const ESTILOS = `
   .cabecera :focus-visible{outline-color:#fff}
   .cabecera-acciones{display:flex;gap:9px;flex-wrap:wrap}
   /* los fantasmas se dibujan con luz, no con línea gris */
-  .cabecera-acciones .fantasma{background:rgba(255,255,255,.06);color:#d7e1f0;
-    border-color:rgba(255,255,255,.17)}
-  .cabecera-acciones .fantasma:hover{background:rgba(255,255,255,.14);color:#fff;
-    border-color:rgba(255,255,255,.32)}
+  .cabecera .fantasma{background:rgba(255,255,255,.08);color:#dde6f4;
+    border-color:rgba(255,255,255,.2)}
+  .cabecera .fantasma:hover{background:rgba(255,255,255,.17);color:#fff;
+    border-color:rgba(255,255,255,.36)}
   /* la acción principal es la única pieza clara de la barra: se ve primero */
-  .cabecera-acciones button:not(.fantasma):not(.alerta){background:#fff;color:var(--tinta)}
-  .cabecera-acciones button:not(.fantasma):not(.alerta):hover{background:var(--azul-piel);
+  .cabecera button:not(.fantasma):not(.alerta){background:#fff;color:var(--tinta)}
+  .cabecera button:not(.fantasma):not(.alerta):hover{background:var(--azul-piel);
     color:var(--azul-fuerte)}
 
   .contenido{padding-top:34px;padding-bottom:80px}
@@ -221,9 +214,12 @@ const ESTILOS = `
 
   /* ---------- panel de tarjetas ---------- */
   .panel{padding:24px}
-  .panel-barra{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
-  .busca{display:flex;gap:9px;margin-top:16px}
-  .busca-campo{position:relative;flex:1 1 auto;min-width:0}
+  /* la barra de mandos es la cabecera del panel: se separa del contenido con
+     una línea, y así el buscador y los filtros se leen como una sola fila */
+  .panel-barra{display:flex;align-items:center;justify-content:space-between;gap:14px;
+    flex-wrap:wrap;padding-bottom:16px;border-bottom:1px solid var(--linea-suave)}
+  .busca{display:flex;align-items:center;gap:9px;margin-top:16px;flex-wrap:wrap}
+  .busca-campo{position:relative;flex:1 1 260px;min-width:0}
   .busca-campo input{padding-left:38px}
   .busca-lupa{position:absolute;left:13px;top:50%;transform:translateY(-50%);
     width:15px;height:15px;color:var(--tinta-3);pointer-events:none}
@@ -242,10 +238,15 @@ const ESTILOS = `
   .cod{font-weight:500;font-size:14px;letter-spacing:.06em}
   .fila-num{font-size:11.5px;color:var(--tinta-3);margin-top:1px}
   .negocio{font-weight:500}
+  /* La columna se encoge hasta el ancho del dato y el sobrante se lo queda el
+     negocio, que es lo que se lee: si no, quedaba un hueco muerto entre el
+     place id y los botones. 30ch entra el identificador entero. */
+  .col-destino{width:1%}
   .place{font-family:"Geist Mono",ui-monospace,monospace;font-size:11.5px;color:var(--tinta-2);
     background:var(--papel-2);border:1px solid var(--linea);border-radius:var(--r-s);
-    padding:3px 8px;display:inline-block;max-width:26ch;overflow:hidden;
+    padding:3px 8px;display:inline-block;max-width:30ch;overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+  .sin-dato{color:var(--tinta-3)}
   @media (max-width:820px){.col-destino{display:none}}
 
 
@@ -367,7 +368,7 @@ const ESTILOS = `
   .tipo-acrilico{background:var(--azul-piel);color:var(--azul-fuerte);border-color:var(--azul-borde)}
   .tipo-sticker{background:var(--ambar-piel);color:var(--ambar-tinta);border-color:var(--ambar-borde)}
 
-  .filtros{margin-top:12px}
+  .filtros{flex:0 0 auto}
   .mini{font-size:11.5px;font-weight:500;color:var(--tinta-2);margin:0 0 5px}
 
   /* ---- ventas: tarjeta de gráfica al estilo mono, con la paleta del panel ---- */
@@ -379,12 +380,8 @@ const ESTILOS = `
     color:var(--tinta-3);margin:0 0 5px}
   .metrica{font-size:23px;font-weight:700;letter-spacing:-.03em;line-height:1}
   .metrica .unidad{font-size:12px;font-weight:400;opacity:.65;margin-left:5px}
-  /* la misma retícula del fondo, aquí sí visible: las barras se leen contra
-     ella como sobre papel milimetrado */
   .pozo{background:var(--papel-2);border:1px solid var(--linea-suave);border-radius:14px;
-    padding:14px 12px 8px;
-    background-image:linear-gradient(rgba(22,32,46,.045) 1px,transparent 1px);
-    background-size:100% 22px}
+    padding:14px 12px 8px}
   .pozo svg{display:block;width:100%;height:auto}
   .grafica-pie{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
     margin-top:14px;padding-top:12px;border-top:1px solid var(--linea-suave);
@@ -1588,9 +1585,12 @@ function pintarTabla() {
       (n < 0 ? "" : "<div class='fila-num'>nº " + (n + 1) + "</div>") +
       "</td><td class='negocio'>" + (escHtml(t.negocio) || "—") +
       "<div class='tipo tipo-" + tipo + "'>" + TIPO_NOMBRE[tipo] + "</div>" +
-      "</td><td class='col-destino'><span class='place' title='" + escHtml(t.destino) + "'>" +
-      (place ? escHtml(place) : escHtml(t.destino)) +
-      "</span></td><td><div class='acciones acciones-tarjeta'>" +
+      "</td><td class='col-destino'>" +
+      (t.destino
+        ? "<span class='place' title='" + escHtml(t.destino) + "'>" +
+          escHtml(place || t.destino) + "</span>"
+        : "<span class='sin-dato'>—</span>") +
+      "</td><td><div class='acciones acciones-tarjeta'>" +
       "<button type='button' class='accion-nfc" + (NFC[c] ? " puesto" : "") +
       "' data-nfc='" + c + "' aria-pressed='" + (NFC[c] ? "true" : "false") +
       "'>NFC</button>" +
@@ -2771,12 +2771,11 @@ export function vistaAdmin(origen) {
                  aria-label="Buscar por código o por negocio" autocomplete="off">
         </div>
         <button type="button" class="fantasma" id="limpiarBusca" hidden>Limpiar</button>
-      </div>
-
-      <div class="segmento filtros" id="filtroTipo" role="group" aria-label="Filtrar por tipo">
-        <button type="button" class="activa" data-valor="">Todas</button>
-        <button type="button" data-valor="acrilico">Acrílico</button>
-        <button type="button" data-valor="sticker">Sticker</button>
+        <div class="segmento filtros" id="filtroTipo" role="group" aria-label="Filtrar por tipo">
+          <button type="button" class="activa" data-valor="">Todas</button>
+          <button type="button" data-valor="acrilico">Acrílico</button>
+          <button type="button" data-valor="sticker">Sticker</button>
+        </div>
       </div>
 
       <div id="tabla"></div>
