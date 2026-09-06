@@ -1367,7 +1367,6 @@ function cerrarTarjeta() {
   limpiarAviso("aviso");
 }
 
-$("abrirActivar").onclick = prepararNuevaTarjeta;
 
 function abrirOrden(negocio) {
   salirDeEdicion();
@@ -1512,9 +1511,9 @@ function pintarTabla() {
       "<div class='vacio'><div class='vacio-marca'>" +
       "<i class='m1'></i><i class='m2'></i><i class='m3'></i><i class='m4'></i>" +
       "</div><h2>Todavía no hay ninguna tarjeta</h2>" +
-      "<p>Activa la primera y te devuelvo su QR listo para imprimir. " +
-      "El código se propone solo: la primera es la AAAA.</p>" +
-      "<button type='button' data-activar>Activar la primera tarjeta</button></div>";
+      "<p>Crea tantos registros como plásticos vayas a imprimir. La numeración " +
+      "empieza en AAAA y sigue sola.</p>" +
+      "<button type='button' data-activar>Activar tarjetas</button></div>";
     $("contador").textContent = "";
     return;
   }
@@ -1627,7 +1626,7 @@ function pedirConfirmacion(boton, codigo) {
 }
 
 $("tabla").addEventListener("click", async (e) => {
-  if (e.target.closest("[data-activar]")) { prepararNuevaTarjeta(); return; }
+  if (e.target.closest("[data-activar]")) { abrirActivar(); return; }
   if (e.target.closest("[data-limpiar]")) {
     $("buscar").value = "";
     FILTRO_TIPO = "";
@@ -2408,6 +2407,115 @@ $("tablaGastos").addEventListener("click", async (e) => {
   }
 });
 
+/* ---------- alta de tarjetas en blanco ---------- */
+
+// Crear una tarjeta vacía es escribir exactamente el mismo registro que deja
+// "desactivar": sin destino y sin negocio. Así que reusa ese endpoint en vez de
+// añadir uno que haría lo mismo.
+const MAX_NUEVAS = 500;
+let focoActivar = null;
+
+function codigosNuevos(cuantas) {
+  const sig = siguienteCodigo();
+  if (!sig.codigo || !(cuantas > 0)) return [];
+  const inicio = indiceDeCodigo(sig.codigo);
+  const lista = [];
+  for (let i = 0; i < cuantas && inicio + i < TOPE; i++) {
+    lista.push(codigoDeIndice(inicio + i));
+  }
+  return lista;
+}
+
+function pintarResumenActivar() {
+  const cuantas = Math.min(MAX_NUEVAS, parseInt($("cuantasNuevas").value, 10) || 0);
+  const lista = codigosNuevos(cuantas);
+  const caja = $("activarResumen");
+  if (!lista.length) {
+    caja.textContent = "Escribe cuántas tarjetas vas a imprimir.";
+    return;
+  }
+  const sig = siguienteCodigo();
+  const tipos = {};
+  lista.forEach((c) => { tipos[tipoPorDefecto(c)] = (tipos[tipoPorDefecto(c)] || 0) + 1; });
+  const detalle = Object.keys(tipos)
+    .map((t) => nombreTipo(t, tipos[t]))
+    .join(" y ");
+  caja.textContent = plural(lista.length, "tarjeta", "tarjetas") + " · " + tramo(lista) +
+    " · de la nº " + sig.numero + " a la nº " + (sig.numero + lista.length - 1) +
+    "   ·   " + detalle;
+}
+
+function abrirActivar() {
+  $("cuantasNuevas").value = "";
+  pintarResumenActivar();
+  focoActivar = document.activeElement;
+  $("modalActivar").hidden = false;
+  document.body.style.overflow = "hidden";
+  $("cuantasNuevas").focus();
+}
+
+function cerrarActivar() {
+  if ($("modalActivar").hidden) return;
+  $("modalActivar").hidden = true;
+  document.body.style.overflow = "";
+  if (focoActivar && focoActivar.focus) focoActivar.focus();
+  focoActivar = null;
+}
+
+$("abrirActivar").onclick = abrirActivar;
+$("cerrarActivar").onclick = cerrarActivar;
+$("cancelarActivar").onclick = cerrarActivar;
+$("cuantasNuevas").addEventListener("input", pintarResumenActivar);
+$("modalActivar").addEventListener("click", (e) => {
+  if (e.target.hasAttribute("data-cerrar-activar")) cerrarActivar();
+});
+
+$("formActivar").onsubmit = async (e) => {
+  e.preventDefault();
+  const cuantas = Math.min(MAX_NUEVAS, parseInt($("cuantasNuevas").value, 10) || 0);
+  const lista = codigosNuevos(cuantas);
+  if (!lista.length) {
+    avisar("avisoPanel", "Escribe cuántas tarjetas vas a imprimir.", false);
+    return;
+  }
+
+  const grupos = { acrilico: [], sticker: [] };
+  lista.forEach((c) => grupos[tipoPorDefecto(c)].push(c));
+
+  const boton = $("guardarActivar");
+  const etiqueta = boton.textContent;
+  boton.disabled = true;
+  try {
+    let hechas = 0;
+    for (const tipo of ["acrilico", "sticker"]) {
+      const codigos = grupos[tipo];
+      for (let i = 0; i < codigos.length; i += TANDA) {
+        const tanda = codigos.slice(i, i + TANDA);
+        hechas += tanda.length;
+        boton.textContent = "Creando " + hechas + " de " + lista.length + "…";
+        await llamar("desactivar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ codigos: tanda, tipo: tipo }),
+        });
+      }
+    }
+    cerrarActivar();
+    lista.forEach((c) => TARJETAS.push({
+      codigo: c, negocio: "", destino: "", tipo: tipoPorDefecto(c), vendida: "", precio: 0,
+    }));
+    TARJETAS.sort((a, b) => a.codigo.localeCompare(b.codigo));
+    repintarTodo();
+    avisar("avisoPanel", plural(lista.length, "tarjeta creada", "tarjetas creadas") +
+      " · " + tramo(lista), true);
+  } catch (err) {
+    avisar("avisoPanel", err.message, false);
+  } finally {
+    boton.disabled = false;
+    boton.textContent = etiqueta;
+  }
+};
+
 /* ---------- QR de la tarjeta ---------- */
 
 // Solo estos caracteres caben en el modo alfanumérico del estándar QR, que es
@@ -2501,7 +2609,8 @@ $("modalQR").addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  if (!$("modalGasto").hidden) cerrarGasto();
+  if (!$("modalActivar").hidden) cerrarActivar();
+  else if (!$("modalGasto").hidden) cerrarGasto();
   else if (!$("modalVenta").hidden) cerrarVenta();
   else if (!$("modalTarjeta").hidden) cerrarTarjeta();
   else cerrarQR();
@@ -2549,7 +2658,7 @@ export function vistaAdmin(origen) {
         </span>
       </div>
       <nav class="cabecera-acciones" aria-label="Acciones de la sesión">
-        <button type="button" id="abrirActivar">Activar tarjeta</button>
+        <button type="button" id="abrirActivar">Activar tarjetas</button>
         <button type="button" class="fantasma" id="togglePruebas">Modo pruebas</button>
         <a class="boton fantasma" href="https://www.google.com/maps" target="_blank" rel="noopener">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
@@ -2776,6 +2885,27 @@ export function vistaAdmin(origen) {
         <button type="submit" id="guardar">Activar tarjeta</button>
       </div>
 
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="modalActivar" hidden>
+  <div class="modal-fondo" data-cerrar-activar></div>
+  <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="activarTitulo">
+    <button type="button" class="modal-cerrar" id="cerrarActivar" aria-label="Cerrar">✕</button>
+    <div class="modal-kicker">Tarjetas</div>
+    <h1 id="activarTitulo">Activar tarjetas</h1>
+    <p class="modal-subtitulo">Crea los registros vacíos que siguen en la numeración.</p>
+
+    <form id="formActivar">
+      <label class="mini" for="cuantasNuevas">Cuántas vas a imprimir</label>
+      <input id="cuantasNuevas" type="number" min="1" max="500" placeholder="50" autocomplete="off">
+      <div class="rango-resumen" id="activarResumen"></div>
+
+      <div class="modal-acciones">
+        <button type="button" class="fantasma" id="cancelarActivar">Cancelar</button>
+        <button type="submit" id="guardarActivar">Activar</button>
+      </div>
     </form>
   </div>
 </div>

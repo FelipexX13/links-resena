@@ -244,6 +244,19 @@ mandarlos juntos le cambiaría el tipo a la mitad de las tarjetas.
 El panel parte el rango en tandas de 25. No es capricho: el plan gratuito corta a
 **50 subpeticiones por petición** y cada escritura en KV cuenta como una.
 
+## Activar tarjetas
+
+**Activar tarjetas** pide solo un número: crea esos registros vacíos, seguidos, a
+partir del último código que exista. Es lo que se hace al mandar a imprimir un
+lote — los plásticos ya traen su código y aquí quedan reservados, sin negocio,
+listos para entrar en una orden.
+
+Crear una tarjeta vacía escribe exactamente el mismo registro que deja
+**Desactivar**, así que reutiliza ese endpoint en vez de añadir uno igual. El tipo
+sale del número: hasta la 100, acrílico; de la 101 en adelante, sticker.
+
+Tope de 500 por vez, en tandas de 25.
+
 ## Activar una tarjeta
 
 El panel lleva incorporado el generador de links de reseña, así que no hay que
