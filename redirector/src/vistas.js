@@ -136,19 +136,20 @@ const ESTILOS = `
   button[disabled]{opacity:.45;cursor:not-allowed}
   button[disabled]:active{transform:none}
 
-  /* Cuatro colores por fila, diez filas, y la tabla se vuelve un semáforo. El
-     color se reserva para lo que informa: NFC dice un estado, los otros tres son
-     acciones y solo se colorean al pasar por encima. Todos del mismo ancho, para
-     que las columnas de botones se lean como columnas. */
+  /* Tintados, no rellenos: con diez filas en pantalla hay cuarenta de estos, y
+     cuarenta pastillas saturadas convierten la tabla en un semáforo. Todos del
+     mismo ancho, para que las columnas de botones se lean como columnas. */
   .acciones{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;min-width:252px}
   .acciones button{width:100%;padding:7px 6px;font-size:12.5px;font-weight:500;
-    background:var(--papel-2);color:var(--tinta-2);border:1px solid var(--linea)}
-  .acciones button:hover{background:var(--papel);color:var(--tinta);border-color:var(--tinta-3)}
-  .accion-qr:hover{background:var(--verde-piel);color:var(--verde-fuerte);border-color:var(--verde-borde)}
-  .accion-editar:hover{background:var(--azul-piel);color:var(--azul-fuerte);border-color:var(--azul-borde)}
-  .accion-apagar:hover{background:var(--rojo-piel);color:var(--rojo-fuerte);border-color:var(--rojo-borde)}
-  .accion-apagar.confirmando,.accion-apagar.confirmando:hover{background:var(--rojo);color:#fff;
-    border-color:var(--rojo);box-shadow:0 0 0 3px var(--rojo-piel)}
+    border:1px solid transparent}
+  .accion-qr{background:var(--verde-piel);color:var(--verde-fuerte);border-color:var(--verde-borde)}
+  .accion-qr:hover{background:var(--verde);color:#fff;border-color:var(--verde)}
+  .accion-editar{background:var(--azul-piel);color:var(--azul-fuerte);border-color:var(--azul-borde)}
+  .accion-editar:hover{background:var(--azul);color:#fff;border-color:var(--azul)}
+  .accion-apagar{background:var(--rojo-piel);color:var(--rojo-fuerte);border-color:var(--rojo-borde)}
+  .accion-apagar:hover{background:var(--rojo);color:#fff;border-color:var(--rojo)}
+  .accion-apagar.confirmando{background:var(--rojo);color:#fff;border-color:var(--rojo);
+    box-shadow:0 0 0 3px var(--rojo-piel)}
 
   /* ---------- campos ---------- */
   label{display:block;font-weight:600;font-size:13px;margin:16px 0 6px;letter-spacing:-.005em}
@@ -334,10 +335,11 @@ const ESTILOS = `
   .piezas{font-family:"Geist Mono",ui-monospace,monospace;font-size:12px;color:var(--tinta-2)}
   .importe{font-family:"Geist Mono",ui-monospace,monospace;font-weight:500}
   .acciones-tarjeta{grid-template-columns:repeat(4,minmax(0,1fr));min-width:318px}
-  /* el único con color propio: no es una acción, es el estado del chip */
+  /* apagado va neutro a propósito: el ámbar es la señal de que ya está grabado */
+  .accion-nfc{background:var(--papel-2);color:var(--tinta-3);border-color:var(--linea)}
   .accion-nfc:hover{background:var(--ambar-piel);color:var(--ambar-tinta);border-color:var(--ambar-borde)}
-  .accion-nfc.puesto,.accion-nfc.puesto:hover{background:var(--ambar);color:#4a3400;
-    border-color:var(--ambar)}
+  .accion-nfc.puesto{background:var(--ambar);color:#4a3400;border-color:var(--ambar)}
+  .accion-nfc.puesto:hover{background:#e09b00;color:#3a2900;border-color:#e09b00}
   .acciones-orden{grid-template-columns:repeat(3,minmax(0,1fr));min-width:240px}
   .rango-fila{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
   #rangoOrden{margin-top:14px}
