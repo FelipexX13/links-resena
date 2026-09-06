@@ -338,8 +338,9 @@ const ESTILOS = `
   /* apagado va neutro a propósito: el ámbar es la señal de que ya está grabado */
   .accion-nfc{background:var(--papel-2);color:var(--tinta-3);border-color:var(--linea)}
   .accion-nfc:hover{background:var(--ambar-piel);color:var(--ambar-tinta);border-color:var(--ambar-borde)}
-  .accion-nfc.puesto{background:var(--ambar);color:#4a3400;border-color:var(--ambar)}
-  .accion-nfc.puesto:hover{background:#e09b00;color:#3a2900;border-color:#e09b00}
+  .accion-nfc.puesto{background:var(--ambar-piel);color:var(--ambar-tinta);
+    border-color:var(--ambar-borde)}
+  .accion-nfc.puesto:hover{background:var(--ambar);color:#4a3400;border-color:var(--ambar)}
   .acciones-orden{grid-template-columns:repeat(3,minmax(0,1fr));min-width:240px}
   .rango-fila{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
   #rangoOrden{margin-top:14px}
