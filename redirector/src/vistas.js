@@ -55,7 +55,7 @@ const ESTILOS = `
     /* neutros, todos con el mismo tinte frío */
     --tinta:#16202e; --tinta-2:#5b6779; --tinta-3:#667287;
     --linea:#e2e7f0; --linea-suave:#eef1f7;
-    --papel:#fff; --papel-2:#f8fafd; --fondo:#f2f5fa;
+    --papel:#fff; --papel-2:#f8fafd; --fondo:#f4f7fb;
 
     /* sombras tintadas con el azul del fondo, nunca negro puro */
     --sombra-1:0 1px 2px rgba(22,32,46,.05),0 4px 14px -8px rgba(22,32,46,.14);
@@ -65,9 +65,6 @@ const ESTILOS = `
     /* radios: contenedor suave, interior apretado */
     --r-xl:24px; --r-l:16px; --r-m:11px; --r-s:8px;
 
-    /* la barra de mando: azul de tinta, no negro */
-    --barra-alta:#31456a; --barra-baja:#243350;
-    --barra-tinta:#eef3fa; --barra-tinta-2:#b3c5e0;
     /* filo de luz en el canto de arriba de cada superficie */
     --filo:inset 0 1px 0 rgba(255,255,255,.9);
 
@@ -87,13 +84,11 @@ const ESTILOS = `
   body{margin:0;padding:0;color:var(--tinta);
     background-color:var(--fondo);
     background-image:
-      radial-gradient(58% 50% at 50% 48%,rgba(255,255,255,.62),transparent 76%),
-      /* horizonte: sostiene la barra por debajo */
-      radial-gradient(122% 46% at 50% -14%,rgba(66,133,244,.22),transparent 72%),
-      radial-gradient(66% 56% at 6% -8%,rgba(66,133,244,.30),transparent 66%),
-      radial-gradient(56% 50% at 96% -2%,rgba(234,67,53,.26),transparent 66%),
-      radial-gradient(58% 50% at 92% 102%,rgba(52,168,83,.28),transparent 66%),
-      radial-gradient(58% 50% at 2% 100%,rgba(251,188,5,.30),transparent 66%);
+      radial-gradient(72% 62% at 50% 46%,rgba(255,255,255,.86),transparent 78%),
+      radial-gradient(64% 54% at 4% -6%,rgba(66,133,244,.20),transparent 66%),
+      radial-gradient(56% 50% at 98% 0%,rgba(234,67,53,.15),transparent 66%),
+      radial-gradient(58% 50% at 94% 102%,rgba(52,168,83,.16),transparent 66%),
+      radial-gradient(58% 50% at 0% 100%,rgba(251,188,5,.18),transparent 66%);
     background-repeat:no-repeat;
     background-attachment:fixed;
     font-family:"Geist","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -128,15 +123,13 @@ const ESTILOS = `
 
   /* ---------- cabecera de la aplicación ---------- */
   .envoltorio{max-width:var(--ancho);margin:0 auto;padding:0 22px}
-  /* Oscura a propósito: sobre un fondo claro y con color, una barra blanca se
-     disolvía. Esta ancla la página por arriba y deja que lo único claro sea el
-     contenido, que es lo que se lee. Translúcida porque es fija: el panel pasa
-     desenfocado por debajo y se nota que hay página detrás. */
-  .cabecera{position:sticky;top:0;z-index:10;color:var(--barra-tinta);
-    background:linear-gradient(180deg,var(--barra-alta),var(--barra-baja));
-    -webkit-backdrop-filter:blur(18px) saturate(1.5);
-    backdrop-filter:blur(18px) saturate(1.5);
-    box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 20px 44px -34px rgba(20,32,54,.9)}
+  /* Casi blanca y translúcida: es fija, así que el panel pasa desenfocado por
+     debajo. Lo que la separa del fondo no es el color, es la sombra y la franja
+     de la marca que la cierra por abajo. */
+  .cabecera{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.94);
+    -webkit-backdrop-filter:blur(16px) saturate(1.4);
+    backdrop-filter:blur(16px) saturate(1.4);
+    box-shadow:0 1px 0 var(--linea),0 8px 24px -18px rgba(22,32,46,.5)}
   /* la franja de la marca cierra la barra por abajo */
   .cabecera::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;
     background:linear-gradient(90deg,var(--logo-azul) 0 25%,var(--logo-rojo) 25% 50%,
@@ -147,19 +140,7 @@ const ESTILOS = `
   .marca-texto{display:flex;flex-direction:column;line-height:1.25;min-width:0}
   .marca-texto strong{font-size:15px;font-weight:600;letter-spacing:-.015em}
   .marca-host{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;color:var(--tinta-3)}
-  .cabecera .marca-texto strong{color:#fff}
-  .cabecera .marca-host{color:var(--barra-tinta-2)}
-  .cabecera :focus-visible{outline-color:#fff}
   .cabecera-acciones{display:flex;gap:9px;flex-wrap:wrap}
-  /* los fantasmas se dibujan con luz, no con línea gris */
-  .cabecera .fantasma{background:rgba(255,255,255,.08);color:#dde6f4;
-    border-color:rgba(255,255,255,.2)}
-  .cabecera .fantasma:hover{background:rgba(255,255,255,.17);color:#fff;
-    border-color:rgba(255,255,255,.36)}
-  /* la acción principal es la única pieza clara de la barra: se ve primero */
-  .cabecera button:not(.fantasma):not(.alerta){background:#fff;color:var(--tinta)}
-  .cabecera button:not(.fantasma):not(.alerta):hover{background:var(--azul-piel);
-    color:var(--azul-fuerte)}
 
   .contenido{padding-top:34px;padding-bottom:80px}
   section+section{margin-top:20px}
