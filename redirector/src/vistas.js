@@ -217,7 +217,7 @@ const ESTILOS = `
   /* mismo tono que .cejilla: rótulos de instrumento, no frases */
   th{text-align:left;font-family:"Geist Mono",ui-monospace,monospace;font-size:10.5px;
     font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:var(--tinta-3);
-    border-bottom:1px solid var(--linea);padding:0 10px 9px}
+    border-bottom:1px solid var(--linea);padding:0 10px 9px;white-space:nowrap}
   td{padding:11px 10px;border-bottom:1px solid var(--linea-suave);vertical-align:middle}
   tbody tr{transition:background var(--paso)}
   tbody tr:hover{background:var(--papel-2)}
@@ -225,10 +225,17 @@ const ESTILOS = `
   .cod{font-weight:500;font-size:14px;letter-spacing:.06em}
   .fila-num{font-size:11.5px;color:var(--tinta-3);margin-top:1px}
   .negocio{font-weight:500}
-  /* La columna se encoge hasta el ancho del dato y el sobrante se lo queda el
-     negocio, que es lo que se lee: si no, quedaba un hueco muerto entre el
-     place id y los botones. 30ch entra el identificador entero. */
-  .col-destino{width:1%}
+  /* Los anchos se recalculaban con el contenido de cada página: una página sin
+     place ids encogía esa columna y partía su rótulo en dos renglones. Con el
+     código y el place id a medida fija, el negocio se queda con el sobrante y
+     las columnas no se mueven al pasar de página. 30ch entra el id entero. */
+  /* fixed y no auto: en auto el width es una sugerencia y el navegador la
+     recalcula con lo que haya en la página */
+  #tabla table{table-layout:fixed}
+  #tabla th:first-child,#tabla td:first-child{width:96px}
+  /* 318 del grid de botones + los 20 de padding de la celda */
+  #tabla th:last-child,#tabla td:last-child{width:338px}
+  .col-destino{width:240px}
   .place{font-family:"Geist Mono",ui-monospace,monospace;font-size:11.5px;color:var(--tinta-2);
     background:var(--papel-2);border:1px solid var(--linea);border-radius:var(--r-s);
     padding:3px 8px;display:inline-block;max-width:30ch;overflow:hidden;
