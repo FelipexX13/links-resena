@@ -164,20 +164,26 @@ const ESTILOS = `
   button[disabled]{opacity:.45;cursor:not-allowed}
   button[disabled]:active{transform:none}
 
-  /* Tintados, no rellenos: con diez filas en pantalla hay cuarenta de estos, y
-     cuarenta pastillas saturadas convierten la tabla en un semáforo. Todos del
-     mismo ancho, para que las columnas de botones se lean como columnas. */
+  /* Tres niveles, y cada uno significa algo. En reposo el botón es blanco con
+     un filo gris y la letra de su color: se distingue cuál es cuál sin que diez
+     filas se conviertan en cuarenta manchas. Al pasar por encima se rellena del
+     tinte. Y el relleno sólido queda reservado para confirmar el apagado, que
+     es el único momento en que el rojo tiene que alarmar de verdad.
+
+     Los selectores van con .acciones delante a propósito: .acciones button pesa
+     (0,1,1) y se comía los border-color de una sola clase. */
   .acciones{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;min-width:252px}
   .acciones button{width:100%;padding:7px 6px;font-size:12.5px;font-weight:500;
-    border:1px solid transparent}
-  .accion-qr{background:var(--verde-piel);color:var(--verde-fuerte);border-color:var(--verde-borde)}
-  .accion-qr:hover{background:var(--verde);color:#fff;border-color:var(--verde)}
-  .accion-editar{background:var(--azul-piel);color:var(--azul-fuerte);border-color:var(--azul-borde)}
-  .accion-editar:hover{background:var(--azul);color:#fff;border-color:var(--azul)}
-  .accion-apagar{background:var(--rojo-piel);color:var(--rojo-fuerte);border-color:var(--rojo-borde)}
-  .accion-apagar:hover{background:var(--rojo);color:#fff;border-color:var(--rojo)}
-  .accion-apagar.confirmando{background:var(--rojo);color:#fff;border-color:var(--rojo);
-    box-shadow:0 0 0 3px var(--rojo-piel)}
+    background:var(--papel);color:var(--tinta-2);border:1px solid var(--linea)}
+  .acciones .accion-qr{color:var(--verde-fuerte)}
+  .acciones .accion-qr:hover{background:var(--verde-piel);border-color:var(--verde-borde)}
+  .acciones .accion-editar{color:var(--azul-fuerte)}
+  .acciones .accion-editar:hover{background:var(--azul-piel);border-color:var(--azul-borde)}
+  .acciones .accion-apagar{color:var(--rojo-fuerte)}
+  .acciones .accion-apagar:hover{background:var(--rojo-piel);border-color:var(--rojo-borde)}
+  .acciones .accion-apagar.confirmando,
+  .acciones .accion-apagar.confirmando:hover{background:var(--rojo);color:#fff;
+    border-color:var(--rojo);box-shadow:0 0 0 3px var(--rojo-piel)}
 
   /* ---------- campos ---------- */
   label{display:block;font-weight:600;font-size:13px;margin:16px 0 6px;letter-spacing:-.005em}
@@ -376,12 +382,16 @@ const ESTILOS = `
   .piezas{font-family:"Geist Mono",ui-monospace,monospace;font-size:12px;color:var(--tinta-2)}
   .importe{font-family:"Geist Mono",ui-monospace,monospace;font-weight:500}
   .acciones-tarjeta{grid-template-columns:repeat(4,minmax(0,1fr));min-width:318px}
-  /* apagado va neutro a propósito: el ámbar es la señal de que ya está grabado */
-  .accion-nfc{background:var(--papel-2);color:var(--tinta-3);border-color:var(--linea)}
-  .accion-nfc:hover{background:var(--ambar-piel);color:var(--ambar-tinta);border-color:var(--ambar-borde)}
-  .accion-nfc.puesto{background:var(--ambar-piel);color:var(--ambar-tinta);
+  /* El único que nace relleno, porque no es una acción: dice si el chip ya está
+     grabado. Ahora que los otros tres van en blanco, el ámbar se ve de un
+     vistazo y la columna se lee como lo que es, un inventario de lo hecho. */
+  .acciones .accion-nfc{color:var(--tinta-3)}
+  .acciones .accion-nfc:hover{background:var(--ambar-piel);color:var(--ambar-tinta);
     border-color:var(--ambar-borde)}
-  .accion-nfc.puesto:hover{background:var(--ambar);color:#4a3400;border-color:var(--ambar)}
+  .acciones .accion-nfc.puesto{background:var(--ambar-piel);color:var(--ambar-tinta);
+    border-color:var(--ambar-borde)}
+  .acciones .accion-nfc.puesto:hover{background:var(--ambar);color:#4a3400;
+    border-color:var(--ambar)}
   .acciones-orden{grid-template-columns:repeat(3,minmax(0,1fr));min-width:240px}
   .rango-fila{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
   #rangoOrden{margin-top:14px}
