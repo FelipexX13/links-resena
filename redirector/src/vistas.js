@@ -517,11 +517,18 @@ const ESTILOS = `
     tr:hover{background:transparent}
     td{border:0;padding:0}
     td:last-child{width:auto;white-space:normal;padding-top:11px}
+    /* Las medidas fijas de la tabla llevan #tabla delante y una media query no
+       suma especificidad: sin repetir el selector, la celda de los botones se
+       quedaba en 338px y "Desactivar" se salía de la pantalla. */
+    #tabla th:first-child,#tabla td:first-child,
+    #tabla th:last-child,#tabla td:last-child{width:auto}
     .negocio{font-size:15px;margin-top:2px}
     .acciones{grid-template-columns:repeat(3,minmax(0,1fr));min-width:0}
     /* son cuatro: con tres columnas caían 3+1 */
     .acciones-tarjeta{grid-template-columns:repeat(4,minmax(0,1fr));min-width:0}
     .acciones button{padding:9px 6px}
+    /* en 390px cada uno se queda con 78: "Desactivar" no entra a 12.5 */
+    .acciones-tarjeta button{padding:9px 3px;font-size:11.5px}
 
     /* 132px de cabecera fija en una pantalla de 844 es peaje permanente */
     .cabecera{position:static}
