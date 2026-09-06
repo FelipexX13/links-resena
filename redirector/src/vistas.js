@@ -78,10 +78,13 @@ const ESTILOS = `
   body{margin:0;padding:0;color:var(--tinta);
     background-color:var(--fondo);
     background-image:
-      radial-gradient(62% 52% at 10% -4%,rgba(66,133,244,.20),transparent 68%),
-      radial-gradient(52% 46% at 92% 2%,rgba(234,67,53,.16),transparent 68%),
-      radial-gradient(50% 44% at 84% 98%,rgba(52,168,83,.17),transparent 68%),
-      radial-gradient(50% 44% at 4% 96%,rgba(251,188,5,.18),transparent 68%);
+      /* el velo blanco va primero, así pinta encima y deja el centro tranquilo:
+         el color vive en los bordes, donde no hay nada que leer */
+      radial-gradient(58% 50% at 50% 48%,rgba(255,255,255,.62),transparent 76%),
+      radial-gradient(66% 56% at 6% -8%,rgba(66,133,244,.30),transparent 66%),
+      radial-gradient(56% 50% at 96% -2%,rgba(234,67,53,.26),transparent 66%),
+      radial-gradient(58% 50% at 92% 102%,rgba(52,168,83,.28),transparent 66%),
+      radial-gradient(58% 50% at 2% 100%,rgba(251,188,5,.30),transparent 66%);
     background-repeat:no-repeat;
     background-attachment:fixed;
     font-family:"Geist","Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -114,9 +117,14 @@ const ESTILOS = `
 
   /* ---------- cabecera de la aplicación ---------- */
   .envoltorio{max-width:var(--ancho);margin:0 auto;padding:0 22px}
-  .cabecera{position:sticky;top:0;z-index:10;background:rgba(242,245,250,.82);
-    -webkit-backdrop-filter:blur(14px) saturate(1.6);
-    backdrop-filter:blur(14px) saturate(1.6);border-bottom:1px solid var(--linea)}
+  .cabecera{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.94);
+    -webkit-backdrop-filter:blur(16px) saturate(1.4);
+    backdrop-filter:blur(16px) saturate(1.4);
+    box-shadow:0 1px 0 var(--linea),0 8px 24px -18px rgba(22,32,46,.5)}
+  /* la franja de la marca cierra la barra por abajo */
+  .cabecera::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;
+    background:linear-gradient(90deg,var(--logo-azul) 0 25%,var(--logo-rojo) 25% 50%,
+      var(--logo-amarillo) 50% 75%,var(--logo-verde) 75% 100%)}
   .cabecera-fila{display:flex;align-items:center;justify-content:space-between;gap:18px;
     flex-wrap:wrap;padding:20px 0}
   .marca{display:flex;align-items:center;gap:11px;min-width:0}
