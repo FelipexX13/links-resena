@@ -48,6 +48,9 @@ const ESTILOS = `
     --rojo:#d93025; --rojo-fuerte:#b3261e; --rojo-piel:#fce8e6; --rojo-borde:#f5c6c2;
     --ambar:#f9ab00; --ambar-tinta:#8a6100; --ambar-piel:#fef7e0; --ambar-borde:#fae3a8;
     --verde:#1e8e3e; --verde-fuerte:#166b2e; --verde-piel:#e6f4ea; --verde-borde:#bfe2ca;
+    /* los avisos van en relleno sólido con letra blanca: estos dos son los
+       tonos más claros que todavía pasan AA contra el blanco */
+    --verde-aviso:#1a7f3c; --rojo-aviso:#c0392f;
 
     /* neutros, todos con el mismo tinte frío */
     --tinta:#16202e; --tinta-2:#5b6779; --tinta-3:#667287;
@@ -63,7 +66,7 @@ const ESTILOS = `
     --r-xl:24px; --r-l:16px; --r-m:11px; --r-s:8px;
 
     --ancho:1120px;
-    --z-grano:5; --z-modal:100;
+    --z-grano:5; --z-modal:100; --z-tostada:200;
     --paso:.16s cubic-bezier(.2,.7,.3,1);
   }
 
@@ -271,21 +274,27 @@ const ESTILOS = `
   .contador{font-size:12px;color:var(--tinta-3);margin-top:11px}
 
   /* ---------- avisos ---------- */
-  /* Se ceñía al ancho del panel: una caja de mil píxeles para tres palabras.
-     Ahora se ajusta al texto y lleva su icono, para que se lea como respuesta a
-     algo y no como un bloque suelto de la página. */
-  .aviso{display:none;align-items:flex-start;gap:9px;margin-top:14px;
-    padding:9px 15px 9px 12px;border-radius:999px;font-size:13px;line-height:1.45;
-    font-weight:500;border:1px solid transparent;max-width:100%;
-    animation:aviso-entra .18s cubic-bezier(.2,.7,.3,1)}
-  .aviso.ok,.aviso.mal{display:inline-flex}
-  .aviso::before{content:"";width:16px;height:16px;flex:0 0 auto;margin-top:1px;
+  /* Flotan arriba a la derecha: un aviso metido en el flujo empujaba el panel
+     entero hacia abajo cada vez que aparecía. */
+  .tostadas{position:fixed;top:16px;right:16px;z-index:var(--z-tostada);display:flex;
+    flex-direction:column;align-items:flex-end;gap:9px;pointer-events:none;
+    max-width:min(420px,calc(100vw - 32px))}
+  .tostada{display:flex;align-items:flex-start;gap:9px;pointer-events:auto;
+    padding:11px 11px 11px 14px;border-radius:var(--r-m);font-size:13px;line-height:1.45;
+    font-weight:500;color:#fff;box-shadow:var(--sombra-2);
+    animation:tostada-entra .2s cubic-bezier(.2,.7,.3,1)}
+  .tostada.ok{background:var(--verde-aviso)}
+  .tostada.mal{background:var(--rojo-aviso)}
+  .tostada::before{content:"";width:16px;height:16px;flex:0 0 auto;margin-top:1px;
     background-repeat:no-repeat;background-position:center;background-size:16px 16px}
-  .aviso.ok{background:var(--verde-fuerte);color:#fff;border-color:var(--verde-fuerte)}
-  .aviso.ok::before{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E")}
-  .aviso.mal{background:var(--rojo-fuerte);color:#fff;border-color:var(--rojo-fuerte)}
-  .aviso.mal::before{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7.5v5.5M12 16.4v.01'/%3E%3C/svg%3E")}
-  @keyframes aviso-entra{from{opacity:0;transform:translateY(-4px)}}
+  .tostada.ok::before{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E")}
+  .tostada.mal::before{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7.5v5.5M12 16.4v.01'/%3E%3C/svg%3E")}
+  .tostada-x{flex:0 0 auto;width:20px;height:20px;padding:0;margin-top:-1px;border-radius:50%;
+    background:rgba(255,255,255,.16);color:#fff;font-size:11px;line-height:1}
+  .tostada-x:hover{background:rgba(255,255,255,.3)}
+  .tostada.sale{animation:tostada-sale .18s ease-in forwards}
+  @keyframes tostada-entra{from{opacity:0;transform:translateX(14px)}}
+  @keyframes tostada-sale{to{opacity:0;transform:translateX(14px)}}
 
   .ayuda{font-size:12px;line-height:1.5;color:var(--tinta-2);margin:9px 0 0;max-width:62ch}
   .ayuda-alta{margin:0 0 8px}
@@ -319,8 +328,6 @@ const ESTILOS = `
   .modal-kicker{display:inline-block;font-size:11.5px;font-weight:600;color:var(--azul-fuerte);
     background:var(--azul-piel);border-radius:999px;padding:4px 12px;margin-bottom:12px}
   .modal-acciones{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:24px}
-  .modal-caja .aviso{border-radius:var(--r-m);display:none}
-  .modal-caja .aviso.ok,.modal-caja .aviso.mal{display:flex}
   /* radial y no lineal: un degradado recto de lado a lado se lee como plantilla */
   .modal-tarjeta::after{content:"";position:absolute;top:0;left:0;right:0;height:190px;
     pointer-events:none;z-index:0;
@@ -596,18 +603,41 @@ function escHtml(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-let RELOJ_AVISO = null;
+// Un aviso por cada sitio empujaba el panel al aparecer. Ahora hay una sola pila
+// flotante y el primer argumento se ignora: se conserva por las llamadas de
+// siempre, que dicen dónde habría salido antes.
+const VIDA_TOSTADA = { ok: 6000, mal: 9000 };
 
-function avisar(caja, texto, ok) {
-  const a = $(caja);
-  a.textContent = texto;
-  a.className = "aviso " + (ok ? "ok" : "mal");
-  clearTimeout(RELOJ_AVISO);
-  // lo que salió bien se va solo; un error se queda hasta que se arregle
-  if (ok) RELOJ_AVISO = setTimeout(() => limpiarAviso(caja), 6000);
+function quitarTostada(t) {
+  if (!t || !t.isConnected || t.classList.contains("sale")) return;
+  t.classList.add("sale");
+  setTimeout(() => t.remove(), 200);
 }
 
-function limpiarAviso(caja) { $(caja).className = "aviso"; }
+function avisar(caja, texto, ok) {
+  const t = document.createElement("div");
+  t.className = "tostada " + (ok ? "ok" : "mal");
+
+  const cuerpo = document.createElement("span");
+  cuerpo.textContent = texto;
+
+  const cerrar = document.createElement("button");
+  cerrar.type = "button";
+  cerrar.className = "tostada-x";
+  cerrar.setAttribute("aria-label", "Cerrar el aviso");
+  cerrar.textContent = "✕";
+  cerrar.onclick = () => quitarTostada(t);
+
+  t.appendChild(cuerpo);
+  t.appendChild(cerrar);
+  $("tostadas").appendChild(t);
+  // el error dura más: hay que alcanzar a leerlo
+  setTimeout(() => quitarTostada(t), ok ? VIDA_TOSTADA.ok : VIDA_TOSTADA.mal);
+}
+
+function limpiarAviso() {
+  [].slice.call($("tostadas").children).forEach(quitarTostada);
+}
 
 /* ---------- sesión ---------- */
 // la cookie es HttpOnly: este script nunca la ve, solo la manda el navegador
@@ -2440,6 +2470,7 @@ export function vistaAdmin(origen) {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 
 <div class="grano"></div>
+<div class="tostadas" id="tostadas" role="status" aria-live="polite"></div>
 
 <div id="pantallaLogin" hidden>
   <main class="entrada">
@@ -2452,7 +2483,6 @@ export function vistaAdmin(origen) {
         <input id="clave" type="password" autocomplete="current-password" autofocus>
         <div class="modal-acciones"><button type="submit">Entrar</button></div>
       </form>
-      <div class="aviso" id="avisoLogin" role="alert"></div>
     </div>
   </main>
 </div>
@@ -2517,7 +2547,6 @@ export function vistaAdmin(origen) {
           <button type="button" class="fantasma" id="recargar">Refrescar</button>
         </div>
       </div>
-      <div class="aviso" id="avisoPanel" role="status"></div>
 
       <div id="vistaTarjetas">
       <div class="busca">
@@ -2698,7 +2727,6 @@ export function vistaAdmin(origen) {
         <button type="submit" id="guardar">Activar tarjeta</button>
       </div>
 
-      <div class="aviso" id="aviso" role="alert"></div>
     </form>
   </div>
 </div>
@@ -2773,7 +2801,6 @@ export function vistaAdmin(origen) {
         <button type="button" class="fantasma" id="cancelarGasto">Cancelar</button>
         <button type="submit" id="guardarGasto">Anotar el gasto</button>
       </div>
-      <div class="aviso" id="avisoGasto" role="alert"></div>
     </form>
   </div>
 </div>
@@ -2802,7 +2829,6 @@ export function vistaAdmin(origen) {
         <button type="button" class="fantasma" id="cancelarVenta">Cancelar</button>
         <button type="submit" id="guardarVenta">Aceptar la orden</button>
       </div>
-      <div class="aviso" id="avisoVenta" role="alert"></div>
     </form>
   </div>
 </div>
@@ -2822,7 +2848,6 @@ export function vistaAdmin(origen) {
       <span class="qr-url" id="nfcUrl"></span>
       <div><button class="fantasma" id="copiarNfc">Copiar el link</button></div>
     </div>
-    <div class="aviso" id="avisoQR" role="alert"></div>
   </div>
 </div>
 
