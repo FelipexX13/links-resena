@@ -1155,12 +1155,22 @@ $("formTarjeta").onsubmit = async (e) => {
       }
 
       cerrarTarjeta();
+      for (const tipo of ["acrilico", "sticker"]) {
+        if (plan.tomar[tipo].length) {
+          parchearTarjetas(plan.tomar[tipo], {
+            negocio: $("negocio").value.trim(), destino: destino, tipo: tipo,
+            vendida: "", precio: 0,
+          });
+        }
+        if (plan.soltar[tipo].length) {
+          parchearTarjetas(plan.soltar[tipo], { negocio: "", destino: "", vendida: "", precio: 0 });
+        }
+      }
       const cola = [];
       if (aTomar) cola.push(plural(aTomar, "tarjeta ocupada", "tarjetas ocupadas"));
       if (aSoltar) cola.push(plural(aSoltar, "tarjeta liberada", "tarjetas liberadas"));
-      avisar("avisoPanel", (plan.base ? "Orden de " : "Orden de ") + $("negocio").value +
+      avisar("avisoPanel", "Orden de " + $("negocio").value +
         (plan.base ? " actualizada · " : " creada · ") + cola.join(" y "), true);
-      await listar();
       return;
     }
 
@@ -1192,9 +1202,11 @@ $("formTarjeta").onsubmit = async (e) => {
         }
       }
       cerrarTarjeta();
+      for (const [tipo, codigos] of grupos) {
+        parchearTarjetas(codigos, { negocio: $("negocio").value.trim(), destino: destino, tipo: tipo });
+      }
       avisar("avisoPanel", plural(total, "tarjeta apuntando", "tarjetas apuntando") +
         " a " + $("negocio").value, true);
-      await listar();
       return;
     }
 
@@ -1213,8 +1225,11 @@ $("formTarjeta").onsubmit = async (e) => {
     });
     const editaba = Boolean(EDITANDO_CODIGO);
     cerrarTarjeta();
+    parchearTarjetas([datos.codigo], {
+      negocio: datos.negocio, destino: datos.destino, tipo: datos.tipo,
+      vendida: datos.vendida, precio: datos.precio,
+    });
     avisar("avisoPanel", "Tarjeta " + datos.codigo + (editaba ? " actualizada" : " activada"), true);
-    await listar();
     abrirQR(datos.codigo);
   } catch (e) {
     avisar("aviso", e.message, false);
@@ -1645,9 +1660,9 @@ $("tabla").addEventListener("click", async (e) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ codigos: [codigo], tipo: t ? tipoDe(t) : "" }),
     });
+    parchearTarjetas([codigo], { negocio: "", destino: "", vendida: "", precio: 0 });
     avisar("avisoPanel", "Tarjeta " + codigo + " desactivada. Queda libre para reasignar.", true);
     cerrarQR();
-    await listar();
   } catch (err) {
     avisar("avisoPanel", err.message, false);
     pintarTabla();
@@ -1824,6 +1839,36 @@ $("togglePruebas").onclick = () => cambiarPruebas(!PRUEBAS);
 $("apagarPruebas").onclick = () => cambiarPruebas(false);
 
 /* ---------- cuentas: gastos, reparto e inventario ---------- */
+
+// KV es de consistencia eventual: lo que se acaba de escribir puede tardar hasta
+// un minuto en aparecer por list(). Volver a pedir la lista justo después no solo
+// no ayuda, sino que pisa el dato bueno con el viejo y parece que no se guardó.
+// Por eso lo recién guardado se aplica en local, que además es instantáneo.
+function repintarTodo() {
+  pintarResumen();
+  pintarTabla();
+  pintarVentas();
+  pintarCuentas();
+}
+
+function parchearTarjetas(codigos, cambios) {
+  const juego = {};
+  codigos.forEach((c) => { juego[c] = 1; });
+  TARJETAS = TARJETAS.map((t) => (juego[t.codigo] ? Object.assign({}, t, cambios) : t));
+  repintarTodo();
+}
+
+function parchearGasto(id, gasto) {
+  if (!gasto) {
+    GASTOS = GASTOS.filter((g) => g.id !== id);
+  } else {
+    const entero = Object.assign({ id: id }, gasto);
+    const i = GASTOS.map((g) => g.id).indexOf(id);
+    if (i >= 0) GASTOS[i] = entero; else GASTOS.push(entero);
+    GASTOS.sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+  }
+  pintarCuentas();
+}
 
 async function cargarGastos() {
   try {
@@ -2053,9 +2098,10 @@ $("tablaLocales").addEventListener("click", async (e) => {
         });
       }
     }
+    parchearTarjetas(l.codigos.acrilico.concat(l.codigos.sticker),
+      { negocio: "", destino: "", vendida: "", precio: 0 });
     avisar("avisoPanel", "Orden de " + negocio + " cancelada · " +
       plural(total, "tarjeta libre", "tarjetas libres") + " otra vez", true);
-    await listar();
   } catch (err) {
     avisar("avisoPanel", err.message, false);
     pintarVentas();
@@ -2153,9 +2199,12 @@ $("formVenta").onsubmit = async (e) => {
     }
     const importe = precios.acrilico * l.acrilico + precios.sticker * l.sticker;
     cerrarVenta();
+    for (const tipo of ["acrilico", "sticker"]) {
+      if (l.codigos[tipo].length) {
+        parchearTarjetas(l.codigos[tipo], { vendida: fecha, precio: precios[tipo] });
+      }
+    }
     avisar("avisoPanel", "Orden de " + l.negocio + " aceptada · " + dinero(importe), true);
-    await listar();
-    pintarVentas();
   } catch (err) {
     avisar("avisoVenta", err.message, false);
   } finally {
@@ -2304,7 +2353,7 @@ $("formGasto").onsubmit = async (e) => {
   boton.disabled = true;
   boton.textContent = "Guardando…";
   try {
-    await llamar("gasto", {
+    const guardado = await llamar("gasto", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2322,8 +2371,8 @@ $("formGasto").onsubmit = async (e) => {
     });
     const editaba = Boolean(GASTO_EDITADO);
     cerrarGasto();
+    parchearGasto(guardado.id, guardado);
     avisar("avisoPanel", editaba ? "Gasto actualizado" : "Gasto anotado", true);
-    await cargarGastos();
   } catch (err) {
     avisar("avisoGasto", err.message, false);
   } finally {
@@ -2351,8 +2400,8 @@ $("tablaGastos").addEventListener("click", async (e) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: id }),
     });
+    parchearGasto(id, null);
     avisar("avisoPanel", "Gasto borrado", true);
-    await cargarGastos();
   } catch (err) {
     avisar("avisoPanel", err.message, false);
     pintarCuentas();

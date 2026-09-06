@@ -119,6 +119,18 @@ mintiendo. Sumando lo que trajo cada compra eso no puede pasar. Cada gasto
 admite hasta ocho cosas, y el gasto entero cabe en la metadata de KV, así que el
 listado es una sola llamada.
 
+## Por qué el panel no vuelve a preguntar tras guardar
+
+KV es de **consistencia eventual**: lo que se acaba de escribir puede tardar
+hasta un minuto en salir por `list()`. Volver a pedir la lista justo después de
+guardar no solo no ayuda — devuelve el dato viejo y **pisa** el bueno, así que
+parece que el cambio no se guardó aunque sí esté escrito.
+
+Por eso, tras cada escritura el panel aplica el cambio sobre la lista que ya
+tiene en memoria, con lo que acaba de mandar. Sale instantáneo y no depende de
+la propagación. **Refrescar** sí vuelve a preguntar, y ahí sí puede tardar hasta
+un minuto en reflejar algo recién escrito.
+
 ## Modo pruebas
 
 Para revisar un lote impreso hace falta lo contrario de lo normal: que el QR **no**
