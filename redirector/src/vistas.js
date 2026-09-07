@@ -404,7 +404,7 @@ const ESTILOS = `
   .acciones .accion-nfc.puesto:hover{background:var(--ambar);color:#4a3400;
     border-color:var(--ambar)}
   .acciones-orden{grid-template-columns:repeat(3,minmax(0,1fr));min-width:240px}
-  .tope{margin-top:12px;padding:13px 15px;border-radius:var(--r-m);
+  .tope{margin-top:20px;padding:13px 15px;border-radius:var(--r-m);
     background:var(--papel-2);border:1px solid var(--linea)}
   .tope .cejilla{margin-bottom:11px}
   .tope-socio+.tope-socio{margin-top:12px}
@@ -2299,7 +2299,6 @@ function pintarTope() {
 
 function pintarCuentas() {
   const c = cuentas();
-  pintarTope();
   const serie = dineroPorDia(DIAS_DINERO);
   const suma = serie.reduce((a, punto) => a + punto[METRICA_DINERO], 0);
 
@@ -2369,7 +2368,9 @@ function pintarCuentas() {
 
   const inv = inventario();
   if (!inv.length) {
-    $("tablaInventario").innerHTML = "<p class='ayuda'>Ningún gasto trae piezas apuntadas.</p>";
+    $("tablaInventario").innerHTML = "<div class='vacio'><h2>Nada en inventario</h2>" +
+      "<p>El inventario sale de las piezas que traen los gastos. Apunta cuántas " +
+      "llegaron en cada compra y aparecen aquí.</p></div>";
     return;
   }
   let invFilas = "";
@@ -2395,16 +2396,19 @@ $("metricaDinero").addEventListener("click", (e) => {
 });
 
 function pintarVista(valor) {
-  VISTA = valor === "locales" || valor === "cuentas" ? valor : "tarjetas";
+  const conocidas = { locales: 1, cuentas: 1, inventario: 1 };
+  VISTA = conocidas[valor] ? valor : "tarjetas";
   marcarSegmento("vistaPanel", VISTA);
   $("vistaTarjetas").hidden = VISTA !== "tarjetas";
   $("vistaLocales").hidden = VISTA !== "locales";
   $("vistaCuentas").hidden = VISTA !== "cuentas";
-  $("abrirActivar").hidden = VISTA === "cuentas";
-  $("abrirRango").hidden = VISTA === "cuentas";
+  $("vistaInventario").hidden = VISTA !== "inventario";
+  // activar tarjetas es reponer plástico: va con el inventario, no con la lista
+  $("abrirActivar").hidden = VISTA !== "inventario";
+  $("abrirRango").hidden = VISTA !== "tarjetas" && VISTA !== "locales";
   $("abrirAjustes").hidden = VISTA !== "cuentas";
   if (VISTA === "locales") pintarVentas();
-  if (VISTA === "cuentas") pintarCuentas();
+  if (VISTA === "cuentas" || VISTA === "inventario") pintarCuentas();
 }
 
 $("vistaPanel").addEventListener("click", (e) => {
@@ -2806,6 +2810,7 @@ function abrirAjustes(socio) {
   SOCIO_AJUSTES = socio === "nicolas" ? "nicolas" : "felipe";
   marcarSegmento("socioAjustes", SOCIO_AJUSTES);
   pintarFormAjustes(SOCIO_AJUSTES);
+  pintarTope();
   limpiarAviso();
   focoAjustes = document.activeElement;
   $("modalAjustes").hidden = false;
@@ -3654,6 +3659,7 @@ export function vistaAdmin(origen) {
           <button type="button" class="activa" data-valor="tarjetas">Tarjetas</button>
           <button type="button" data-valor="locales">Órdenes</button>
           <button type="button" data-valor="cuentas">Cuentas</button>
+          <button type="button" data-valor="inventario">Inventario</button>
         </div>
         <div class="cabecera-acciones">
           <button type="button" id="abrirActivar">Activar tarjetas</button>
@@ -3703,7 +3709,6 @@ export function vistaAdmin(origen) {
 
         <div class="socios" id="socios"></div>
         <div class="saldo" id="saldo"></div>
-        <div class="tope" id="tope"></div>
 
         <div class="bloque-titulo">
           <h2>Gastos</h2>
@@ -3711,7 +3716,9 @@ export function vistaAdmin(origen) {
         </div>
         <div id="tablaGastos"></div>
 
-        <div class="bloque-titulo"><h2>Inventario</h2></div>
+      </div>
+
+      <div id="vistaInventario" hidden>
         <div id="tablaInventario"></div>
       </div>
 
@@ -3907,6 +3914,8 @@ export function vistaAdmin(origen) {
 
       <label class="mini" for="ajustesNota">Nota bajo el nombre</label>
       <input id="ajustesNota" type="text" maxlength="160" autocomplete="off">
+
+      <div class="tope" id="tope"></div>
 
       <div class="modal-acciones">
         <button type="button" class="fantasma" id="cancelarAjustes">Cancelar</button>

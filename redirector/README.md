@@ -90,6 +90,15 @@ crea el namespace KV en **Storage & Databases → KV**, enlázalo en
 
 ---
 
+## Las cuatro pestañas del panel
+
+**Tarjetas** lista el plástico; **Órdenes**, lo vendido; **Cuentas**, el dinero
+entre los dos; **Inventario**, lo que hay para imprimir.
+
+Cada una trae su botón en la barra de mandos y solo el suyo: *Editar un rango* en
+las dos primeras, *Mis datos* en Cuentas y *Activar tarjetas* en Inventario,
+porque crear registros vacíos es reponer plástico, no gestionar una lista.
+
 ## Cuentas: gastos, reparto e inventario
 
 Tercera vista del panel, junto a Tarjetas y Órdenes. Sale de dos fuentes que ya
@@ -383,7 +392,8 @@ bloque `comprobante`.
 
 ### El tope de la declaración de renta
 
-En **Cuentas** hay una barra por cada uno con lo que lleva vendido en el año
+Vive dentro de **Mis datos**, junto a los datos de cada uno, que es de lo que
+habla. Hay una barra por cada uno con lo que lleva vendido en el año
 contra los **1.400 UVT de ingresos brutos** que obligan a declarar renta — en
 2026, **$73.323.600** con el UVT en $52.374.
 
