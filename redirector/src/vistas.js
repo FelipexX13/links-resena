@@ -403,15 +403,7 @@ const ESTILOS = `
     border-color:var(--ambar-borde)}
   .acciones .accion-nfc.puesto:hover{background:var(--ambar);color:#4a3400;
     border-color:var(--ambar)}
-  .acciones-orden{grid-template-columns:repeat(4,minmax(0,1fr));min-width:318px}
-  /* como el NFC: no es una acción, es el estado del encargo */
-  .acciones .accion-ficha{color:var(--tinta-3)}
-  .acciones .accion-ficha:hover{background:var(--azul-piel);color:var(--azul-fuerte);
-    border-color:var(--azul-borde)}
-  .acciones .accion-ficha.pedida{background:var(--ambar-piel);color:var(--ambar-tinta);
-    border-color:var(--ambar-borde)}
-  .acciones .accion-ficha.lista{background:var(--verde-piel);color:var(--verde-fuerte);
-    border-color:var(--verde-borde)}
+  .acciones-orden{grid-template-columns:repeat(3,minmax(0,1fr));min-width:240px}
   .tope{margin-top:12px;padding:13px 15px;border-radius:var(--r-m);
     background:var(--papel-2);border:1px solid var(--linea)}
   .tope-alto{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
@@ -1237,10 +1229,15 @@ $("formTarjeta").onsubmit = async (e) => {
       }
       const aTomar = plan.tomar.acrilico.length + plan.tomar.sticker.length;
       const aSoltar = plan.soltar.acrilico.length + plan.soltar.sticker.length;
-      if (!aTomar && !aSoltar) {
+      const previa = fichaDe($("negocio").value.trim());
+      const lleva = $("ordenLlevaFicha").checked;
+      const fichaCambia = lleva !== Boolean(previa) ||
+        (lleva && previa && (Boolean(previa.hecha) !== $("ordenFichaHecha").checked ||
+          (previa.notas || "") !== $("ordenFichaNotas").value.trim()));
+      if (!aTomar && !aSoltar && !fichaCambia) {
         avisar("aviso", plan.base
-          ? "Esa orden ya tiene esas piezas. Cambia las cantidades."
-          : "Escribe cuántas piezas lleva la orden.", false);
+          ? "Esa orden ya tiene esas piezas. Cambia algo antes de guardar."
+          : "Escribe cuántas piezas lleva la orden, o márcale la ficha.", false);
         return;
       }
 
@@ -1278,6 +1275,35 @@ $("formTarjeta").onsubmit = async (e) => {
         }
       }
 
+      // La ficha no lleva precio aquí: si es nueva nace sin cobrar y se le pone el
+      // precio al aceptar la orden, con las tarjetas.
+      let fichaNueva = null;
+      let fichaFuera = null;
+      if (fichaCambia) {
+        boton.textContent = "Guardando la ficha…";
+        if (lleva) {
+          fichaNueva = await llamar("servicio", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: previa ? previa.id : undefined,
+              negocio: $("negocio").value.trim(),
+              precio: previa ? Number(previa.precio) || 0 : 0,
+              fecha: previa ? previa.fecha || "" : "",
+              hecha: $("ordenFichaHecha").checked,
+              notas: $("ordenFichaNotas").value.trim(),
+            }),
+          });
+        } else if (previa) {
+          await llamar("servicio-borrar", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: previa.id }),
+          });
+          fichaFuera = previa.id;
+        }
+      }
+
       cerrarTarjeta();
       for (const tipo of ["acrilico", "sticker"]) {
         if (plan.tomar[tipo].length) {
@@ -1290,9 +1316,13 @@ $("formTarjeta").onsubmit = async (e) => {
           parchearTarjetas(plan.soltar[tipo], { negocio: "", destino: "", vendida: "", precio: 0 });
         }
       }
+      if (fichaNueva) parchearServicio(fichaNueva.id, fichaNueva);
+      if (fichaFuera) parchearServicio(fichaFuera, null);
       const cola = [];
       if (aTomar) cola.push(plural(aTomar, "tarjeta ocupada", "tarjetas ocupadas"));
       if (aSoltar) cola.push(plural(aSoltar, "tarjeta liberada", "tarjetas liberadas"));
+      if (fichaNueva) cola.push("ficha de Google");
+      if (fichaFuera) cola.push("ficha quitada");
       avisar("avisoPanel", "Orden de " + $("negocio").value +
         (plan.base ? " actualizada · " : " creada · ") + cola.join(" y "), true);
       return;
@@ -1414,6 +1444,10 @@ function pintarModo(valor) {
   if (MODO === "local") pintarResumenLocal();
 }
 
+$("ordenLlevaFicha").addEventListener("change", () => {
+  $("detalleFicha").hidden = !$("ordenLlevaFicha").checked;
+});
+
 $("origenRango").addEventListener("click", (e) => {
   const b = e.target.closest("[data-valor]");
   if (b) pintarOrigenRango(b.dataset.valor);
@@ -1497,9 +1531,9 @@ function abrirOrden(negocio) {
   llenarLocales();
   const l = locales().filter((x) => x.negocio === negocio)[0];
   $("tarjetaModalKicker").textContent = l ? "Orden de " + l.negocio : "Orden";
-  $("tarjetaModalTitulo").textContent = l ? "Cambiar las piezas" : "Nueva orden";
+  $("tarjetaModalTitulo").textContent = l ? "Cambiar la orden" : "Nueva orden";
   $("tarjetaModalSubtitulo").textContent = l
-    ? "Sube o baja cuántas lleva. Las que sobren quedan libres para otra orden."
+    ? "Sube o baja cuántas piezas lleva y si va con ficha de Google. Las que sobren quedan libres para otra orden."
     : "Ocupa acrílicos y stickers libres y los apunta a la ficha del local. Queda pendiente hasta que la aceptes o la canceles.";
   if (l) {
     $("localExistente").value = l.negocio;
@@ -1507,7 +1541,10 @@ function abrirOrden(negocio) {
     $("nAcrilicos").value = l.acrilico;
     $("nStickers").value = l.sticker;
   }
+  ponerFichaEnOrden(l ? l.ficha : null);
   pintarModo("local");
+  // pintarModo deja el botón en "Crear la orden"; si ya existe, se está editando
+  if (l) $("guardar").textContent = "Guardar la orden";
   limpiarAviso("aviso");
   focoTarjeta = document.activeElement;
   $("modalTarjeta").hidden = false;
@@ -1515,8 +1552,18 @@ function abrirOrden(negocio) {
   $("nAcrilicos").focus();
 }
 
+// La ficha es parte de lo que lleva la orden, así que se edita aquí y no en una
+// ventana aparte. El precio no: ese va con el resto en el cobro.
+function ponerFichaEnOrden(ficha) {
+  $("ordenLlevaFicha").checked = Boolean(ficha);
+  $("ordenFichaHecha").checked = Boolean(ficha && ficha.hecha);
+  $("ordenFichaNotas").value = ficha ? ficha.notas || "" : "";
+  $("detalleFicha").hidden = !ficha;
+}
+
 $("abrirLocal").onclick = () => {
   salirDeEdicion();
+  ponerFichaEnOrden(null);
   $("tarjetaModalKicker").textContent = "Orden";
   $("tarjetaModalTitulo").textContent = "Nueva orden";
   $("tarjetaModalSubtitulo").textContent = "Ocupa acrílicos y stickers libres y los apunta a la ficha del local. Queda pendiente hasta que la aceptes o la canceles.";
@@ -1853,6 +1900,10 @@ function dinero(n) {
   return "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
 }
 
+function fichaDe(negocio) {
+  return SERVICIOS.filter((x) => x.negocio === negocio)[0] || null;
+}
+
 // Lo cobrado por fichas: sin fecha es un trato hablado, no un ingreso.
 function ingresoFichas() {
   return SERVICIOS.reduce((a, s) => a + (s.fecha ? Number(s.precio) || 0 : 0), 0);
@@ -1943,7 +1994,7 @@ function pintarVentas() {
     const piezas = l.piezas;
     const f = l.ficha;
     // sin plástico no hay nada que abrir, cobrar ni liberar: esa fila solo tiene ficha
-    // sin plástico no hay nada que abrir ni liberar, pero sí que cobrar
+    // sin plástico no hay nada que liberar; abrir y cobrar sí, por la ficha
     const soloFicha = piezas === 0 ? " disabled" : "";
     const sinCobro = piezas === 0 && !f ? " disabled" : "";
     filas += "<tr><td class='negocio'>" + escHtml(l.negocio) + "</td>" +
@@ -1963,10 +2014,7 @@ function pintarVentas() {
       "</td><td class='importe'>" + (l.cobrado ? dinero(l.importe) : "—") + "</td>" +
       "<td><div class='acciones acciones-orden'>" +
       "<button type='button' class='accion-qr' data-piezas='" + escHtml(l.negocio) + "'" +
-      soloFicha + ">Piezas</button>" +
-      "<button type='button' class='accion-ficha" +
-      (f ? (f.hecha ? " lista" : " pedida") : "") +
-      "' data-ficha='" + escHtml(l.negocio) + "'>Ficha</button>" +
+      sinCobro + ">Orden</button>" +
       "<button type='button' class='accion-editar' data-vender='" + escHtml(l.negocio) + "'" +
       sinCobro + ">" + (l.cobrado ? "Cobro" : "Aceptar") + "</button>" +
       "<button type='button' class='accion-apagar' data-cancelar='" + escHtml(l.negocio) +
@@ -2285,7 +2333,6 @@ function pintarVista(valor) {
   $("vistaCuentas").hidden = VISTA !== "cuentas";
   $("abrirLocal").hidden = VISTA === "cuentas";
   $("abrirRango").hidden = VISTA === "cuentas";
-  $("abrirFicha").hidden = VISTA !== "locales";
   $("abrirAjustes").hidden = VISTA !== "cuentas";
   if (VISTA === "locales") pintarVentas();
   if (VISTA === "cuentas") pintarCuentas();
@@ -2311,9 +2358,6 @@ $("tablaLocales").addEventListener("click", async (e) => {
 
   const pz = e.target.closest("[data-piezas]");
   if (pz) { abrirOrden(pz.dataset.piezas); return; }
-
-  const fi = e.target.closest("[data-ficha]");
-  if (fi) { abrirFicha(fi.dataset.ficha); return; }
 
   const v = e.target.closest("[data-vender]");
   if (v) { abrirVenta(v.dataset.vender); return; }
@@ -2473,252 +2517,6 @@ function nombreArchivo(negocio, fecha) {
     .replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase().slice(0, 40);
   return "comprobante-" + (limpio || "venta") + "-" + fecha + ".pdf";
 }
-
-/* ---------- la ficha de Google, que se cobra aparte ---------- */
-
-// Montarle al local su sitio en Google —fotos, horarios, datos— es otro
-// servicio del negocio. No cuelga de ninguna tarjeta: hay locales que solo
-// piden eso, así que se guarda por su cuenta y se une a la orden por el nombre.
-let FICHA_ID = null;
-let FICHA_ACTUAL = null;
-let focoFicha = null;
-
-function fichaDe(negocio) {
-  return SERVICIOS.filter((x) => x.negocio === negocio)[0] || null;
-}
-
-// Aquí solo se lee: el cobro vive en la ventana de la venta, con el resto
-function pintarResumenFicha() {
-  const f = FICHA_ACTUAL || {};
-  $("fichaResumen").textContent = f.fecha
-    ? "Cobrada el " + f.fecha + " · " + dinero(f.precio)
-    : "Sin cobrar todavía. Se cobra desde la orden, junto con las tarjetas.";
-}
-
-function abrirFicha(negocio) {
-  const s = negocio ? fichaDe(negocio) : null;
-  FICHA_ID = s ? s.id : null;
-  FICHA_ACTUAL = s;
-  // los locales que ya existen, para no reescribir el nombre a mano
-  $("localesFicha").innerHTML = locales()
-    .map((l) => "<option value='" + escHtml(l.negocio) + "'>").join("");
-  $("fichaNegocio").value = s ? s.negocio : (negocio || "");
-  $("fichaNotas").value = s ? s.notas || "" : "";
-  $("fichaHecha").checked = Boolean(s && s.hecha);
-  $("borrarFicha").hidden = !s;
-  $("fichaTitulo").textContent = s ? "Ficha de " + s.negocio : "Ficha de Google";
-  $("guardarFicha").textContent = s ? "Guardar" : "Anotar";
-  olvidarConfirmacion();
-  limpiarAviso();
-  pintarResumenFicha();
-  focoFicha = document.activeElement;
-  $("modalFicha").hidden = false;
-  document.body.style.overflow = "hidden";
-  $("fichaNegocio").focus();
-}
-
-function cerrarFicha() {
-  if ($("modalFicha").hidden) return;
-  olvidarConfirmacion();
-  $("modalFicha").hidden = true;
-  document.body.style.overflow = "";
-  if (focoFicha && focoFicha.focus) focoFicha.focus();
-  focoFicha = null;
-  FICHA_ID = null;
-  FICHA_ACTUAL = null;
-}
-
-$("abrirFicha").onclick = () => abrirFicha("");
-$("cerrarFicha").onclick = cerrarFicha;
-$("cancelarFicha").onclick = cerrarFicha;
-$("modalFicha").addEventListener("click", (e) => {
-  if (e.target.hasAttribute("data-cerrar-ficha")) cerrarFicha();
-});
-$("formFicha").onsubmit = async (e) => {
-  e.preventDefault();
-  const negocio = $("fichaNegocio").value.trim();
-  if (!negocio) {
-    avisar("avisoFicha", "Falta el nombre del local.", false);
-    return;
-  }
-  // el cobro que ya tuviera se respeta: esta ventana no lo toca
-  const previa = FICHA_ACTUAL || {};
-  const cuerpo = {
-    negocio: negocio,
-    precio: Number(previa.precio) || 0,
-    fecha: previa.fecha || "",
-    hecha: $("fichaHecha").checked,
-    notas: $("fichaNotas").value.trim(),
-  };
-  if (FICHA_ID) cuerpo.id = FICHA_ID;
-
-  const boton = $("guardarFicha");
-  const etiqueta = boton.textContent;
-  boton.disabled = true;
-  try {
-    const r = await llamar("servicio", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(cuerpo),
-    });
-    cerrarFicha();
-    parchearServicio(r.id, r);
-    avisar("avisoPanel", "Ficha de " + negocio + " guardada", true);
-  } catch (err) {
-    avisar("avisoFicha", err.message, false);
-  } finally {
-    boton.disabled = false;
-    boton.textContent = etiqueta;
-  }
-};
-
-// Quitarla borra un cobro, así que pide el segundo clic como el resto
-$("borrarFicha").onclick = async () => {
-  if (!FICHA_ID) return;
-  const boton = $("borrarFicha");
-  if (CONFIRMANDO !== "ficha") { pedirConfirmacion(boton, "ficha"); return; }
-
-  olvidarConfirmacion();
-  const id = FICHA_ID;
-  const negocio = $("fichaNegocio").value.trim();
-  boton.disabled = true;
-  try {
-    await llamar("servicio-borrar", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: id }),
-    });
-    cerrarFicha();
-    parchearServicio(id, null);
-    avisar("avisoPanel", "Ficha de " + negocio + " quitada", true);
-  } catch (err) {
-    avisar("avisoFicha", err.message, false);
-  } finally {
-    boton.disabled = false;
-  }
-};
-
-// Los tres botones del comprobante trabajan con lo que hay en el formulario,
-// no con lo guardado: así se puede revisar el PDF antes de aceptar la orden.
-function datosDelComprobante() {
-  if (!LOCAL_VENTA) return null;
-  // sin los datos del vendedor no hay comprobante, así que en vez de mandarlo a
-  // buscar el botón a otra pestaña, se le abre el formulario aquí mismo
-  if (!VENDEDOR || !VENDEDOR.nombre) {
-    cerrarVenta();
-    abrirAjustes();
-    avisar("avisoPanel", "Pon tu nombre y tu cédula una vez y ya sale en todos los comprobantes.", false);
-    return null;
-  }
-  const l = LOCAL_VENTA;
-  const items = itemsDelLocal(l, preciosDeLaVenta());
-  if (!items.length) {
-    avisar("avisoVenta", "Pon los precios antes de sacar el comprobante.", false);
-    return null;
-  }
-  return {
-    referencia: Date.now().toString(36),
-    fecha: $("ventaFecha").value || hoyISO(),
-    vendedor: VENDEDOR,
-    negocio: l.negocio,
-    nit: $("ventaNit").value.trim(),
-    correo: $("ventaCorreo").value.trim(),
-    telefono: $("ventaTelefono").value.trim(),
-    items: items,
-  };
-}
-
-async function recordarComprador(negocio, correo, nit, telefono) {
-  if (!correo && !nit && !telefono) return;
-  const guardado = COMPRADORES[negocio] || {};
-  if (guardado.correo === correo && guardado.nit === nit &&
-      guardado.telefono === telefono) return;
-  try {
-    await llamar("comprador", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ negocio: negocio, correo: correo, nit: nit, telefono: telefono }),
-    });
-    COMPRADORES[negocio] = { negocio: negocio, correo: correo, nit: nit, telefono: telefono };
-  } catch (e) {
-    // que no se caiga la venta por no poder recordar el correo
-  }
-}
-
-$("bajarComprobante").onclick = () => {
-  try {
-    const d = datosDelComprobante();
-    if (!d) return;
-    comprobantePDF(d).doc.save(nombreArchivo(d.negocio, d.fecha));
-  } catch (err) {
-    avisar("avisoVenta", err.message, false);
-  }
-};
-
-// En el teléfono el menú nativo de compartir sí puede meter el PDF en WhatsApp;
-// wa.me solo lleva texto, así que ese es el plan de repuesto.
-$("compartirComprobante").onclick = async () => {
-  try {
-    const d = datosDelComprobante();
-    if (!d) return;
-    const hecho = comprobantePDF(d);
-    const archivo = new File([hecho.doc.output("blob")], nombreArchivo(d.negocio, d.fecha),
-      { type: "application/pdf" });
-    const texto = "Comprobante de venta · " + d.negocio + " · " + dinero(hecho.total);
-    if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
-      await navigator.share({ files: [archivo], title: "Comprobante de venta", text: texto });
-      return;
-    }
-    hecho.doc.save(nombreArchivo(d.negocio, d.fecha));
-    window.open("https://wa.me/?text=" + encodeURIComponent(texto +
-      " — te lo adjunto en este chat."), "_blank", "noopener");
-  } catch (err) {
-    if (err && err.name === "AbortError") return;
-    avisar("avisoVenta", err.message, false);
-  }
-};
-
-$("mandarComprobante").onclick = async () => {
-  const correo = $("ventaCorreo").value.trim();
-  if (!correo) {
-    avisar("avisoVenta", "Escribe el correo del cliente.", false);
-    $("ventaCorreo").focus();
-    return;
-  }
-  const boton = $("mandarComprobante");
-  const etiqueta = boton.textContent;
-  boton.disabled = true;
-  boton.textContent = "Enviando…";
-  try {
-    const d = datosDelComprobante();
-    if (!d) return;
-    const hecho = comprobantePDF(d);
-    const base64 = hecho.doc.output("datauristring").split(",")[1];
-    await llamar("comprobante", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        correo: correo,
-        negocio: d.negocio,
-        archivo: nombreArchivo(d.negocio, d.fecha),
-        total: dinero(hecho.total),
-        fecha: fechaLarga(d.fecha),
-        referencia: d.referencia,
-        vendedor: d.vendedor.nombre,
-        telefonoVendedor: d.vendedor.telefono || "",
-        pdf: base64,
-      }),
-    });
-    await recordarComprador(d.negocio, correo, d.nit, d.telefono);
-    avisar("avisoPanel", "Comprobante enviado a " + correo, true);
-  } catch (err) {
-    avisar("avisoVenta", err.message, false);
-  } finally {
-    boton.disabled = false;
-    boton.textContent = etiqueta;
-  }
-};
-
 /* ---------- mis datos, los del que vende ---------- */
 
 let focoAjustes = null;
@@ -3349,7 +3147,6 @@ document.addEventListener("keydown", (e) => {
   if (!$("modalActivar").hidden) cerrarActivar();
   else if (!$("modalGasto").hidden) cerrarGasto();
   else if (!$("modalAjustes").hidden) cerrarAjustes();
-  else if (!$("modalFicha").hidden) cerrarFicha();
   else if (!$("modalVenta").hidden) cerrarVenta();
   else if (!$("modalTarjeta").hidden) cerrarTarjeta();
   else cerrarQR();
@@ -3443,7 +3240,6 @@ export function vistaAdmin(origen) {
         <div class="cabecera-acciones">
           <button type="button" id="abrirLocal">Nueva orden</button>
           <button type="button" class="fantasma" id="abrirRango">Editar un rango</button>
-          <button type="button" class="fantasma" id="abrirFicha" hidden>Nueva ficha</button>
           <button type="button" class="fantasma" id="abrirAjustes" hidden>Mis datos</button>
           <button type="button" class="fantasma" id="recargar">Refrescar</button>
         </div>
@@ -3564,6 +3360,16 @@ export function vistaAdmin(origen) {
           </div>
         </div>
         <div class="rango-resumen" id="localResumen">Escribe cuántos acrílicos y cuántos stickers lleva la orden.</div>
+
+        <label class="casilla" id="filaLlevaFicha">
+          <input type="checkbox" id="ordenLlevaFicha"> Lleva ficha de Google</label>
+        <div id="detalleFicha" hidden>
+          <label class="casilla"><input type="checkbox" id="ordenFichaHecha">
+            Ya está publicada</label>
+          <label class="mini sobre-buscador" for="ordenFichaNotas">Notas de la ficha</label>
+          <input id="ordenFichaNotas" type="text" maxlength="200"
+                 placeholder="Faltan las fotos del local" autocomplete="off">
+        </div>
       </div>
 
       <div id="campoUna">
@@ -3685,39 +3491,6 @@ export function vistaAdmin(origen) {
     </form>
   </div>
 </div>
-
-<div class="modal" id="modalFicha" hidden>
-  <div class="modal-fondo" data-cerrar-ficha></div>
-  <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="fichaTitulo">
-    <button type="button" class="modal-cerrar" id="cerrarFicha" aria-label="Cerrar">✕</button>
-    <div class="modal-kicker">Servicio</div>
-    <h1 id="fichaTitulo">Ficha de Google</h1>
-    <p class="modal-subtitulo">Montarle el sitio en Google: fotos, horarios y datos.
-      El precio se pone al cobrar la orden.</p>
-
-    <form id="formFicha">
-      <label class="mini" for="fichaNegocio">Local</label>
-      <input id="fichaNegocio" type="text" maxlength="60" placeholder="Haunch Burguer"
-             autocomplete="off" list="localesFicha">
-      <datalist id="localesFicha"></datalist>
-
-      <div class="rango-resumen" id="fichaResumen"></div>
-
-      <label class="mini sobre-buscador" for="fichaNotas">Notas</label>
-      <input id="fichaNotas" type="text" maxlength="200" placeholder="Faltan las fotos del local"
-             autocomplete="off">
-
-      <label class="casilla"><input type="checkbox" id="fichaHecha"> Ya está publicada en Google</label>
-
-      <div class="modal-acciones">
-        <button type="button" class="fantasma" id="borrarFicha" hidden>Quitar</button>
-        <button type="button" class="fantasma" id="cancelarFicha">Cancelar</button>
-        <button type="submit" id="guardarFicha">Anotar</button>
-      </div>
-    </form>
-  </div>
-</div>
-
 <div class="modal" id="modalGasto" hidden>
   <div class="modal-fondo" data-cerrar-gasto></div>
   <div class="modal-caja modal-tarjeta franja" role="dialog" aria-modal="true" aria-labelledby="gastoTitulo">

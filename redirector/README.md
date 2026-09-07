@@ -254,11 +254,12 @@ las tarjetas, la ficha se queda con el viejo y aparece como una fila aparte.
 Sigue la misma regla que una tarjeta para contar como ingreso: **sin fecha es un
 trato hablado, no plata**.
 
-**El cobro va todo junto.** El precio de la ficha se pone en la misma ventana que
-el de los acrílicos y los stickers, con la misma fecha, y sale en el mismo
-comprobante. Su ventana propia quedó solo para el trabajo: a qué local es, si ya
-está publicada, notas y quitarla. Dejar el precio vacío al cobrar no la borra —
-la deja como estaba.
+**No tiene ventana propia.** La ficha es una cosa más de las que lleva la orden,
+así que se marca en **Orden** —junto a cuántos acrílicos y cuántos stickers—, con
+su casilla de «ya está publicada» y sus notas. Y se cobra en **Aceptar**, en la
+misma fila que el resto y con la misma fecha, saliendo en el mismo comprobante.
+Dejar el precio vacío al cobrar no la borra: la deja como estaba. Para quitarla,
+se desmarca la casilla en Orden.
 
 Un local puede tener ficha sin comprar una sola tarjeta. Entonces su fila sale con
 «sin tarjetas» y **Piezas** y **Cancelar** desactivados, porque no hay plástico
