@@ -697,7 +697,8 @@ let VISTA = "tarjetas";
 let PRUEBAS = false;
 let GASTOS = [];
 let SERVICIOS = [];
-let VENDEDOR = null;
+let VENDEDORES = { felipe: null, nicolas: null };
+let QUIEN_VENDE = "felipe";
 let COMPRADORES = {};
 let NFC = {};
 let METRICA_DINERO = "gastos";
@@ -2090,7 +2091,7 @@ function parchearGasto(id, gasto) {
 async function cargarAjustes() {
   try {
     const a = await llamar("ajustes");
-    VENDEDOR = a.vendedor;
+    VENDEDORES = a.vendedores || { felipe: null, nicolas: null };
     const c = await llamar("compradores");
     COMPRADORES = {};
     (c.compradores || []).forEach((x) => { COMPRADORES[x.negocio] = x; });
@@ -2517,17 +2518,172 @@ function nombreArchivo(negocio, fecha) {
     .replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase().slice(0, 40);
   return "comprobante-" + (limpio || "venta") + "-" + fecha + ".pdf";
 }
+// Los tres botones del comprobante trabajan con lo que hay en el formulario,
+// no con lo guardado: así se puede revisar el PDF antes de aceptar la orden.
+function datosDelComprobante() {
+  if (!LOCAL_VENTA) return null;
+  // sin los datos del vendedor no hay comprobante, así que en vez de mandarlo a
+  // buscar el botón a otra pestaña, se le abre el formulario aquí mismo
+  const quien = VENDEDORES[QUIEN_VENDE];
+  if (!quien || !quien.nombre) {
+    cerrarVenta();
+    abrirAjustes(QUIEN_VENDE);
+    avisar("avisoPanel", "Faltan el nombre y la cédula de " + SOCIO_NOMBRE[QUIEN_VENDE] +
+      ". Se ponen una vez y ya salen en sus comprobantes.", false);
+    return null;
+  }
+  const l = LOCAL_VENTA;
+  const items = itemsDelLocal(l, preciosDeLaVenta());
+  if (!items.length) {
+    avisar("avisoVenta", "Pon los precios antes de sacar el comprobante.", false);
+    return null;
+  }
+  return {
+    referencia: Date.now().toString(36),
+    fecha: $("ventaFecha").value || hoyISO(),
+    vendedor: quien,
+    negocio: l.negocio,
+    nit: $("ventaNit").value.trim(),
+    correo: $("ventaCorreo").value.trim(),
+    telefono: $("ventaTelefono").value.trim(),
+    items: items,
+  };
+}
+
+async function recordarComprador(negocio, correo, nit, telefono) {
+  if (!correo && !nit && !telefono) return;
+  const guardado = COMPRADORES[negocio] || {};
+  if (guardado.correo === correo && guardado.nit === nit &&
+      guardado.telefono === telefono) return;
+  try {
+    await llamar("comprador", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ negocio: negocio, correo: correo, nit: nit, telefono: telefono }),
+    });
+    COMPRADORES[negocio] = { negocio: negocio, correo: correo, nit: nit, telefono: telefono };
+  } catch (e) {
+    // que no se caiga la venta por no poder recordar el correo
+  }
+}
+
+$("bajarComprobante").onclick = () => {
+  try {
+    const d = datosDelComprobante();
+    if (!d) return;
+    comprobantePDF(d).doc.save(nombreArchivo(d.negocio, d.fecha));
+  } catch (err) {
+    avisar("avisoVenta", err.message, false);
+  }
+};
+
+// En el teléfono el menú nativo de compartir sí puede meter el PDF en WhatsApp;
+// wa.me solo lleva texto, así que ese es el plan de repuesto.
+$("compartirComprobante").onclick = async () => {
+  try {
+    const d = datosDelComprobante();
+    if (!d) return;
+    const hecho = comprobantePDF(d);
+    const archivo = new File([hecho.doc.output("blob")], nombreArchivo(d.negocio, d.fecha),
+      { type: "application/pdf" });
+    const texto = "Comprobante de venta · " + d.negocio + " · " + dinero(hecho.total);
+    if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
+      await navigator.share({ files: [archivo], title: "Comprobante de venta", text: texto });
+      return;
+    }
+    hecho.doc.save(nombreArchivo(d.negocio, d.fecha));
+    window.open("https://wa.me/?text=" + encodeURIComponent(texto +
+      " — te lo adjunto en este chat."), "_blank", "noopener");
+  } catch (err) {
+    if (err && err.name === "AbortError") return;
+    avisar("avisoVenta", err.message, false);
+  }
+};
+
+$("mandarComprobante").onclick = async () => {
+  const correo = $("ventaCorreo").value.trim();
+  if (!correo) {
+    avisar("avisoVenta", "Escribe el correo del cliente.", false);
+    $("ventaCorreo").focus();
+    return;
+  }
+  const boton = $("mandarComprobante");
+  const etiqueta = boton.textContent;
+  boton.disabled = true;
+  boton.textContent = "Enviando…";
+  try {
+    const d = datosDelComprobante();
+    if (!d) return;
+    const hecho = comprobantePDF(d);
+    const base64 = hecho.doc.output("datauristring").split(",")[1];
+    await llamar("comprobante", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        correo: correo,
+        negocio: d.negocio,
+        archivo: nombreArchivo(d.negocio, d.fecha),
+        total: dinero(hecho.total),
+        fecha: fechaLarga(d.fecha),
+        referencia: d.referencia,
+        vendedor: d.vendedor.nombre,
+        telefonoVendedor: d.vendedor.telefono || "",
+        pdf: base64,
+      }),
+    });
+    await recordarComprador(d.negocio, correo, d.nit, d.telefono);
+    avisar("avisoPanel", "Comprobante enviado a " + correo, true);
+  } catch (err) {
+    avisar("avisoVenta", err.message, false);
+  } finally {
+    boton.disabled = false;
+    boton.textContent = etiqueta;
+  }
+};
+
 /* ---------- mis datos, los del que vende ---------- */
 
 let focoAjustes = null;
+let SOCIO_AJUSTES = "felipe";
+// se edita sobre una copia: así cambiar de pestaña no pierde lo que ibas
+// escribiendo del otro, y al guardar suben los dos
+let BORRADOR_VENDEDORES = {};
 const NOTA_POR_DEFECTO = "Persona natural no responsable de IVA.";
 
-function abrirAjustes() {
-  const v = VENDEDOR || {};
+function leerFormAjustes() {
+  return {
+    nombre: $("ajustesNombre").value.trim(),
+    cedula: $("ajustesCedula").value.trim(),
+    telefono: $("ajustesTelefono").value.trim(),
+    nota: $("ajustesNota").value.trim(),
+  };
+}
+
+function pintarFormAjustes(socio) {
+  const v = BORRADOR_VENDEDORES[socio] || {};
   $("ajustesNombre").value = v.nombre || "";
   $("ajustesCedula").value = v.cedula || "";
   $("ajustesTelefono").value = v.telefono || "";
   $("ajustesNota").value = v.nota !== undefined ? v.nota : NOTA_POR_DEFECTO;
+}
+
+$("socioAjustes").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-valor]");
+  if (!b || b.dataset.valor === SOCIO_AJUSTES) return;
+  BORRADOR_VENDEDORES[SOCIO_AJUSTES] = leerFormAjustes();
+  SOCIO_AJUSTES = b.dataset.valor;
+  marcarSegmento("socioAjustes", SOCIO_AJUSTES);
+  pintarFormAjustes(SOCIO_AJUSTES);
+});
+
+function abrirAjustes(socio) {
+  BORRADOR_VENDEDORES = {
+    felipe: Object.assign({}, VENDEDORES.felipe),
+    nicolas: Object.assign({}, VENDEDORES.nicolas),
+  };
+  SOCIO_AJUSTES = socio === "nicolas" ? "nicolas" : "felipe";
+  marcarSegmento("socioAjustes", SOCIO_AJUSTES);
+  pintarFormAjustes(SOCIO_AJUSTES);
   limpiarAviso();
   focoAjustes = document.activeElement;
   $("modalAjustes").hidden = false;
@@ -2543,7 +2699,7 @@ function cerrarAjustes() {
   focoAjustes = null;
 }
 
-$("abrirAjustes").onclick = abrirAjustes;
+$("abrirAjustes").onclick = () => abrirAjustes(QUIEN_VENDE);
 $("cerrarAjustes").onclick = cerrarAjustes;
 $("cancelarAjustes").onclick = cerrarAjustes;
 $("modalAjustes").addEventListener("click", (e) => {
@@ -2552,23 +2708,32 @@ $("modalAjustes").addEventListener("click", (e) => {
 
 $("formAjustes").onsubmit = async (e) => {
   e.preventDefault();
-  const cuerpo = {
-    nombre: $("ajustesNombre").value.trim(),
-    cedula: $("ajustesCedula").value.trim(),
-    telefono: $("ajustesTelefono").value.trim(),
-    nota: $("ajustesNota").value.trim(),
-  };
+  BORRADOR_VENDEDORES[SOCIO_AJUSTES] = leerFormAjustes();
+  const pendientes = ["felipe", "nicolas"].filter((k) => {
+    const v = BORRADOR_VENDEDORES[k] || {};
+    return v.nombre || v.cedula;
+  });
+  if (!pendientes.length) {
+    avisar("avisoAjustes", "Pon al menos el nombre y la cédula de uno.", false);
+    return;
+  }
+
   const boton = $("guardarAjustes");
   boton.disabled = true;
   try {
-    const r = await llamar("ajustes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(cuerpo),
-    });
-    VENDEDOR = { nombre: r.nombre, cedula: r.cedula, telefono: r.telefono, nota: r.nota };
+    let ultimo = null;
+    for (const socio of pendientes) {
+      ultimo = await llamar("ajustes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(Object.assign({ socio: socio }, BORRADOR_VENDEDORES[socio])),
+      });
+    }
+    VENDEDORES = ultimo.vendedores;
     cerrarAjustes();
-    avisar("avisoPanel", "Datos guardados", true);
+    avisar("avisoPanel", pendientes.length === 2
+      ? "Datos de los dos guardados"
+      : "Datos de " + SOCIO_NOMBRE[pendientes[0]] + " guardados", true);
   } catch (err) {
     avisar("avisoAjustes", err.message, false);
   } finally {
@@ -2629,6 +2794,21 @@ function pintarResumenVenta() {
   $("ventaResumen").textContent = (partes.join("   +   ") || "sin nada que cobrar") +
     "   =   " + dinero(total);
 }
+
+// cada uno usa su propio teléfono, así que el panel recuerda quién es
+$("quienVende").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-valor]");
+  if (!b) return;
+  QUIEN_VENDE = b.dataset.valor;
+  marcarSegmento("quienVende", QUIEN_VENDE);
+  try { localStorage.setItem("quienVende", QUIEN_VENDE); } catch (err) {}
+});
+
+try {
+  const guardado = localStorage.getItem("quienVende");
+  if (guardado === "felipe" || guardado === "nicolas") QUIEN_VENDE = guardado;
+} catch (e) {}
+marcarSegmento("quienVende", QUIEN_VENDE);
 
 $("precioAcrilico").addEventListener("input", pintarResumenVenta);
 $("precioSticker").addEventListener("input", pintarResumenVenta);
@@ -3464,11 +3644,16 @@ export function vistaAdmin(origen) {
   <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="ajustesTitulo">
     <button type="button" class="modal-cerrar" id="cerrarAjustes" aria-label="Cerrar">✕</button>
     <div class="modal-kicker">Comprobantes</div>
-    <h1 id="ajustesTitulo">Mis datos</h1>
-    <p class="modal-subtitulo">Lo que sale como vendedor en cada comprobante.</p>
+    <h1 id="ajustesTitulo">Quién vende</h1>
+    <p class="modal-subtitulo">Los datos de cada uno, para firmar el comprobante de sus ventas.</p>
 
     <form id="formAjustes">
-      <label class="mini" for="ajustesNombre">Nombre completo</label>
+      <div class="segmento" id="socioAjustes" role="group" aria-label="De quién son los datos">
+        <button type="button" class="activa" data-valor="felipe">Felipe</button>
+        <button type="button" data-valor="nicolas">Nicolás</button>
+      </div>
+
+      <label class="mini sobre-buscador" for="ajustesNombre">Nombre completo</label>
       <input id="ajustesNombre" type="text" maxlength="80" placeholder="Juan Felipe Pérez"
              autocomplete="off">
 
@@ -3481,7 +3666,7 @@ export function vistaAdmin(origen) {
                  autocomplete="off"></div>
       </div>
 
-      <label class="mini" for="ajustesNota">Nota bajo tu nombre</label>
+      <label class="mini" for="ajustesNota">Nota bajo el nombre</label>
       <input id="ajustesNota" type="text" maxlength="160" autocomplete="off">
 
       <div class="modal-acciones">
@@ -3607,6 +3792,11 @@ export function vistaAdmin(origen) {
 
     <div class="comprobante">
       <div class="cejilla">Comprobante de venta</div>
+      <p class="mini2 sin-aire">Quién hizo la venta</p>
+      <div class="segmento" id="quienVende" role="group" aria-label="Quién hizo la venta">
+        <button type="button" class="activa" data-valor="felipe">Felipe</button>
+        <button type="button" data-valor="nicolas">Nicolás</button>
+      </div>
       <div class="modal-acciones acciones-izq">
         <button type="button" class="fantasma" id="bajarComprobante">Descargar PDF</button>
         <button type="button" class="fantasma" id="compartirComprobante">Compartir</button>

@@ -295,10 +295,19 @@ precio.
 El correo y el NIT del local quedan guardados en `b:<negocio>`, así que la
 siguiente vez salen puestos.
 
-### Mis datos
+### Quién vende
 
-En **Cuentas › Mis datos** van el nombre, la cédula, el teléfono y la nota que
-salen como vendedor. Se guardan en `cfg:vendedor` y no hay comprobante sin ellos.
+Las ventas las hace uno u otro, así que **Cuentas › Mis datos** guarda los datos
+de los dos: nombre, cédula, teléfono y la nota que va bajo el nombre. Se cambia
+de uno a otro con el segmentado de arriba, y lo escrito no se pierde al saltar
+entre ellos: sube todo de una al guardar.
+
+En la ventana del cobro hay otro segmentado, **quién hizo la venta**, que decide
+con cuál de los dos se firma ese comprobante. El panel recuerda el último elegido
+en ese teléfono, que es de quien suele ser.
+
+Los dos viven en `cfg:vendedor` como `{felipe:{...},nicolas:{...}}`. Lo que había
+guardado cuando era un solo vendedor se lee como de Felipe.
 
 ### El envío del correo
 

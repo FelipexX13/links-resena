@@ -22,7 +22,7 @@
  *   POST /api/servicio {id?,negocio,precio,fecha,hecha,notas}     (sesión)
  *   POST /api/servicio-borrar {id}                                (sesión)
  *   GET  /api/ajustes                                             (sesión)
- *   POST /api/ajustes {nombre,cedula,nota}                        (sesión)
+ *   POST /api/ajustes {socio,nombre,cedula,telefono,nota}         (sesión)
  *   GET  /api/compradores                                         (sesión)
  *   POST /api/comprador {negocio,correo,nit,telefono}             (sesión)
  *   POST /api/comprobante {correo,negocio,archivo,pdf,total}      (sesión)
@@ -40,7 +40,8 @@
  *                   ficha de Google con fotos y horarios. fecha vacía = acordado
  *                   pero todavía sin cobrar, igual que una tarjeta sin vender
  *   "b:<negocio>"   a quién se le manda el comprobante: correo, NIT y teléfono
- *   "cfg:vendedor"  nombre, cédula y nota del que vende, para el comprobante
+ *   "cfg:vendedor"  {felipe:{...},nicolas:{...}} — los dos que venden, para
+ *                   firmar el comprobante con el que hizo esa venta
  *   "intentos:<ip>" contador de logins fallidos, expira solo a las 24 horas
  */
 
@@ -222,11 +223,15 @@ function servicioDe(cuerpo) {
 // Un comprobante de venta, no una factura: sin numeración consecutiva, sin CUFE
 // y sin QR. El PDF se arma en el panel y aquí solo se despacha.
 function vendedorDe(cuerpo) {
+  const socio = String(cuerpo.socio || "");
+  if (socio !== "felipe" && socio !== "nicolas") return { error: "Ese socio no existe" };
+
   const nombre = String(cuerpo.nombre || "").trim().slice(0, 80);
-  if (!nombre) return { error: "Falta tu nombre completo" };
+  if (!nombre) return { error: "Falta el nombre completo" };
   const cedula = String(cuerpo.cedula || "").trim().slice(0, 30);
-  if (!cedula) return { error: "Falta tu número de cédula" };
+  if (!cedula) return { error: "Falta el número de cédula" };
   return {
+    socio: socio,
     vendedor: {
       nombre: nombre,
       cedula: cedula,
@@ -234,6 +239,14 @@ function vendedorDe(cuerpo) {
       telefono: String(cuerpo.telefono || "").trim().slice(0, 30),
     },
   };
+}
+
+// Antes era un solo vendedor suelto. Lo que se guardó así era de Felipe, que es
+// quien montó el panel; se sube al mapa la primera vez que se lee.
+function mapaDeVendedores(guardado) {
+  if (!guardado) return { felipe: null, nicolas: null };
+  if (guardado.nombre) return { felipe: guardado, nicolas: null };
+  return { felipe: guardado.felipe || null, nicolas: guardado.nicolas || null };
 }
 
 function compradorDe(cuerpo) {
@@ -474,15 +487,18 @@ async function api(request, env, accion, url, ctx) {
 
   if (accion === "ajustes" && request.method === "GET") {
     const guardado = await env.TARJETAS.get(LLAVE_VENDEDOR, "json");
-    return json({ vendedor: guardado || null });
+    return json({ vendedores: mapaDeVendedores(guardado) });
   }
 
   if (accion === "ajustes" && request.method === "POST") {
     const cuerpo = await request.json().catch(() => ({}));
     const hecho = vendedorDe(cuerpo);
     if (hecho.error) return json({ error: hecho.error }, 400);
-    await env.TARJETAS.put(LLAVE_VENDEDOR, JSON.stringify(hecho.vendedor));
-    return json(Object.assign({ ok: true }, hecho.vendedor));
+
+    const mapa = mapaDeVendedores(await env.TARJETAS.get(LLAVE_VENDEDOR, "json"));
+    mapa[hecho.socio] = hecho.vendedor;
+    await env.TARJETAS.put(LLAVE_VENDEDOR, JSON.stringify(mapa));
+    return json({ ok: true, vendedores: mapa });
   }
 
   if (accion === "compradores" && request.method === "GET") {
