@@ -240,6 +240,25 @@ sobre la fecha, y sale gratis.
 El estado de la orden tampoco se guarda, se deduce: **con destino y sin `vendida`
 es pendiente; con `vendida` es aceptada; sin destino la tarjeta está libre.**
 
+### La ficha de Google, la venta que no es una tarjeta
+
+Hay locales que además piden que les **montemos su sitio en Google**: fotos,
+horarios, datos. Eso se cobra aparte y no cuelga de ningún plástico, así que es
+la única excepción a lo de arriba: vive en su propia clave, `s:<id>`, con el
+nombre del local, el precio, la fecha del cobro y si ya está publicada.
+
+Se une a la orden por el **nombre del negocio**, el mismo con el que se agrupan
+las tarjetas. Consecuencia a tener presente: si le cambias el nombre al local en
+las tarjetas, la ficha se queda con el viejo y aparece como una fila aparte.
+
+Sigue la misma regla que una tarjeta para contar como ingreso: **sin fecha es un
+trato hablado, no plata**. Y un local puede tener ficha sin comprar una sola
+tarjeta — entonces su fila sale con «sin tarjetas» y solo el botón **Ficha**
+activo, porque no hay piezas que abrir, cobrar ni liberar.
+
+El botón lleva el color del estado, como el del NFC: ámbar si está pedida,
+verde si ya está publicada.
+
 ## Editar un rango
 
 **Editar un rango** escribe el mismo link en varias tarjetas de una vez. Las

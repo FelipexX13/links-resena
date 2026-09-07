@@ -163,6 +163,7 @@ const ESTILOS = `
   button.fantasma:hover,a.boton.fantasma:hover{background:var(--papel-2);
     color:var(--tinta);border-color:var(--tinta-3)}
   button.leer{background:var(--azul-piel);color:var(--azul-fuerte);border:1px solid var(--azul-borde)}
+  button.confirmando{background:var(--rojo);color:#fff;border-color:var(--rojo)}
   button.leer:hover{background:var(--azul);color:#fff;border-color:var(--azul)}
   button[disabled]{opacity:.45;cursor:not-allowed}
   button[disabled]:active{transform:none}
@@ -402,7 +403,19 @@ const ESTILOS = `
     border-color:var(--ambar-borde)}
   .acciones .accion-nfc.puesto:hover{background:var(--ambar);color:#4a3400;
     border-color:var(--ambar)}
-  .acciones-orden{grid-template-columns:repeat(3,minmax(0,1fr));min-width:240px}
+  .acciones-orden{grid-template-columns:repeat(4,minmax(0,1fr));min-width:318px}
+  /* como el NFC: no es una acción, es el estado del encargo */
+  .acciones .accion-ficha{color:var(--tinta-3)}
+  .acciones .accion-ficha:hover{background:var(--azul-piel);color:var(--azul-fuerte);
+    border-color:var(--azul-borde)}
+  .acciones .accion-ficha.pedida{background:var(--ambar-piel);color:var(--ambar-tinta);
+    border-color:var(--ambar-borde)}
+  .acciones .accion-ficha.lista{background:var(--verde-piel);color:var(--verde-fuerte);
+    border-color:var(--verde-borde)}
+  .casilla{display:flex;align-items:center;gap:9px;margin:16px 0 0;
+    font-size:13px;font-weight:500;cursor:pointer}
+  .casilla input{width:18px;height:18px;flex:0 0 auto;padding:0;margin:0;
+    accent-color:var(--azul);cursor:pointer}
   .rango-fila{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
   #rangoOrden{margin-top:14px}
   button.alerta{background:var(--ambar);color:#4a3400}
@@ -550,9 +563,12 @@ const ESTILOS = `
        La etiqueta sigue en el marcado, escondida, porque es de donde el lector
        de pantalla saca el nombre del botón. */
     .cabecera .cabecera-acciones{display:flex;gap:14px}
+    /* display:flex explícito: un <button> es inline-block por defecto, así que
+       justify-content no hacía nada y el icono se apoyaba en la línea base */
     .cabecera .cabecera-acciones button,
     .cabecera .cabecera-acciones a.boton{width:46px;height:46px;flex:0 0 auto;
-      padding:0;border-radius:50%;justify-content:center}
+      padding:0;border-radius:50%;display:flex;align-items:center;
+      justify-content:center;line-height:0;letter-spacing:0}
     .cabecera .icono-barra{display:block}
     .cabecera .cabecera-acciones svg{width:19px;height:19px}
     .cabecera .etiqueta{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
@@ -673,6 +689,7 @@ let VENTA_EDITADA = { vendida: "", precio: 0 };
 let VISTA = "tarjetas";
 let PRUEBAS = false;
 let GASTOS = [];
+let SERVICIOS = [];
 let NFC = {};
 let METRICA_DINERO = "gastos";
 let GASTO_EDITADO = "";
@@ -748,6 +765,7 @@ function mostrar(dentro) {
     listar();
     llamar("modo").then((r) => pintarPruebas(r.prueba)).catch(() => {});
     cargarGastos();
+    cargarServicios();
   }
   else { cerrarQR(); cerrarTarjeta(); $("clave").focus(); }
 }
@@ -1672,7 +1690,9 @@ function paginacion(actual, total) {
 
 $("buscar").addEventListener("input", () => { PAGINA = 1; pintarTabla(); });
 $("limpiarBusca").onclick = () => { $("buscar").value = ""; PAGINA = 1; pintarTabla(); $("buscar").focus(); };
-$("recargar").onclick = () => { CARGANDO = true; pintarTabla(); listar(); cargarGastos(); };
+$("recargar").onclick = () => {
+  CARGANDO = true; pintarTabla(); listar(); cargarGastos(); cargarServicios();
+};
 
 /* ---------- borrado en dos toques ---------- */
 
@@ -1773,9 +1793,31 @@ function locales() {
       if (t.vendida > g.fecha) g.fecha = t.vendida;
     }
   });
+  // La ficha de Google se vende sola: un local puede pedirla sin comprar una
+  // sola tarjeta, así que también abre fila.
+  SERVICIOS.forEach((s) => {
+    const nombre = String(s.negocio || "").trim();
+    if (!nombre) return;
+    if (!mapa[nombre]) {
+      mapa[nombre] = { negocio: nombre, destino: "", acrilico: 0, sticker: 0,
+        vendidas: 0, importe: 0, fecha: "", codigos: { acrilico: [], sticker: [] } };
+    }
+    const g = mapa[nombre];
+    g.ficha = s;
+    if (s.fecha) {
+      g.importe += Number(s.precio) || 0;
+      if (s.fecha > g.fecha) g.fecha = s.fecha;
+    }
+  });
+
   // primero las que esperan respuesta: son las que piden hacer algo
-  return Object.keys(mapa).map((k) => mapa[k]).sort((a, b) =>
-    (a.vendidas ? 1 : 0) - (b.vendidas ? 1 : 0) ||
+  return Object.keys(mapa).map((k) => {
+    const l = mapa[k];
+    l.piezas = l.acrilico + l.sticker;
+    l.cobrado = l.vendidas > 0 || Boolean(l.ficha && l.ficha.fecha);
+    return l;
+  }).sort((a, b) =>
+    (a.cobrado ? 1 : 0) - (b.cobrado ? 1 : 0) ||
     (b.fecha || "").localeCompare(a.fecha || "") ||
     a.negocio.localeCompare(b.negocio));
 }
@@ -1791,6 +1833,11 @@ function plural(n, uno, varios) {
 
 function dinero(n) {
   return "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
+}
+
+// Lo cobrado por fichas: sin fecha es un trato hablado, no un ingreso.
+function ingresoFichas() {
+  return SERVICIOS.reduce((a, s) => a + (s.fecha ? Number(s.precio) || 0 : 0), 0);
 }
 
 function ventasPorDia(dias) {
@@ -1809,6 +1856,11 @@ function ventasPorDia(dias) {
     if (i === undefined) return;
     serie[i].unidades += 1;
     serie[i].ingresos += Number(t.precio) || 0;
+  });
+  // suma al dinero pero no a las unidades: una ficha no es una pieza impresa
+  SERVICIOS.forEach((s) => {
+    const i = indice[s.fecha];
+    if (i !== undefined) serie[i].ingresos += Number(s.precio) || 0;
   });
   return serie;
 }
@@ -1853,8 +1905,9 @@ function pintarVentas() {
   $("pozoGrafica").innerHTML = svgBarras(serie, campo);
 
   const lista = locales();
-  const vendidos = lista.filter((l) => l.vendidas).length;
-  const total = TARJETAS.reduce((a, t) => a + (t.vendida ? Number(t.precio) || 0 : 0), 0);
+  const vendidos = lista.filter((l) => l.cobrado).length;
+  const total = TARJETAS.reduce((a, t) => a + (t.vendida ? Number(t.precio) || 0 : 0), 0) +
+    ingresoFichas();
   const pendientes = lista.length - vendidos;
   $("graficaPie").innerHTML = "<span>" + vendidos + " aceptadas · " + pendientes +
     " pendientes</span><span>Acumulado <b>" + dinero(total) + "</b></span>";
@@ -1869,23 +1922,35 @@ function pintarVentas() {
 
   let filas = "";
   lista.forEach((l) => {
-    const aceptada = l.vendidas > 0;
-    const piezas = l.acrilico + l.sticker;
+    const piezas = l.piezas;
+    const f = l.ficha;
+    // sin plástico no hay nada que abrir, cobrar ni liberar: esa fila solo tiene ficha
+    const soloFicha = piezas === 0 ? " disabled" : "";
     filas += "<tr><td class='negocio'>" + escHtml(l.negocio) + "</td>" +
-      "<td class='piezas'>" + plural(l.acrilico, "acrílico", "acrílicos") + "<br>" +
-      plural(l.sticker, "sticker", "stickers") + "</td>" +
-      "<td><span class='estado " + (aceptada
+      "<td class='piezas'>" + (piezas
+        ? plural(l.acrilico, "acrílico", "acrílicos") + "<br>" +
+          plural(l.sticker, "sticker", "stickers")
+        : "<span class='sin-dato'>sin tarjetas</span>") +
+      (f ? "<div class='fila-num'>ficha de Google" +
+        (f.precio ? " · " + dinero(f.precio) : "") + "</div>" : "") +
+      "</td>" +
+      "<td><span class='estado " + (l.cobrado
         ? "estado-vendido'>Aceptada " + l.fecha
         : "estado-pendiente'>Pendiente") +
-      "</span>" + (aceptada && l.vendidas < piezas
+      "</span>" + (l.cobrado && piezas && l.vendidas < piezas
         ? "<div class='fila-num'>" + l.vendidas + " de " + piezas + " piezas</div>" : "") +
-      "</td><td class='importe'>" + (aceptada ? dinero(l.importe) : "—") + "</td>" +
+      (f && !f.hecha ? "<div class='fila-num'>ficha sin publicar</div>" : "") +
+      "</td><td class='importe'>" + (l.cobrado ? dinero(l.importe) : "—") + "</td>" +
       "<td><div class='acciones acciones-orden'>" +
-      "<button type='button' class='accion-qr' data-piezas='" + escHtml(l.negocio) + "'>Piezas</button>" +
-      "<button type='button' class='accion-editar' data-vender='" + escHtml(l.negocio) + "'>" +
-      (aceptada ? "Cobro" : "Aceptar") + "</button>" +
+      "<button type='button' class='accion-qr' data-piezas='" + escHtml(l.negocio) + "'" +
+      soloFicha + ">Piezas</button>" +
+      "<button type='button' class='accion-ficha" +
+      (f ? (f.hecha ? " lista" : " pedida") : "") +
+      "' data-ficha='" + escHtml(l.negocio) + "'>Ficha</button>" +
+      "<button type='button' class='accion-editar' data-vender='" + escHtml(l.negocio) + "'" +
+      soloFicha + ">" + (l.vendidas ? "Cobro" : "Aceptar") + "</button>" +
       "<button type='button' class='accion-apagar' data-cancelar='" + escHtml(l.negocio) +
-      "'>Cancelar</button></div></td></tr>";
+      "'" + soloFicha + ">Cancelar</button></div></td></tr>";
   });
   $("tablaLocales").innerHTML =
     "<table><thead><tr><th>Local</th><th>Piezas</th><th>Estado</th><th>Importe</th><th></th>" +
@@ -1954,6 +2019,28 @@ function parchearGasto(id, gasto) {
   pintarCuentas();
 }
 
+async function cargarServicios() {
+  try {
+    SERVICIOS = (await llamar("servicios")).servicios;
+    pintarVentas();
+    pintarCuentas();
+  } catch (e) {
+    avisar("avisoPanel", e.message, false);
+  }
+}
+
+function parchearServicio(id, servicio) {
+  if (!servicio) {
+    SERVICIOS = SERVICIOS.filter((x) => x.id !== id);
+  } else {
+    const entero = Object.assign({ id: id }, servicio);
+    const i = SERVICIOS.map((x) => x.id).indexOf(id);
+    if (i >= 0) SERVICIOS[i] = entero; else SERVICIOS.push(entero);
+  }
+  pintarVentas();
+  pintarCuentas();
+}
+
 async function cargarGastos() {
   try {
     GASTOS = (await llamar("gastos")).gastos;
@@ -1975,7 +2062,8 @@ function cuentas() {
     else if (g.paga === "nicolas") puesto.nicolas += m;
     else { puesto.felipe += m / 2; puesto.nicolas += m / 2; }
   });
-  const ingresos = TARJETAS.reduce((a, t) => a + (t.vendida ? Number(t.precio) || 0 : 0), 0);
+  const ingresos = TARJETAS.reduce((a, t) => a + (t.vendida ? Number(t.precio) || 0 : 0), 0) +
+    ingresoFichas();
   const justo = gastos / 2;
   return {
     gastos: gastos,
@@ -2006,6 +2094,10 @@ function dineroPorDia(dias) {
   TARJETAS.forEach((t) => {
     const i = indice[t.vendida];
     if (i !== undefined) serie[i].ingresos += Number(t.precio) || 0;
+  });
+  SERVICIOS.forEach((s) => {
+    const i = indice[s.fecha];
+    if (i !== undefined) serie[i].ingresos += Number(s.precio) || 0;
   });
   return serie;
 }
@@ -2129,6 +2221,7 @@ function pintarVista(valor) {
   $("vistaCuentas").hidden = VISTA !== "cuentas";
   $("abrirLocal").hidden = VISTA === "cuentas";
   $("abrirRango").hidden = VISTA === "cuentas";
+  $("abrirFicha").hidden = VISTA !== "locales";
   if (VISTA === "locales") pintarVentas();
   if (VISTA === "cuentas") pintarCuentas();
 }
@@ -2153,6 +2246,9 @@ $("tablaLocales").addEventListener("click", async (e) => {
 
   const pz = e.target.closest("[data-piezas]");
   if (pz) { abrirOrden(pz.dataset.piezas); return; }
+
+  const fi = e.target.closest("[data-ficha]");
+  if (fi) { abrirFicha(fi.dataset.ficha); return; }
 
   const v = e.target.closest("[data-vender]");
   if (v) { abrirVenta(v.dataset.vender); return; }
@@ -2191,6 +2287,130 @@ $("tablaLocales").addEventListener("click", async (e) => {
     pintarVentas();
   }
 });
+
+/* ---------- la ficha de Google, que se cobra aparte ---------- */
+
+// Montarle al local su sitio en Google —fotos, horarios, datos— es otro
+// servicio del negocio. No cuelga de ninguna tarjeta: hay locales que solo
+// piden eso, así que se guarda por su cuenta y se une a la orden por el nombre.
+let FICHA_ID = null;
+let focoFicha = null;
+
+function fichaDe(negocio) {
+  return SERVICIOS.filter((x) => x.negocio === negocio)[0] || null;
+}
+
+function pintarResumenFicha() {
+  const precio = Number($("fichaPrecio").value) || 0;
+  const fecha = $("fichaFecha").value;
+  $("fichaResumen").textContent = fecha
+    ? "Cobrada el " + fecha + " · " + dinero(precio)
+    : "Sin cobrar" + (precio ? " · " + dinero(precio) + " acordados" : "");
+}
+
+function abrirFicha(negocio) {
+  const s = negocio ? fichaDe(negocio) : null;
+  FICHA_ID = s ? s.id : null;
+  // los locales que ya existen, para no reescribir el nombre a mano
+  $("localesFicha").innerHTML = locales()
+    .map((l) => "<option value='" + escHtml(l.negocio) + "'>").join("");
+  $("fichaNegocio").value = s ? s.negocio : (negocio || "");
+  $("fichaPrecio").value = s && s.precio ? s.precio : "";
+  $("fichaFecha").value = s ? s.fecha || "" : "";
+  $("fichaNotas").value = s ? s.notas || "" : "";
+  $("fichaHecha").checked = Boolean(s && s.hecha);
+  $("borrarFicha").hidden = !s;
+  $("fichaTitulo").textContent = s ? "Ficha de " + s.negocio : "Ficha de Google";
+  $("guardarFicha").textContent = s ? "Guardar" : "Anotar";
+  olvidarConfirmacion();
+  limpiarAviso();
+  pintarResumenFicha();
+  focoFicha = document.activeElement;
+  $("modalFicha").hidden = false;
+  document.body.style.overflow = "hidden";
+  ($("fichaNegocio").value ? $("fichaPrecio") : $("fichaNegocio")).focus();
+}
+
+function cerrarFicha() {
+  if ($("modalFicha").hidden) return;
+  olvidarConfirmacion();
+  $("modalFicha").hidden = true;
+  document.body.style.overflow = "";
+  if (focoFicha && focoFicha.focus) focoFicha.focus();
+  focoFicha = null;
+  FICHA_ID = null;
+}
+
+$("abrirFicha").onclick = () => abrirFicha("");
+$("cerrarFicha").onclick = cerrarFicha;
+$("cancelarFicha").onclick = cerrarFicha;
+$("modalFicha").addEventListener("click", (e) => {
+  if (e.target.hasAttribute("data-cerrar-ficha")) cerrarFicha();
+});
+$("fichaPrecio").addEventListener("input", pintarResumenFicha);
+$("fichaFecha").addEventListener("input", pintarResumenFicha);
+
+$("formFicha").onsubmit = async (e) => {
+  e.preventDefault();
+  const negocio = $("fichaNegocio").value.trim();
+  if (!negocio) {
+    avisar("avisoFicha", "Falta el nombre del local.", false);
+    return;
+  }
+  const cuerpo = {
+    negocio: negocio,
+    precio: Math.max(0, Number($("fichaPrecio").value) || 0),
+    fecha: $("fichaFecha").value,
+    hecha: $("fichaHecha").checked,
+    notas: $("fichaNotas").value.trim(),
+  };
+  if (FICHA_ID) cuerpo.id = FICHA_ID;
+
+  const boton = $("guardarFicha");
+  const etiqueta = boton.textContent;
+  boton.disabled = true;
+  try {
+    const r = await llamar("servicio", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cuerpo),
+    });
+    cerrarFicha();
+    parchearServicio(r.id, r);
+    avisar("avisoPanel", "Ficha de " + negocio + " guardada", true);
+  } catch (err) {
+    avisar("avisoFicha", err.message, false);
+  } finally {
+    boton.disabled = false;
+    boton.textContent = etiqueta;
+  }
+};
+
+// Quitarla borra un cobro, así que pide el segundo clic como el resto
+$("borrarFicha").onclick = async () => {
+  if (!FICHA_ID) return;
+  const boton = $("borrarFicha");
+  if (CONFIRMANDO !== "ficha") { pedirConfirmacion(boton, "ficha"); return; }
+
+  olvidarConfirmacion();
+  const id = FICHA_ID;
+  const negocio = $("fichaNegocio").value.trim();
+  boton.disabled = true;
+  try {
+    await llamar("servicio-borrar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: id }),
+    });
+    cerrarFicha();
+    parchearServicio(id, null);
+    avisar("avisoPanel", "Ficha de " + negocio + " quitada", true);
+  } catch (err) {
+    avisar("avisoFicha", err.message, false);
+  } finally {
+    boton.disabled = false;
+  }
+};
 
 function abrirVenta(negocio) {
   const l = locales().filter((x) => x.negocio === negocio)[0];
@@ -2719,6 +2939,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (!$("modalActivar").hidden) cerrarActivar();
   else if (!$("modalGasto").hidden) cerrarGasto();
+  else if (!$("modalFicha").hidden) cerrarFicha();
   else if (!$("modalVenta").hidden) cerrarVenta();
   else if (!$("modalTarjeta").hidden) cerrarTarjeta();
   else cerrarQR();
@@ -2811,6 +3032,7 @@ export function vistaAdmin(origen) {
         <div class="cabecera-acciones">
           <button type="button" id="abrirLocal">Nueva orden</button>
           <button type="button" class="fantasma" id="abrirRango">Editar un rango</button>
+          <button type="button" class="fantasma" id="abrirFicha" hidden>Nueva ficha</button>
           <button type="button" class="fantasma" id="recargar">Refrescar</button>
         </div>
       </div>
@@ -3013,6 +3235,43 @@ export function vistaAdmin(origen) {
       <div class="modal-acciones">
         <button type="button" class="fantasma" id="cancelarActivar">Cancelar</button>
         <button type="submit" id="guardarActivar">Activar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="modalFicha" hidden>
+  <div class="modal-fondo" data-cerrar-ficha></div>
+  <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="fichaTitulo">
+    <button type="button" class="modal-cerrar" id="cerrarFicha" aria-label="Cerrar">✕</button>
+    <div class="modal-kicker">Servicio</div>
+    <h1 id="fichaTitulo">Ficha de Google</h1>
+    <p class="modal-subtitulo">Montarle el sitio en Google: fotos, horarios y datos.</p>
+
+    <form id="formFicha">
+      <label class="mini" for="fichaNegocio">Local</label>
+      <input id="fichaNegocio" type="text" maxlength="60" placeholder="Haunch Burguer"
+             autocomplete="off" list="localesFicha">
+      <datalist id="localesFicha"></datalist>
+
+      <div class="rango-fila">
+        <div><label class="mini" for="fichaPrecio">Precio en pesos</label>
+          <input id="fichaPrecio" type="number" min="0" step="1" placeholder="80000"></div>
+        <div><label class="mini" for="fichaFecha">Fecha del cobro</label>
+          <input id="fichaFecha" type="date"></div>
+      </div>
+      <div class="rango-resumen" id="fichaResumen"></div>
+
+      <label class="mini sobre-buscador" for="fichaNotas">Notas</label>
+      <input id="fichaNotas" type="text" maxlength="200" placeholder="Faltan las fotos del local"
+             autocomplete="off">
+
+      <label class="casilla"><input type="checkbox" id="fichaHecha"> Ya está publicada en Google</label>
+
+      <div class="modal-acciones">
+        <button type="button" class="fantasma" id="borrarFicha" hidden>Quitar</button>
+        <button type="button" class="fantasma" id="cancelarFicha">Cancelar</button>
+        <button type="submit" id="guardarFicha">Anotar</button>
       </div>
     </form>
   </div>

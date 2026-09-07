@@ -18,6 +18,9 @@
  *   GET  /api/gastos   listado de gastos                          (sesión)
  *   POST /api/gasto    {id?, fecha, proveedor, monto, paga, ...}  (sesión)
  *   POST /api/gasto-borrar {id}                                   (sesión)
+ *   GET  /api/servicios                                           (sesión)
+ *   POST /api/servicio {id?,negocio,precio,fecha,hecha,notas}     (sesión)
+ *   POST /api/servicio-borrar {id}                                (sesión)
  *
  * Secreto obligatorio:  ADMIN_PASSWORD
  *
@@ -28,6 +31,9 @@
  *                   + la misma info como metadata, para listar en una sola llamada
  *   "n:A7K2"        existe = el chip NFC de esa tarjeta ya está grabado
  *   "g:<id>"        un gasto: qué se compró, cuánto costó, quién puso y si llegó
+ *   "s:<id>"        un servicio vendido que no va en plástico: crearle al local su
+ *                   ficha de Google con fotos y horarios. fecha vacía = acordado
+ *                   pero todavía sin cobrar, igual que una tarjeta sin vender
  *   "intentos:<ip>" contador de logins fallidos, expira solo a las 24 horas
  */
 
@@ -175,6 +181,31 @@ function gastoDe(cuerpo) {
   };
 }
 
+// La ficha de Google se cobra aparte y no cuelga de ninguna tarjeta: un local
+// puede pedirla sin comprar un solo acrílico. Por eso vive en su propia clave y
+// se une a la orden por el nombre del negocio.
+function servicioDe(cuerpo) {
+  const negocio = String(cuerpo.negocio || "").trim().slice(0, 60);
+  if (!negocio) return { error: "Falta el nombre del local" };
+
+  const precio = Number(cuerpo.precio);
+  if (!Number.isFinite(precio) || precio < 0) return { error: "El precio no es válido" };
+
+  const cruda = String(cuerpo.fecha || "");
+  const fecha = cruda ? fechaValida(cruda) : "";
+  if (cruda && !fecha) return { error: "La fecha del cobro va en formato AAAA-MM-DD" };
+
+  return {
+    servicio: {
+      negocio: negocio,
+      precio: Math.round(precio),
+      fecha: fecha,
+      hecha: Boolean(cuerpo.hecha),
+      notas: String(cuerpo.notas || "").trim().slice(0, 200),
+    },
+  };
+}
+
 /* ---------- API ---------- */
 
 async function api(request, env, accion, url, ctx) {
@@ -287,6 +318,33 @@ async function api(request, env, accion, url, ctx) {
       : Date.now().toString(36);
     await env.TARJETAS.put("g:" + id, JSON.stringify(hecho.gasto), { metadata: hecho.gasto });
     return json(Object.assign({ ok: true, id: id }, hecho.gasto));
+  }
+
+  if (accion === "servicios" && request.method === "GET") {
+    const { keys } = await env.TARJETAS.list({ prefix: "s:" });
+    const servicios = keys.map((k) => Object.assign({ id: k.name.slice(2) }, k.metadata || {}));
+    servicios.sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+    return json({ servicios });
+  }
+
+  if (accion === "servicio" && request.method === "POST") {
+    const cuerpo = await request.json().catch(() => ({}));
+    const hecho = servicioDe(cuerpo);
+    if (hecho.error) return json({ error: hecho.error }, 400);
+
+    const id = FORMATO_ID.test(String(cuerpo.id || ""))
+      ? String(cuerpo.id)
+      : Date.now().toString(36);
+    await env.TARJETAS.put("s:" + id, JSON.stringify(hecho.servicio), { metadata: hecho.servicio });
+    return json(Object.assign({ ok: true, id: id }, hecho.servicio));
+  }
+
+  if (accion === "servicio-borrar" && request.method === "POST") {
+    const cuerpo = await request.json().catch(() => ({}));
+    const id = String(cuerpo.id || "");
+    if (!FORMATO_ID.test(id)) return json({ error: "Identificador inválido" }, 400);
+    await env.TARJETAS.delete("s:" + id);
+    return json({ ok: true });
   }
 
   if (accion === "gasto-borrar" && request.method === "POST") {
