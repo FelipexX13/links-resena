@@ -296,6 +296,37 @@ precio.
 El correo y el NIT del local quedan guardados en `b:<negocio>`, así que la
 siguiente vez salen puestos.
 
+### La lista de precios
+
+La ventana del cobro trae los precios de la publicidad en pastillas, bajo cada
+campo. **El vinilo baja por cantidad**, así que el tramo lo elige la propia orden
+con lo que lleva —12 stickers marcan el de 10-19— y los demás quedan a un toque
+por si hay que cambiarlo. **Otro** vacía el campo para escribir a mano cuando se
+hizo un descuento.
+
+| | Antes | Ahora |
+|---|---|---|
+| Acrílico NFC + QR | $70.000 | **$49.900** |
+| Vinilo de mesa NFC + QR | $35.000 | **$24.900** y baja por cantidad |
+| Creación de la ficha de Google | $60.000 | **$39.900** |
+
+Escala del vinilo: 1 → $24.900 · 2-4 → $22.900 · 5-9 → $19.900 · 10-19 → $16.900
+· 20-49 → $14.900 · 50-99 → $12.900 · 100+ → $11.900.
+
+Al abrir una orden sin cobrar, los tres campos vienen puestos con esos precios.
+Si ya se cobró, manda lo que se cobró.
+
+Todo eso está en `PRECIOS` y `LISTA`, encima de `preciosDeLaVenta`.
+
+### La oferta sale en el comprobante
+
+Bajo cada precio unitario va **el de antes, tachado**, y antes del total una línea
+verde con lo que se ahorró el cliente. El correo lleva la misma línea en su caja
+de resumen. Sale solo cuando lo cobrado está por debajo del precio de lista, así
+que un descuento propio también se ve.
+
+El tachado se dibuja a mano con `doc.line` sobre el texto: jsPDF no trae tachado.
+
 ### Enviado el comprobante, la orden se cierra
 
 El papel ya está en manos del cliente, así que a partir de ahí **no se toca

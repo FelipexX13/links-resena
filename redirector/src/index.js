@@ -332,6 +332,9 @@ function correoComprobante(d) {
     'style="font-family:Helvetica,Arial,sans-serif">' +
     fila("Fecha", d.fecha) +
     fila("Referencia", d.referencia) +
+    (d.ahorro ? "<tr><td style=\"padding:6px 0;font-size:13px;color:#1e8e3e\">Te ahorras" +
+      "</td><td align=\"right\" style=\"padding:6px 0;font-size:13px;color:#1e8e3e;" +
+      "font-weight:600\">-" + escapar(d.ahorro) + "</td></tr>" : "") +
     '<tr><td colspan="2" style="padding:4px 0"><div style="border-top:1px solid ' + linea +
     '"></div></td></tr>' +
     '<tr><td style="padding:6px 0;font-size:14px;color:' + tinta + ';font-weight:600">Total</td>' +
@@ -608,6 +611,7 @@ async function api(request, env, accion, url, ctx) {
       // "12 de septiembre de 2026" son 24: con 20 se comía el año
       fecha: String(cuerpo.fecha || "").slice(0, 40),
       referencia: String(cuerpo.referencia || "").slice(0, 30),
+      ahorro: String(cuerpo.ahorro || "").slice(0, 30),
       vendedor: String(cuerpo.vendedor || "").slice(0, 80),
       telefonoVendedor: String(cuerpo.telefonoVendedor || "").slice(0, 30),
     };

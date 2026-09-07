@@ -419,6 +419,18 @@ const ESTILOS = `
   .tope-nota b{color:var(--tinta-2);font-weight:500}
   /* el comprobante no es parte del formulario: se manda con lo que ya está
      guardado, así que va en su propio bloque debajo */
+  /* precios a un toque: pastillas pequeñas, la sugerida marcada */
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+  .chips button{padding:5px 11px;font-size:12px;font-weight:500;border-radius:999px;
+    background:var(--papel-2);color:var(--tinta-2);border:1px solid var(--linea)}
+  .chips button:hover:not(:disabled){background:var(--azul-piel);color:var(--azul-fuerte);
+    border-color:var(--azul-borde)}
+  .chips button.sugerido{background:var(--azul-piel);color:var(--azul-fuerte);
+    border-color:var(--azul-borde)}
+  .chips button.sugerido:hover:not(:disabled){background:var(--azul);color:#fff;
+    border-color:var(--azul)}
+  .chips .tramo{font-size:10.5px;opacity:.7;margin-left:4px}
+  .chips button.otro{background:transparent;border-style:dashed}
   .comprobante{margin-top:22px;padding-top:18px;border-top:1px solid var(--linea-suave)}
   .comprobante .modal-acciones{margin-top:10px}
   .casilla{display:flex;align-items:center;gap:9px;margin:16px 0 0;
@@ -2496,18 +2508,18 @@ function itemsDelLocal(l, precios) {
   const items = [];
   if (l.acrilico && precios.acrilico) {
     items.push({ que: "Acrílico personalizado con chip NFC",
-      cuantos: l.acrilico, unitario: precios.acrilico });
+      cuantos: l.acrilico, unitario: precios.acrilico, antes: LISTA.acrilico });
   }
   if (l.sticker && precios.sticker) {
     items.push({ que: "Sticker de mesa con chip NFC",
-      cuantos: l.sticker, unitario: precios.sticker });
+      cuantos: l.sticker, unitario: precios.sticker, antes: LISTA.sticker });
   }
   const ficha = precios.ficha !== undefined
     ? precios.ficha
     : (l.ficha ? Number(l.ficha.precio) || 0 : 0);
   if (ficha) {
     items.push({ que: "Montaje de la ficha del negocio en Google",
-      cuantos: 1, unitario: ficha });
+      cuantos: 1, unitario: ficha, antes: LISTA.ficha });
   }
   return items;
 }
@@ -2564,24 +2576,48 @@ function comprobantePDF(datos) {
   y += 2.5;
   doc.setDrawColor(226, 231, 240).line(izq, y, der, y);
 
-  doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(20, 30, 45);
   let total = 0;
+  let ahorro = 0;
   datos.items.forEach((it) => {
     const parcial = it.cuantos * it.unitario;
     total += parcial;
+    const rebaja = it.antes && it.antes > it.unitario
+      ? (it.antes - it.unitario) * it.cuantos : 0;
+    ahorro += rebaja;
+
     y += 8;
+    doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(20, 30, 45);
     const lineas = doc.splitTextToSize(it.que, 72);
     doc.text(lineas, izq, y);
     doc.text(String(it.cuantos), 118, y, { align: "right" });
     doc.text(dinero(it.unitario), 152, y, { align: "right" });
     doc.text(dinero(parcial), der, y, { align: "right" });
     y += (lineas.length - 1) * 4.6;
+
+    // el precio de antes, tachado a mano: jsPDF no trae subrayado ni tachado
+    if (rebaja) {
+      y += 4.4;
+      doc.setFontSize(8).setTextColor(150, 158, 172);
+      const viejo = dinero(it.antes);
+      doc.text(viejo, 152, y, { align: "right" });
+      const ancho = doc.getTextWidth(viejo);
+      doc.setDrawColor(150, 158, 172).setLineWidth(0.25);
+      doc.line(152 - ancho, y - 0.9, 152, y - 0.9);
+    }
   });
 
   y += 6;
-  doc.setDrawColor(226, 231, 240).line(izq, y, der, y);
+  doc.setDrawColor(226, 231, 240).setLineWidth(0.3).line(izq, y, der, y);
+
+  if (ahorro) {
+    y += 7;
+    doc.setFont("helvetica", "normal").setFontSize(9.5).setTextColor(30, 142, 62);
+    doc.text("Te ahorras", 152, y, { align: "right" });
+    doc.text("-" + dinero(ahorro), der, y, { align: "right" });
+  }
+
   y += 8;
-  doc.setFont("helvetica", "bold").setFontSize(12);
+  doc.setFont("helvetica", "bold").setFontSize(12).setTextColor(20, 30, 45);
   doc.text("Total", 152, y, { align: "right" });
   doc.text(dinero(total), der, y, { align: "right" });
 
@@ -2589,7 +2625,7 @@ function comprobantePDF(datos) {
   doc.text("Este documento no es una factura de venta ni una factura electrónica. " +
     "Es un comprobante comercial de la operación.", izq, 282, { maxWidth: der - izq });
 
-  return { doc: doc, total: total };
+  return { doc: doc, total: total, ahorro: ahorro };
 }
 
 function nombreArchivo(negocio, fecha) {
@@ -2703,6 +2739,7 @@ $("mandarComprobante").onclick = async () => {
         negocio: d.negocio,
         archivo: nombreArchivo(d.negocio, d.fecha),
         total: dinero(hecho.total),
+        ahorro: hecho.ahorro ? dinero(hecho.ahorro) : "",
         fecha: fechaLarga(d.fecha),
         referencia: d.referencia,
         vendedor: d.vendedor.nombre,
@@ -2839,11 +2876,14 @@ function abrirVenta(negocio) {
     const t = TARJETAS.filter((x) => x.negocio === l.negocio && tipoDe(x) === tipo && x.precio)[0];
     return t ? t.precio : "";
   };
-  $("precioAcrilico").value = unitario("acrilico");
-  $("precioSticker").value = unitario("sticker");
+  // si la orden ya se cobró se respeta lo que se cobró; si no, la lista de precios
+  $("precioAcrilico").value = unitario("acrilico") || (l.acrilico ? PRECIOS.acrilico : "");
+  $("precioSticker").value = unitario("sticker") || (l.sticker ? precioSticker(l.sticker) : "");
+  pintarChips();
   // un local puede no tener plástico y llevar solo la ficha
   $("bloquePiezas").hidden = !l.piezas;
-  $("precioFicha").value = l.ficha && l.ficha.precio ? l.ficha.precio : "";
+  $("precioFicha").value = l.ficha && l.ficha.precio ? l.ficha.precio
+    : (l.ficha ? PRECIOS.ficha : "");
   $("guardarVenta").textContent = l.vendidas ? "Guardar el cobro" : "Aceptar la orden";
   const comp = COMPRADORES[l.negocio] || {};
   $("ventaCorreo").value = comp.correo || "";
@@ -2857,6 +2897,67 @@ function abrirVenta(negocio) {
   document.body.style.overflow = "hidden";
   $("precioAcrilico").focus();
 }
+
+// La lista de precios de la publicidad. El vinilo baja por cantidad, así que el
+// tramo lo elige la propia orden: para eso ya sabe cuántos lleva.
+// Lo que vale sin la promoción. Va tachado en el comprobante, para que el
+// cliente vea lo que se ahorró.
+const LISTA = { acrilico: 70000, sticker: 35000, ficha: 60000 };
+
+const PRECIOS = {
+  acrilico: 49900,
+  ficha: 39900,
+  sticker: [
+    { desde: 100, rotulo: "100+", precio: 11900 },
+    { desde: 50, rotulo: "50-99", precio: 12900 },
+    { desde: 20, rotulo: "20-49", precio: 14900 },
+    { desde: 10, rotulo: "10-19", precio: 16900 },
+    { desde: 5, rotulo: "5-9", precio: 19900 },
+    { desde: 2, rotulo: "2-4", precio: 22900 },
+    { desde: 1, rotulo: "1", precio: 24900 },
+  ],
+};
+
+function precioSticker(cuantos) {
+  const tramo = PRECIOS.sticker.filter((x) => cuantos >= x.desde)[0];
+  return tramo ? tramo.precio : PRECIOS.sticker[PRECIOS.sticker.length - 1].precio;
+}
+
+function chipPrecio(campo, precio, rotulo, sugerido) {
+  return "<button type='button' data-campo='" + campo + "' data-precio='" + precio + "'" +
+    (sugerido ? " class='sugerido'" : "") + ">" + dinero(precio) +
+    (rotulo ? "<span class='tramo'>" + rotulo + "</span>" : "") + "</button>";
+}
+
+function pintarChips() {
+  const l = LOCAL_VENTA;
+  if (!l) return;
+  const otro = (campo) => "<button type='button' class='otro' data-otro='" + campo + "'>Otro</button>";
+  $("chipsAcrilico").innerHTML =
+    chipPrecio("precioAcrilico", PRECIOS.acrilico, "", true) + otro("precioAcrilico");
+  const sugerido = precioSticker(l.sticker);
+  $("chipsSticker").innerHTML = PRECIOS.sticker.slice().reverse()
+    .map((t) => chipPrecio("precioSticker", t.precio, t.rotulo, t.precio === sugerido)).join("") +
+    otro("precioSticker");
+  $("chipsFicha").innerHTML =
+    chipPrecio("precioFicha", PRECIOS.ficha, "", true) + otro("precioFicha");
+}
+
+$("modalVenta").addEventListener("click", (e) => {
+  const chip = e.target.closest("[data-precio]");
+  if (chip && !chip.disabled) {
+    $(chip.dataset.campo).value = chip.dataset.precio;
+    pintarResumenVenta();
+    return;
+  }
+  const libre = e.target.closest("[data-otro]");
+  if (libre && !libre.disabled) {
+    const campo = $(libre.dataset.otro);
+    campo.value = "";
+    campo.focus();
+    pintarResumenVenta();
+  }
+});
 
 function preciosDeLaVenta() {
   return {
@@ -2878,6 +2979,8 @@ function pintarBloqueoVenta(negocio) {
   }
   ["ventaFecha", "precioAcrilico", "precioSticker", "precioFicha", "guardarVenta"]
     .forEach((id) => { $(id).disabled = Boolean(acta); });
+  $("modalVenta").querySelectorAll(".chips button")
+    .forEach((b) => { b.disabled = Boolean(acta); });
 }
 
 $("borrarComprobante").onclick = async () => {
@@ -3905,14 +4008,17 @@ export function vistaAdmin(origen) {
 
       <div class="rango-fila" id="bloquePiezas">
         <div><label class="mini" for="precioAcrilico">Precio por acrílico</label>
-          <input id="precioAcrilico" type="number" min="0" step="1" placeholder="0" autocomplete="off"></div>
+          <input id="precioAcrilico" type="number" min="0" step="1" placeholder="0" autocomplete="off">
+          <div class="chips" id="chipsAcrilico"></div></div>
         <div><label class="mini" for="precioSticker">Precio por sticker</label>
-          <input id="precioSticker" type="number" min="0" step="1" placeholder="0" autocomplete="off"></div>
+          <input id="precioSticker" type="number" min="0" step="1" placeholder="0" autocomplete="off">
+          <div class="chips" id="chipsSticker"></div></div>
       </div>
 
       <label class="mini" for="precioFicha">Ficha de Google
         <span class="suave">(vacío si no lleva)</span></label>
       <input id="precioFicha" type="number" min="0" step="1" placeholder="0" autocomplete="off">
+      <div class="chips" id="chipsFicha"></div>
       <div class="rango-resumen" id="ventaResumen"></div>
 
       <label class="mini" for="ventaCorreo">Correo del cliente</label>
