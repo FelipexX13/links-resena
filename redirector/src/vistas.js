@@ -447,6 +447,11 @@ const ESTILOS = `
     color:var(--ambar-tinta);border-radius:var(--r-l);padding:12px 16px;
     font-size:13px;margin-bottom:20px}
   .banner b{font-weight:600}
+  /* el de después de aceptar: la orden ya está guardada, no es una advertencia */
+  .banner.hecho{background:var(--verde-piel);border-color:var(--verde-borde);
+    color:var(--verde-fuerte)}
+  .banner.hecho button{margin-left:0}
+  .banner.hecho .fantasma{margin-left:auto}
   .banner button{margin-left:auto}
   /* ---- cuentas ---- */
   .socios{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;
@@ -2699,6 +2704,15 @@ async function recordarComprador(negocio, correo, nit, telefono) {
   }
 }
 
+$("mandarComprobante").onclick = () => enviarComprobante($("mandarComprobante"));
+
+$("siEnviar").onclick = async () => {
+  const fue = await enviarComprobante($("siEnviar"));
+  if (fue) cerrarVenta();
+};
+
+$("ahoraNo").onclick = cerrarVenta;
+
 $("bajarComprobante").onclick = () => {
   try {
     const d = datosDelComprobante();
@@ -2732,20 +2746,19 @@ $("compartirComprobante").onclick = async () => {
   }
 };
 
-$("mandarComprobante").onclick = async () => {
+async function enviarComprobante(boton) {
   const correo = $("ventaCorreo").value.trim();
   if (!correo) {
     avisar("avisoVenta", "Escribe el correo del cliente.", false);
     $("ventaCorreo").focus();
-    return;
+    return false;
   }
-  const boton = $("mandarComprobante");
   const etiqueta = boton.textContent;
   boton.disabled = true;
   boton.textContent = "Enviando…";
   try {
     const d = datosDelComprobante();
-    if (!d) return;
+    if (!d) return false;
     const hecho = comprobantePDF(d);
     const base64 = hecho.doc.output("datauristring").split(",")[1];
     const r = await llamar("comprobante", {
@@ -2772,8 +2785,10 @@ $("mandarComprobante").onclick = async () => {
     }
     avisar("avisoPanel", "Comprobante enviado a " + correo +
       " · la orden queda cerrada", true);
+    return true;
   } catch (err) {
     avisar("avisoVenta", err.message, false);
+    return false;
   } finally {
     boton.disabled = false;
     boton.textContent = etiqueta;
@@ -2907,6 +2922,7 @@ function abrirVenta(negocio) {
   $("ventaCorreo").value = comp.correo || "";
   $("ventaNit").value = comp.nit || "";
   $("ventaTelefono").value = comp.telefono || "";
+  $("preguntaComprobante").hidden = true;
   pintarBloqueoVenta(l.negocio);
   limpiarAviso("avisoVenta");
   pintarResumenVenta();
@@ -3134,9 +3150,9 @@ $("formVenta").onsubmit = async (e) => {
     }
 
     const importe = precios.acrilico * l.acrilico + precios.sticker * l.sticker + precios.ficha;
-    await recordarComprador(l.negocio, $("ventaCorreo").value.trim(),
+    const correoCliente = $("ventaCorreo").value.trim();
+    await recordarComprador(l.negocio, correoCliente,
       $("ventaNit").value.trim(), $("ventaTelefono").value.trim());
-    cerrarVenta();
     for (const tipo of ["acrilico", "sticker"]) {
       if (l.codigos[tipo].length) {
         parchearTarjetas(l.codigos[tipo],
@@ -3145,6 +3161,15 @@ $("formVenta").onsubmit = async (e) => {
     }
     if (fichaNueva) parchearServicio(fichaNueva.id, fichaNueva);
     avisar("avisoPanel", "Orden de " + l.negocio + " aceptada · " + dinero(importe), true);
+    // si hay correo, el paso siguiente casi siempre es mandarlo: se pregunta aquí
+    // en vez de obligar a volver a entrar al cobro
+    if (correoCliente && !cerrada(l.negocio)) {
+      $("preguntaCorreo").textContent = correoCliente;
+      $("preguntaComprobante").hidden = false;
+      $("preguntaComprobante").scrollIntoView({ block: "nearest" });
+    } else {
+      cerrarVenta();
+    }
   } catch (err) {
     avisar("avisoVenta", err.message, false);
   } finally {
@@ -4020,6 +4045,13 @@ export function vistaAdmin(origen) {
     <div class="modal-kicker">Venta</div>
     <h1 id="ventaTitulo">Aceptar la orden</h1>
     <p class="modal-subtitulo" id="ventaSubtitulo"></p>
+
+    <div class="banner hecho" id="preguntaComprobante" hidden role="status">
+      <span>Orden aceptada. <b>¿Le mando el comprobante a
+        <span id="preguntaCorreo"></span>?</b></span>
+      <button type="button" class="fantasma" id="ahoraNo">Ahora no</button>
+      <button type="button" class="leer" id="siEnviar">Enviar</button>
+    </div>
 
     <div class="banner" id="bloqueoVenta" hidden role="status">
       <span id="bloqueoTexto"></span>

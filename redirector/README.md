@@ -292,9 +292,11 @@ archivo, no forma serie. Como somos no responsables de IVA (RUT responsabilidad
 *documento soporte en adquisiciones a no obligados a facturar*; eso no sale de
 aquí.
 
-Tres botones, y ninguno se dispara solo: el envío es un clic aparte del guardado,
-porque a veces se cierra la venta antes de tener el correo o hay que corregir un
-precio.
+Tres botones, y ninguno se dispara solo. Pero **al aceptar la orden la ventana no
+se cierra**: si hay correo del cliente, pregunta ahí mismo si mandarlo, con
+*Enviar* y *Ahora no*. Es lo que se hace a continuación nueve de cada diez veces,
+y sin la pregunta tocaba volver a entrar al cobro. Sin correo guardado, se cierra
+como siempre.
 
 | Botón | Qué hace |
 |---|---|
