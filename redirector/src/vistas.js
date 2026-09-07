@@ -1446,6 +1446,18 @@ function editar(codigo) {
   abrirTarjetaModal();
 }
 
+// Si ya hay nombre escrito, el enlace abre Maps buscándolo: es lo que se hace a
+// continuación, copiar la URL del sitio.
+function pintarEnlaceMaps() {
+  const nombre = $("negocio").value.trim() || $("buscarLocal").value.trim();
+  $("enlaceMaps").href = nombre
+    ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(nombre)
+    : "https://www.google.com/maps";
+}
+
+$("negocio").addEventListener("input", pintarEnlaceMaps);
+$("buscarLocal").addEventListener("input", pintarEnlaceMaps);
+
 function pintarModo(valor) {
   MODO = valor === "rango" || valor === "local" ? valor : "una";
   marcarSegmento("modoTarjeta", MODO);
@@ -1462,6 +1474,7 @@ function pintarModo(valor) {
   if (MODO === "rango") pintarOrigenRango(ORIGEN_RANGO);
   else $("bloqueTipo").hidden = MODO === "local";   // en un local van los dos tipos
   if (MODO === "local") pintarResumenLocal();
+  pintarEnlaceMaps();
 }
 
 $("ordenLlevaFicha").addEventListener("change", () => {
@@ -3834,6 +3847,8 @@ export function vistaAdmin(origen) {
 
       <div class="modal-acciones acciones-izq">
         <button type="button" class="leer" id="analizar">Leer la URL</button>
+        <a class="enlace-mini" id="enlaceMaps" target="_blank" rel="noopener"
+           href="https://www.google.com/maps">Google Maps</a>
         <a class="enlace-mini" target="_blank" rel="noopener"
            href="https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder">Buscador de Place ID</a>
       </div>
