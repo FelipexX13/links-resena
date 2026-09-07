@@ -3804,14 +3804,14 @@ export function vistaAdmin(origen) {
 
       <div class="rango-fila" id="bloquePiezas">
         <div><label class="mini" for="precioAcrilico">Precio por acrílico</label>
-          <input id="precioAcrilico" type="number" min="0" step="100" placeholder="0" autocomplete="off"></div>
+          <input id="precioAcrilico" type="number" min="0" step="1" placeholder="0" autocomplete="off"></div>
         <div><label class="mini" for="precioSticker">Precio por sticker</label>
-          <input id="precioSticker" type="number" min="0" step="100" placeholder="0" autocomplete="off"></div>
+          <input id="precioSticker" type="number" min="0" step="1" placeholder="0" autocomplete="off"></div>
       </div>
 
       <label class="mini" for="precioFicha">Ficha de Google
         <span class="suave">(vacío si no lleva)</span></label>
-      <input id="precioFicha" type="number" min="0" step="1000" placeholder="0" autocomplete="off">
+      <input id="precioFicha" type="number" min="0" step="1" placeholder="0" autocomplete="off">
       <div class="rango-resumen" id="ventaResumen"></div>
 
       <div class="rango-fila">
