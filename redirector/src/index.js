@@ -24,7 +24,7 @@
  *   GET  /api/ajustes                                             (sesión)
  *   POST /api/ajustes {nombre,cedula,nota}                        (sesión)
  *   GET  /api/compradores                                         (sesión)
- *   POST /api/comprador {negocio,correo,nit}                      (sesión)
+ *   POST /api/comprador {negocio,correo,nit,telefono}             (sesión)
  *   POST /api/comprobante {correo,negocio,archivo,pdf,total}      (sesión)
  *
  * Secreto obligatorio:  ADMIN_PASSWORD
@@ -39,7 +39,7 @@
  *   "s:<id>"        un servicio vendido que no va en plástico: crearle al local su
  *                   ficha de Google con fotos y horarios. fecha vacía = acordado
  *                   pero todavía sin cobrar, igual que una tarjeta sin vender
- *   "b:<negocio>"   a quién se le manda el comprobante: correo y NIT del local
+ *   "b:<negocio>"   a quién se le manda el comprobante: correo, NIT y teléfono
  *   "cfg:vendedor"  nombre, cédula y nota del que vende, para el comprobante
  *   "intentos:<ip>" contador de logins fallidos, expira solo a las 24 horas
  */
@@ -246,8 +246,89 @@ function compradorDe(cuerpo) {
       negocio: negocio,
       correo: correo,
       nit: String(cuerpo.nit || "").trim().slice(0, 30),
+      telefono: String(cuerpo.telefono || "").trim().slice(0, 30),
     },
   };
+}
+
+function escapar(t) {
+  return String(t == null ? "" : t)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// Correo en tablas y estilos en línea, que es lo único que respetan Gmail y
+// Outlook. La franja de cuatro colores son cuatro celdas al 25%: un degradado
+// CSS ahí se cae en la mitad de los clientes.
+function correoComprobante(d) {
+  const gris = "#5b6779";
+  const tinta = "#16202e";
+  const linea = "#e2e7f0";
+  const fila = (rotulo, valor) => !valor ? "" :
+    "<tr><td style=\"padding:6px 0;font-size:13px;color:" + gris + "\">" + escapar(rotulo) +
+    "</td><td align=\"right\" style=\"padding:6px 0;font-size:13px;color:" + tinta +
+    ";font-weight:600\">" + escapar(valor) + "</td></tr>";
+
+  // el charset va explícito: sin él hay clientes que leen el UTF-8 como latin-1
+  // y las tildes salen partidas
+  return '<!doctype html><html><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1"></head>' +
+    '<body style="margin:0;padding:0;background:#f4f7fb">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" ' +
+    'style="background:#f4f7fb;padding:28px 12px">' +
+    '<tr><td align="center">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" ' +
+    'style="max-width:544px;background:#ffffff;border:1px solid ' + linea + ';border-radius:14px">' +
+
+    // la franja de la marca
+    '<tr><td style="padding:0"><table role="presentation" width="100%" cellpadding="0" ' +
+    'cellspacing="0"><tr>' +
+    '<td width="25%" style="height:4px;line-height:4px;font-size:0;background:#4285F4">&nbsp;</td>' +
+    '<td width="25%" style="height:4px;line-height:4px;font-size:0;background:#EA4335">&nbsp;</td>' +
+    '<td width="25%" style="height:4px;line-height:4px;font-size:0;background:#FBBC05">&nbsp;</td>' +
+    '<td width="25%" style="height:4px;line-height:4px;font-size:0;background:#34A853">&nbsp;</td>' +
+    '</tr></table></td></tr>' +
+
+    '<tr><td style="padding:30px 32px 8px;font-family:Helvetica,Arial,sans-serif">' +
+    '<div style="font-size:11px;font-weight:700;letter-spacing:1.4px;color:' + gris +
+    ';text-transform:uppercase">Comprobante de venta</div>' +
+    '<div style="margin-top:8px;font-size:22px;font-weight:700;color:' + tinta +
+    ';line-height:1.25">' + escapar(d.negocio) + '</div>' +
+    '<p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:' + gris + '">' +
+    'Gracias por tu compra. Adjunto va el comprobante en PDF con el detalle de lo ' +
+    'entregado.</p>' +
+    '</td></tr>' +
+
+    '<tr><td style="padding:20px 32px 0;font-family:Helvetica,Arial,sans-serif">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" ' +
+    'style="background:#f8fafd;border:1px solid ' + linea + ';border-radius:10px">' +
+    '<tr><td style="padding:14px 16px">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" ' +
+    'style="font-family:Helvetica,Arial,sans-serif">' +
+    fila("Fecha", d.fecha) +
+    fila("Referencia", d.referencia) +
+    '<tr><td colspan="2" style="padding:4px 0"><div style="border-top:1px solid ' + linea +
+    '"></div></td></tr>' +
+    '<tr><td style="padding:6px 0;font-size:14px;color:' + tinta + ';font-weight:600">Total</td>' +
+    '<td align="right" style="padding:6px 0;font-size:18px;color:' + tinta +
+    ';font-weight:700">' + escapar(d.total) + '</td></tr>' +
+    '</table></td></tr></table></td></tr>' +
+
+    '<tr><td style="padding:24px 32px 30px;font-family:Helvetica,Arial,sans-serif">' +
+    '<p style="margin:0;font-size:14px;line-height:1.6;color:' + gris + '">' +
+    'Cualquier duda, responde a este correo' +
+    (d.telefonoVendedor ? ' o escríbenos al ' + escapar(d.telefonoVendedor) : '') + '.</p>' +
+    '<div style="margin-top:22px;padding-top:18px;border-top:1px solid ' + linea + '">' +
+    '<div style="font-size:14px;font-weight:600;color:' + tinta + '">' +
+    escapar(d.vendedor) + '</div>' +
+    '<div style="margin-top:3px;font-size:12px;color:' + gris + '">' +
+    escapar(NOMBRE_REMITENTE) + ' · ' + escapar(CORREO_REMITENTE) + '</div>' +
+    '<p style="margin:14px 0 0;font-size:11px;line-height:1.5;color:#8c95a5">' +
+    'Este documento no es una factura de venta ni una factura electrónica. ' +
+    'Es un comprobante comercial de la operación.</p>' +
+    '</div></td></tr>' +
+
+    '</table></td></tr></table></body></html>';
 }
 
 /* ---------- API ---------- */
@@ -414,7 +495,11 @@ async function api(request, env, accion, url, ctx) {
     const cuerpo = await request.json().catch(() => ({}));
     const hecho = compradorDe(cuerpo);
     if (hecho.error) return json({ error: hecho.error }, 400);
-    const dato = { correo: hecho.comprador.correo, nit: hecho.comprador.nit };
+    const dato = {
+      correo: hecho.comprador.correo,
+      nit: hecho.comprador.nit,
+      telefono: hecho.comprador.telefono,
+    };
     await env.TARJETAS.put("b:" + hecho.comprador.negocio, JSON.stringify(dato),
       { metadata: dato });
     return json(Object.assign({ ok: true }, hecho.comprador));
@@ -434,6 +519,14 @@ async function api(request, env, accion, url, ctx) {
     const negocio = String(cuerpo.negocio || "").trim().slice(0, 60) || "tu compra";
     const archivo = String(cuerpo.archivo || "comprobante.pdf").slice(0, 80);
     const total = String(cuerpo.total || "").slice(0, 30);
+    const datos = {
+      negocio: negocio,
+      total: total,
+      fecha: String(cuerpo.fecha || "").slice(0, 20),
+      referencia: String(cuerpo.referencia || "").slice(0, 30),
+      vendedor: String(cuerpo.vendedor || "").slice(0, 80),
+      telefonoVendedor: String(cuerpo.telefonoVendedor || "").slice(0, 30),
+    };
 
     const r = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
@@ -443,9 +536,14 @@ async function api(request, env, accion, url, ctx) {
         replyTo: { email: CORREO_REMITENTE },
         to: [{ email: correo }],
         subject: "Comprobante de venta · " + negocio,
-        htmlContent: "<p>Hola,</p><p>Adjunto el comprobante de la venta" +
-          (total ? " por <b>" + total + "</b>" : "") + ".</p>" +
-          "<p>Cualquier cosa, responde a este correo.</p><p>Gracias.</p>",
+        htmlContent: correoComprobante(datos),
+        textContent: "Gracias por tu compra. Adjunto va el comprobante de venta" +
+          (total ? " por " + total : "") + ".\n\n" +
+          (datos.fecha ? "Fecha: " + datos.fecha + "\n" : "") +
+          (datos.referencia ? "Referencia: " + datos.referencia + "\n" : "") +
+          "\nCualquier duda, responde a este correo.\n\n" +
+          datos.vendedor + "\n" + NOMBRE_REMITENTE + " · " + CORREO_REMITENTE + "\n\n" +
+          "Este documento no es una factura de venta ni una factura electrónica.",
         attachment: [{ name: archivo, content: pdf }],
       }),
     });

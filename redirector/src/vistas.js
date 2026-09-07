@@ -2414,20 +2414,21 @@ function comprobantePDF(datos) {
   doc.text(datos.vendedor.nombre, izq, y);
   doc.text(datos.negocio || "—", 110, y);
 
-  y += 5;
+  // cada columna crece por su lado y la tabla arranca debajo de la más larga
   doc.setFont("helvetica", "normal").setFontSize(9.5).setTextColor(90, 100, 120);
-  doc.text("C.C. " + datos.vendedor.cedula, izq, y);
-  if (datos.nit) doc.text("NIT/C.C. " + datos.nit, 110, y);
+  let mias = ["C.C. " + datos.vendedor.cedula];
+  if (datos.vendedor.telefono) mias.push("Tel. " + datos.vendedor.telefono);
+  if (datos.vendedor.nota) mias = mias.concat(doc.splitTextToSize(datos.vendedor.nota, 78));
 
-  if (datos.vendedor.telefono) {
-    y += 4.5;
-    doc.text("Tel. " + datos.vendedor.telefono, izq, y);
-  }
-  if (datos.vendedor.nota) {
-    y += 4.5;
-    doc.text(doc.splitTextToSize(datos.vendedor.nota, 80), izq, y);
-    y += (doc.splitTextToSize(datos.vendedor.nota, 80).length - 1) * 4.2;
-  }
+  let suyas = [];
+  if (datos.nit) suyas.push("NIT/C.C. " + datos.nit);
+  if (datos.correo) suyas = suyas.concat(doc.splitTextToSize(datos.correo, 78));
+  if (datos.telefono) suyas.push("Tel. " + datos.telefono);
+
+  let yi = y, yd = y;
+  mias.forEach((t) => { yi += 4.6; doc.text(t, izq, yi); });
+  suyas.forEach((t) => { yd += 4.6; doc.text(t, 110, yd); });
+  y = Math.max(yi, yd);
 
   y += 12;
   doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(120, 130, 145);
@@ -2460,15 +2461,7 @@ function comprobantePDF(datos) {
   doc.text("Total", 152, y, { align: "right" });
   doc.text(dinero(total), der, y, { align: "right" });
 
-  y += 22;
-  doc.setDrawColor(160, 170, 185).line(izq, y, izq + 62, y);
-  y += 5;
-  doc.setFont("helvetica", "normal").setFontSize(9.5).setTextColor(90, 100, 120);
-  doc.text(datos.vendedor.nombre, izq, y);
-  y += 4.5;
-  doc.text("C.C. " + datos.vendedor.cedula, izq, y);
-
-  doc.setFontSize(8).setTextColor(140, 150, 165);
+  doc.setFont("helvetica", "normal").setFontSize(8).setTextColor(140, 150, 165);
   doc.text("Este documento no es una factura de venta ni una factura electrónica. " +
     "Es un comprobante comercial de la operación.", izq, 282, { maxWidth: der - izq });
 
@@ -2629,21 +2622,24 @@ function datosDelComprobante() {
     vendedor: VENDEDOR,
     negocio: l.negocio,
     nit: $("ventaNit").value.trim(),
+    correo: $("ventaCorreo").value.trim(),
+    telefono: $("ventaTelefono").value.trim(),
     items: items,
   };
 }
 
-async function recordarComprador(negocio, correo, nit) {
-  if (!correo && !nit) return;
+async function recordarComprador(negocio, correo, nit, telefono) {
+  if (!correo && !nit && !telefono) return;
   const guardado = COMPRADORES[negocio] || {};
-  if (guardado.correo === correo && guardado.nit === nit) return;
+  if (guardado.correo === correo && guardado.nit === nit &&
+      guardado.telefono === telefono) return;
   try {
     await llamar("comprador", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ negocio: negocio, correo: correo, nit: nit }),
+      body: JSON.stringify({ negocio: negocio, correo: correo, nit: nit, telefono: telefono }),
     });
-    COMPRADORES[negocio] = { negocio: negocio, correo: correo, nit: nit };
+    COMPRADORES[negocio] = { negocio: negocio, correo: correo, nit: nit, telefono: telefono };
   } catch (e) {
     // que no se caiga la venta por no poder recordar el correo
   }
@@ -2706,10 +2702,14 @@ $("mandarComprobante").onclick = async () => {
         negocio: d.negocio,
         archivo: nombreArchivo(d.negocio, d.fecha),
         total: dinero(hecho.total),
+        fecha: fechaLarga(d.fecha),
+        referencia: d.referencia,
+        vendedor: d.vendedor.nombre,
+        telefonoVendedor: d.vendedor.telefono || "",
         pdf: base64,
       }),
     });
-    await recordarComprador(d.negocio, correo, d.nit);
+    await recordarComprador(d.negocio, correo, d.nit, d.telefono);
     avisar("avisoPanel", "Comprobante enviado a " + correo, true);
   } catch (err) {
     avisar("avisoVenta", err.message, false);
@@ -2800,6 +2800,7 @@ function abrirVenta(negocio) {
   const comp = COMPRADORES[l.negocio] || {};
   $("ventaCorreo").value = comp.correo || "";
   $("ventaNit").value = comp.nit || "";
+  $("ventaTelefono").value = comp.telefono || "";
   limpiarAviso("avisoVenta");
   pintarResumenVenta();
   focoVenta = document.activeElement;
@@ -2907,7 +2908,8 @@ $("formVenta").onsubmit = async (e) => {
     }
 
     const importe = precios.acrilico * l.acrilico + precios.sticker * l.sticker + precios.ficha;
-    await recordarComprador(l.negocio, $("ventaCorreo").value.trim(), $("ventaNit").value.trim());
+    await recordarComprador(l.negocio, $("ventaCorreo").value.trim(),
+      $("ventaNit").value.trim(), $("ventaTelefono").value.trim());
     cerrarVenta();
     for (const tipo of ["acrilico", "sticker"]) {
       if (l.codigos[tipo].length) {
@@ -3814,11 +3816,14 @@ export function vistaAdmin(origen) {
       <input id="precioFicha" type="number" min="0" step="1" placeholder="0" autocomplete="off">
       <div class="rango-resumen" id="ventaResumen"></div>
 
+      <label class="mini" for="ventaCorreo">Correo del cliente</label>
+      <input id="ventaCorreo" type="email" placeholder="local@correo.com" autocomplete="off">
+
       <div class="rango-fila">
-        <div><label class="mini" for="ventaCorreo">Correo del cliente</label>
-          <input id="ventaCorreo" type="email" placeholder="local@correo.com" autocomplete="off"></div>
         <div><label class="mini" for="ventaNit">NIT o cédula <span class="suave">(opcional)</span></label>
           <input id="ventaNit" type="text" maxlength="30" placeholder="900123456-7" autocomplete="off"></div>
+        <div><label class="mini" for="ventaTelefono">Teléfono <span class="suave">(opcional)</span></label>
+          <input id="ventaTelefono" type="text" maxlength="30" placeholder="300 123 4567" autocomplete="off"></div>
       </div>
 
       <div class="modal-acciones">
