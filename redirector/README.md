@@ -261,12 +261,13 @@ misma fila que el resto y con la misma fecha, saliendo en el mismo comprobante.
 Dejar el precio vacío al cobrar no la borra: la deja como estaba. Para quitarla,
 se desmarca la casilla en Orden.
 
-Un local puede tener ficha sin comprar una sola tarjeta. Entonces su fila sale con
-«sin tarjetas» y **Piezas** y **Cancelar** desactivados, porque no hay plástico
-que abrir ni liberar; **Aceptar** sigue activo, que es por donde se cobra.
+Un local puede tener ficha sin comprar una sola tarjeta: su fila sale con «sin
+tarjetas» y los tres botones sirven igual, porque la orden existe aunque no haya
+plástico.
 
-El botón lleva el color del estado, como el del NFC: ámbar si está pedida,
-verde si ya está publicada.
+**Cancelar se la lleva.** La ficha es parte de la orden, así que si el local no
+paga, se va con el resto. Antes solo liberaba tarjetas y dejaba la ficha cobrada:
+la fila seguía viva, en verde, y con Cancelar apagado no había cómo limpiarla.
 
 ## Comprobante de venta
 

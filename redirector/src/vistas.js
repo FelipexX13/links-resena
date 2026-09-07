@@ -2005,8 +2005,7 @@ function pintarVentas() {
     const piezas = l.piezas;
     const f = l.ficha;
     // sin plástico no hay nada que abrir, cobrar ni liberar: esa fila solo tiene ficha
-    // sin plástico no hay nada que liberar; abrir y cobrar sí, por la ficha
-    const soloFicha = piezas === 0 ? " disabled" : "";
+    // una fila sin piezas y sin ficha no existe, así que los tres botones valen
     const sinCobro = piezas === 0 && !f ? " disabled" : "";
     filas += "<tr><td class='negocio'>" + escHtml(l.negocio) + "</td>" +
       "<td class='piezas'>" + (piezas
@@ -2029,7 +2028,7 @@ function pintarVentas() {
       "<button type='button' class='accion-editar' data-vender='" + escHtml(l.negocio) + "'" +
       sinCobro + ">" + (l.cobrado ? "Cobro" : "Aceptar") + "</button>" +
       "<button type='button' class='accion-apagar' data-cancelar='" + escHtml(l.negocio) +
-      "'" + soloFicha + ">Cancelar</button></div></td></tr>";
+      "'" + sinCobro + ">Cancelar</button></div></td></tr>";
   });
   $("tablaLocales").innerHTML =
     "<table><thead><tr><th>Local</th><th>Piezas</th><th>Estado</th><th>Importe</th><th></th>" +
@@ -2435,10 +2434,26 @@ $("tablaLocales").addEventListener("click", async (e) => {
         });
       }
     }
+    // La ficha era parte de la orden: si el local no paga, se va con ella. Si no,
+    // la fila seguía viva y cobrada, y con Cancelar apagado no había cómo
+    // limpiarla.
+    if (l.ficha) {
+      c.textContent = "Quitando la ficha…";
+      await llamar("servicio-borrar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: l.ficha.id }),
+      });
+    }
+
     parchearTarjetas(l.codigos.acrilico.concat(l.codigos.sticker),
-      { negocio: "", destino: "", vendida: "", precio: 0 });
-    avisar("avisoPanel", "Orden de " + negocio + " cancelada · " +
-      plural(total, "tarjeta libre", "tarjetas libres") + " otra vez", true);
+      { negocio: "", destino: "", vendida: "", precio: 0, vendedor: "" });
+    if (l.ficha) parchearServicio(l.ficha.id, null);
+
+    const suelto = [];
+    if (total) suelto.push(plural(total, "tarjeta libre", "tarjetas libres") + " otra vez");
+    if (l.ficha) suelto.push("ficha quitada");
+    avisar("avisoPanel", "Orden de " + negocio + " cancelada · " + suelto.join(" y "), true);
   } catch (err) {
     avisar("avisoPanel", err.message, false);
     pintarVentas();
