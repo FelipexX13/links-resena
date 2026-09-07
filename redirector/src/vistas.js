@@ -2617,7 +2617,8 @@ function datosDelComprobante() {
     avisar("avisoPanel", "Pon tu nombre y tu cédula una vez y ya sale en todos los comprobantes.", false);
     return null;
   }
-  const items = itemsDelLocal(LOCAL_VENTA, preciosDeLaVenta());
+  const l = LOCAL_VENTA;
+  const items = itemsDelLocal(l, preciosDeLaVenta());
   if (!items.length) {
     avisar("avisoVenta", "Pon los precios antes de sacar el comprobante.", false);
     return null;
@@ -2649,9 +2650,9 @@ async function recordarComprador(negocio, correo, nit) {
 }
 
 $("bajarComprobante").onclick = () => {
-  const d = datosDelComprobante();
-  if (!d) return;
   try {
+    const d = datosDelComprobante();
+    if (!d) return;
     comprobantePDF(d).doc.save(nombreArchivo(d.negocio, d.fecha));
   } catch (err) {
     avisar("avisoVenta", err.message, false);
@@ -2661,9 +2662,9 @@ $("bajarComprobante").onclick = () => {
 // En el teléfono el menú nativo de compartir sí puede meter el PDF en WhatsApp;
 // wa.me solo lleva texto, así que ese es el plan de repuesto.
 $("compartirComprobante").onclick = async () => {
-  const d = datosDelComprobante();
-  if (!d) return;
   try {
+    const d = datosDelComprobante();
+    if (!d) return;
     const hecho = comprobantePDF(d);
     const archivo = new File([hecho.doc.output("blob")], nombreArchivo(d.negocio, d.fecha),
       { type: "application/pdf" });
@@ -2688,14 +2689,13 @@ $("mandarComprobante").onclick = async () => {
     $("ventaCorreo").focus();
     return;
   }
-  const d = datosDelComprobante();
-  if (!d) return;
-
   const boton = $("mandarComprobante");
   const etiqueta = boton.textContent;
   boton.disabled = true;
   boton.textContent = "Enviando…";
   try {
+    const d = datosDelComprobante();
+    if (!d) return;
     const hecho = comprobantePDF(d);
     const base64 = hecho.doc.output("datauristring").split(",")[1];
     await llamar("comprobante", {
