@@ -412,6 +412,20 @@ const ESTILOS = `
     border-color:var(--ambar-borde)}
   .acciones .accion-ficha.lista{background:var(--verde-piel);color:var(--verde-fuerte);
     border-color:var(--verde-borde)}
+  .tope{margin-top:12px;padding:13px 15px;border-radius:var(--r-m);
+    background:var(--papel-2);border:1px solid var(--linea)}
+  .tope-alto{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    font-size:12.5px;color:var(--tinta-2)}
+  .tope-alto b{color:var(--tinta);font-family:"Geist Mono",ui-monospace,monospace;font-weight:500}
+  .tope-barra{margin-top:9px;height:7px;border-radius:999px;background:var(--linea);overflow:hidden}
+  .tope-barra i{display:block;height:100%;border-radius:999px;background:var(--verde)}
+  .tope.cerca .tope-barra i{background:var(--ambar)}
+  .tope.pasado .tope-barra i{background:var(--rojo)}
+  .tope-nota{margin-top:7px;font-size:11.5px;color:var(--tinta-3)}
+  /* el comprobante no es parte del formulario: se manda con lo que ya está
+     guardado, así que va en su propio bloque debajo */
+  .comprobante{margin-top:22px;padding-top:18px;border-top:1px solid var(--linea-suave)}
+  .comprobante .modal-acciones{margin-top:10px}
   .casilla{display:flex;align-items:center;gap:9px;margin:16px 0 0;
     font-size:13px;font-weight:500;cursor:pointer}
   .casilla input{width:18px;height:18px;flex:0 0 auto;padding:0;margin:0;
@@ -690,6 +704,8 @@ let VISTA = "tarjetas";
 let PRUEBAS = false;
 let GASTOS = [];
 let SERVICIOS = [];
+let VENDEDOR = null;
+let COMPRADORES = {};
 let NFC = {};
 let METRICA_DINERO = "gastos";
 let GASTO_EDITADO = "";
@@ -766,6 +782,7 @@ function mostrar(dentro) {
     llamar("modo").then((r) => pintarPruebas(r.prueba)).catch(() => {});
     cargarGastos();
     cargarServicios();
+    cargarAjustes();
   }
   else { cerrarQR(); cerrarTarjeta(); $("clave").focus(); }
 }
@@ -2019,6 +2036,19 @@ function parchearGasto(id, gasto) {
   pintarCuentas();
 }
 
+async function cargarAjustes() {
+  try {
+    const a = await llamar("ajustes");
+    VENDEDOR = a.vendedor;
+    const c = await llamar("compradores");
+    COMPRADORES = {};
+    (c.compradores || []).forEach((x) => { COMPRADORES[x.negocio] = x; });
+    pintarCuentas();
+  } catch (e) {
+    avisar("avisoPanel", e.message, false);
+  }
+}
+
 async function cargarServicios() {
   try {
     SERVICIOS = (await llamar("servicios")).servicios;
@@ -2122,8 +2152,39 @@ function inventario() {
     .sort((a, b) => (b.recibido + b.pedido) - (a.recibido + a.pedido));
 }
 
+// El tope de los 3.500 UVT es lo que sostiene ser no responsable de IVA, y con
+// eso, no estar obligado a facturar electrónicamente. Sube cada año: hay que
+// cambiarlo a mano en enero.
+const TOPE_UVT = { anio: 2026, pesos: 183309000 };
+
+function vendidoEnElAnio(anio) {
+  const desde = String(anio) + "-";
+  const enTarjetas = TARJETAS.reduce((a, t) =>
+    a + (String(t.vendida || "").indexOf(desde) === 0 ? Number(t.precio) || 0 : 0), 0);
+  const enFichas = SERVICIOS.reduce((a, x) =>
+    a + (String(x.fecha || "").indexOf(desde) === 0 ? Number(x.precio) || 0 : 0), 0);
+  return enTarjetas + enFichas;
+}
+
+function pintarTope() {
+  const vendido = vendidoEnElAnio(TOPE_UVT.anio);
+  const parte = vendido / TOPE_UVT.pesos;
+  const caja = $("tope");
+  caja.className = "tope" + (parte >= 1 ? " pasado" : (parte >= 0.8 ? " cerca" : ""));
+  caja.innerHTML = "<div class='tope-alto'><span>Vendido en " + TOPE_UVT.anio +
+    " <b>" + dinero(vendido) + "</b></span><span>Tope <b>" + dinero(TOPE_UVT.pesos) +
+    "</b></span></div>" +
+    "<div class='tope-barra'><i style='width:" + Math.min(100, parte * 100).toFixed(1) +
+    "%'></i></div>" +
+    "<div class='tope-nota'>" + (parte >= 1
+      ? "Pasaste los 3.500 UVT: toca revisar si sigues siendo no responsable de IVA."
+      : "Quedan " + dinero(TOPE_UVT.pesos - vendido) + " antes de los 3.500 UVT.") +
+    "</div>";
+}
+
 function pintarCuentas() {
   const c = cuentas();
+  pintarTope();
   const serie = dineroPorDia(DIAS_DINERO);
   const suma = serie.reduce((a, punto) => a + punto[METRICA_DINERO], 0);
 
@@ -2222,6 +2283,7 @@ function pintarVista(valor) {
   $("abrirLocal").hidden = VISTA === "cuentas";
   $("abrirRango").hidden = VISTA === "cuentas";
   $("abrirFicha").hidden = VISTA !== "locales";
+  $("abrirAjustes").hidden = VISTA !== "cuentas";
   if (VISTA === "locales") pintarVentas();
   if (VISTA === "cuentas") pintarCuentas();
 }
@@ -2287,6 +2349,131 @@ $("tablaLocales").addEventListener("click", async (e) => {
     pintarVentas();
   }
 });
+
+/* ---------- comprobante de venta ---------- */
+
+// A propósito NO es una factura: no lleva numeración consecutiva, ni CUFE, ni
+// QR, y lo dice en el pie. La referencia es la hora en base 36, que sirve para
+// nombrarlo pero no forma serie. Somos no responsables de IVA, así que el
+// comprador que lo necesite arma su documento soporte por su lado.
+const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+  "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+function fechaLarga(iso) {
+  const p = String(iso || "").split("-");
+  if (p.length !== 3) return String(iso || "");
+  return Number(p[2]) + " de " + MESES[Number(p[1]) - 1] + " de " + p[0];
+}
+
+function itemsDelLocal(l, precios) {
+  const items = [];
+  if (l.acrilico && precios.acrilico) {
+    items.push({ que: "Acrílico personalizado con chip NFC",
+      cuantos: l.acrilico, unitario: precios.acrilico });
+  }
+  if (l.sticker && precios.sticker) {
+    items.push({ que: "Sticker de mesa con chip NFC",
+      cuantos: l.sticker, unitario: precios.sticker });
+  }
+  if (l.ficha && l.ficha.precio) {
+    items.push({ que: "Montaje de la ficha del negocio en Google",
+      cuantos: 1, unitario: Number(l.ficha.precio) || 0 });
+  }
+  return items;
+}
+
+function comprobantePDF(datos) {
+  if (!window.jspdf) throw new Error("No cargó la librería del PDF. Recarga la página.");
+  const doc = new window.jspdf.jsPDF({ unit: "mm", format: "a4" });
+  const izq = 20, der = 190;
+  let y = 24;
+
+  doc.setFont("helvetica", "bold").setFontSize(17).setTextColor(20, 30, 45);
+  doc.text("Comprobante de venta", izq, y);
+
+  y += 6;
+  doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(120, 130, 145);
+  doc.text("Referencia " + datos.referencia + "   ·   " + fechaLarga(datos.fecha), izq, y);
+
+  y += 10;
+  doc.setDrawColor(226, 231, 240).setLineWidth(0.3).line(izq, y, der, y);
+
+  y += 8;
+  doc.setFontSize(10).setTextColor(90, 100, 120);
+  doc.text("De", izq, y);
+  doc.text("Para", 110, y);
+
+  y += 5.5;
+  doc.setFont("helvetica", "bold").setFontSize(11).setTextColor(20, 30, 45);
+  doc.text(datos.vendedor.nombre, izq, y);
+  doc.text(datos.negocio || "—", 110, y);
+
+  y += 5;
+  doc.setFont("helvetica", "normal").setFontSize(9.5).setTextColor(90, 100, 120);
+  doc.text("C.C. " + datos.vendedor.cedula, izq, y);
+  if (datos.nit) doc.text("NIT/C.C. " + datos.nit, 110, y);
+
+  if (datos.vendedor.telefono) {
+    y += 4.5;
+    doc.text("Tel. " + datos.vendedor.telefono, izq, y);
+  }
+  if (datos.vendedor.nota) {
+    y += 4.5;
+    doc.text(doc.splitTextToSize(datos.vendedor.nota, 80), izq, y);
+    y += (doc.splitTextToSize(datos.vendedor.nota, 80).length - 1) * 4.2;
+  }
+
+  y += 12;
+  doc.setFont("helvetica", "bold").setFontSize(8.5).setTextColor(120, 130, 145);
+  doc.text("DESCRIPCIÓN", izq, y);
+  doc.text("CANT.", 118, y, { align: "right" });
+  doc.text("V. UNITARIO", 152, y, { align: "right" });
+  doc.text("TOTAL", der, y, { align: "right" });
+
+  y += 2.5;
+  doc.setDrawColor(226, 231, 240).line(izq, y, der, y);
+
+  doc.setFont("helvetica", "normal").setFontSize(10).setTextColor(20, 30, 45);
+  let total = 0;
+  datos.items.forEach((it) => {
+    const parcial = it.cuantos * it.unitario;
+    total += parcial;
+    y += 8;
+    const lineas = doc.splitTextToSize(it.que, 72);
+    doc.text(lineas, izq, y);
+    doc.text(String(it.cuantos), 118, y, { align: "right" });
+    doc.text(dinero(it.unitario), 152, y, { align: "right" });
+    doc.text(dinero(parcial), der, y, { align: "right" });
+    y += (lineas.length - 1) * 4.6;
+  });
+
+  y += 6;
+  doc.setDrawColor(226, 231, 240).line(izq, y, der, y);
+  y += 8;
+  doc.setFont("helvetica", "bold").setFontSize(12);
+  doc.text("Total", 152, y, { align: "right" });
+  doc.text(dinero(total), der, y, { align: "right" });
+
+  y += 22;
+  doc.setDrawColor(160, 170, 185).line(izq, y, izq + 62, y);
+  y += 5;
+  doc.setFont("helvetica", "normal").setFontSize(9.5).setTextColor(90, 100, 120);
+  doc.text(datos.vendedor.nombre, izq, y);
+  y += 4.5;
+  doc.text("C.C. " + datos.vendedor.cedula, izq, y);
+
+  doc.setFontSize(8).setTextColor(140, 150, 165);
+  doc.text("Este documento no es una factura de venta ni una factura electrónica. " +
+    "Es un comprobante comercial de la operación.", izq, 282, { maxWidth: der - izq });
+
+  return { doc: doc, total: total };
+}
+
+function nombreArchivo(negocio, fecha) {
+  const limpio = String(negocio || "venta").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase().slice(0, 40);
+  return "comprobante-" + (limpio || "venta") + "-" + fecha + ".pdf";
+}
 
 /* ---------- la ficha de Google, que se cobra aparte ---------- */
 
@@ -2412,6 +2599,180 @@ $("borrarFicha").onclick = async () => {
   }
 };
 
+// Los tres botones del comprobante trabajan con lo que hay en el formulario,
+// no con lo guardado: así se puede revisar el PDF antes de aceptar la orden.
+function datosDelComprobante() {
+  if (!LOCAL_VENTA) return null;
+  if (!VENDEDOR || !VENDEDOR.nombre) {
+    avisar("avisoVenta", "Primero pon tu nombre y tu cédula en Cuentas › Mis datos.", false);
+    return null;
+  }
+  const l = LOCAL_VENTA;
+  const precios = {
+    acrilico: Math.max(0, Number($("precioAcrilico").value) || 0),
+    sticker: Math.max(0, Number($("precioSticker").value) || 0),
+  };
+  const items = itemsDelLocal(l, precios);
+  if (!items.length) {
+    avisar("avisoVenta", "Pon los precios antes de sacar el comprobante.", false);
+    return null;
+  }
+  return {
+    referencia: Date.now().toString(36),
+    fecha: $("ventaFecha").value || hoyISO(),
+    vendedor: VENDEDOR,
+    negocio: l.negocio,
+    nit: $("ventaNit").value.trim(),
+    items: items,
+  };
+}
+
+async function recordarComprador(negocio, correo, nit) {
+  if (!correo && !nit) return;
+  const guardado = COMPRADORES[negocio] || {};
+  if (guardado.correo === correo && guardado.nit === nit) return;
+  try {
+    await llamar("comprador", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ negocio: negocio, correo: correo, nit: nit }),
+    });
+    COMPRADORES[negocio] = { negocio: negocio, correo: correo, nit: nit };
+  } catch (e) {
+    // que no se caiga la venta por no poder recordar el correo
+  }
+}
+
+$("bajarComprobante").onclick = () => {
+  const d = datosDelComprobante();
+  if (!d) return;
+  try {
+    comprobantePDF(d).doc.save(nombreArchivo(d.negocio, d.fecha));
+  } catch (err) {
+    avisar("avisoVenta", err.message, false);
+  }
+};
+
+// En el teléfono el menú nativo de compartir sí puede meter el PDF en WhatsApp;
+// wa.me solo lleva texto, así que ese es el plan de repuesto.
+$("compartirComprobante").onclick = async () => {
+  const d = datosDelComprobante();
+  if (!d) return;
+  try {
+    const hecho = comprobantePDF(d);
+    const archivo = new File([hecho.doc.output("blob")], nombreArchivo(d.negocio, d.fecha),
+      { type: "application/pdf" });
+    const texto = "Comprobante de venta · " + d.negocio + " · " + dinero(hecho.total);
+    if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
+      await navigator.share({ files: [archivo], title: "Comprobante de venta", text: texto });
+      return;
+    }
+    hecho.doc.save(nombreArchivo(d.negocio, d.fecha));
+    window.open("https://wa.me/?text=" + encodeURIComponent(texto +
+      " — te lo adjunto en este chat."), "_blank", "noopener");
+  } catch (err) {
+    if (err && err.name === "AbortError") return;
+    avisar("avisoVenta", err.message, false);
+  }
+};
+
+$("mandarComprobante").onclick = async () => {
+  const correo = $("ventaCorreo").value.trim();
+  if (!correo) {
+    avisar("avisoVenta", "Escribe el correo del cliente.", false);
+    $("ventaCorreo").focus();
+    return;
+  }
+  const d = datosDelComprobante();
+  if (!d) return;
+
+  const boton = $("mandarComprobante");
+  const etiqueta = boton.textContent;
+  boton.disabled = true;
+  boton.textContent = "Enviando…";
+  try {
+    const hecho = comprobantePDF(d);
+    const base64 = hecho.doc.output("datauristring").split(",")[1];
+    await llamar("comprobante", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        correo: correo,
+        negocio: d.negocio,
+        archivo: nombreArchivo(d.negocio, d.fecha),
+        total: dinero(hecho.total),
+        pdf: base64,
+      }),
+    });
+    await recordarComprador(d.negocio, correo, d.nit);
+    avisar("avisoPanel", "Comprobante enviado a " + correo, true);
+  } catch (err) {
+    avisar("avisoVenta", err.message, false);
+  } finally {
+    boton.disabled = false;
+    boton.textContent = etiqueta;
+  }
+};
+
+/* ---------- mis datos, los del que vende ---------- */
+
+let focoAjustes = null;
+const NOTA_POR_DEFECTO = "Persona natural no responsable de IVA.";
+
+function abrirAjustes() {
+  const v = VENDEDOR || {};
+  $("ajustesNombre").value = v.nombre || "";
+  $("ajustesCedula").value = v.cedula || "";
+  $("ajustesTelefono").value = v.telefono || "";
+  $("ajustesNota").value = v.nota !== undefined ? v.nota : NOTA_POR_DEFECTO;
+  limpiarAviso();
+  focoAjustes = document.activeElement;
+  $("modalAjustes").hidden = false;
+  document.body.style.overflow = "hidden";
+  $("ajustesNombre").focus();
+}
+
+function cerrarAjustes() {
+  if ($("modalAjustes").hidden) return;
+  $("modalAjustes").hidden = true;
+  document.body.style.overflow = "";
+  if (focoAjustes && focoAjustes.focus) focoAjustes.focus();
+  focoAjustes = null;
+}
+
+$("abrirAjustes").onclick = abrirAjustes;
+$("cerrarAjustes").onclick = cerrarAjustes;
+$("cancelarAjustes").onclick = cerrarAjustes;
+$("modalAjustes").addEventListener("click", (e) => {
+  if (e.target.hasAttribute("data-cerrar-ajustes")) cerrarAjustes();
+});
+
+$("formAjustes").onsubmit = async (e) => {
+  e.preventDefault();
+  const cuerpo = {
+    nombre: $("ajustesNombre").value.trim(),
+    cedula: $("ajustesCedula").value.trim(),
+    telefono: $("ajustesTelefono").value.trim(),
+    nota: $("ajustesNota").value.trim(),
+  };
+  const boton = $("guardarAjustes");
+  boton.disabled = true;
+  try {
+    const r = await llamar("ajustes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cuerpo),
+    });
+    VENDEDOR = { nombre: r.nombre, cedula: r.cedula, telefono: r.telefono, nota: r.nota };
+    cerrarAjustes();
+    avisar("avisoPanel", "Datos guardados", true);
+  } catch (err) {
+    avisar("avisoAjustes", err.message, false);
+  } finally {
+    boton.disabled = false;
+  }
+};
+
 function abrirVenta(negocio) {
   const l = locales().filter((x) => x.negocio === negocio)[0];
   if (!l) return;
@@ -2427,6 +2788,9 @@ function abrirVenta(negocio) {
   $("precioAcrilico").value = unitario("acrilico");
   $("precioSticker").value = unitario("sticker");
   $("guardarVenta").textContent = l.vendidas ? "Guardar el cobro" : "Aceptar la orden";
+  const comp = COMPRADORES[l.negocio] || {};
+  $("ventaCorreo").value = comp.correo || "";
+  $("ventaNit").value = comp.nit || "";
   limpiarAviso("avisoVenta");
   pintarResumenVenta();
   focoVenta = document.activeElement;
@@ -2502,6 +2866,7 @@ $("formVenta").onsubmit = async (e) => {
       }
     }
     const importe = precios.acrilico * l.acrilico + precios.sticker * l.sticker;
+    await recordarComprador(l.negocio, $("ventaCorreo").value.trim(), $("ventaNit").value.trim());
     cerrarVenta();
     for (const tipo of ["acrilico", "sticker"]) {
       if (l.codigos[tipo].length) {
@@ -2939,6 +3304,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (!$("modalActivar").hidden) cerrarActivar();
   else if (!$("modalGasto").hidden) cerrarGasto();
+  else if (!$("modalAjustes").hidden) cerrarAjustes();
   else if (!$("modalFicha").hidden) cerrarFicha();
   else if (!$("modalVenta").hidden) cerrarVenta();
   else if (!$("modalTarjeta").hidden) cerrarTarjeta();
@@ -2955,6 +3321,7 @@ export function vistaAdmin(origen) {
 <meta name="description" content="Panel interno para activar y reasignar las tarjetas de reseña.">
 <title>Panel de tarjetas</title><style>${ESTILOS}</style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js"></script>
 
 <div class="grano"></div>
 <div class="tostadas" id="tostadas" role="status" aria-live="polite"></div>
@@ -3033,6 +3400,7 @@ export function vistaAdmin(origen) {
           <button type="button" id="abrirLocal">Nueva orden</button>
           <button type="button" class="fantasma" id="abrirRango">Editar un rango</button>
           <button type="button" class="fantasma" id="abrirFicha" hidden>Nueva ficha</button>
+          <button type="button" class="fantasma" id="abrirAjustes" hidden>Mis datos</button>
           <button type="button" class="fantasma" id="recargar">Refrescar</button>
         </div>
       </div>
@@ -3077,6 +3445,7 @@ export function vistaAdmin(origen) {
 
         <div class="socios" id="socios"></div>
         <div class="saldo" id="saldo"></div>
+        <div class="tope" id="tope"></div>
 
         <div class="bloque-titulo">
           <h2>Gastos</h2>
@@ -3240,6 +3609,39 @@ export function vistaAdmin(origen) {
   </div>
 </div>
 
+<div class="modal" id="modalAjustes" hidden>
+  <div class="modal-fondo" data-cerrar-ajustes></div>
+  <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="ajustesTitulo">
+    <button type="button" class="modal-cerrar" id="cerrarAjustes" aria-label="Cerrar">✕</button>
+    <div class="modal-kicker">Comprobantes</div>
+    <h1 id="ajustesTitulo">Mis datos</h1>
+    <p class="modal-subtitulo">Lo que sale como vendedor en cada comprobante.</p>
+
+    <form id="formAjustes">
+      <label class="mini" for="ajustesNombre">Nombre completo</label>
+      <input id="ajustesNombre" type="text" maxlength="80" placeholder="Juan Felipe Pérez"
+             autocomplete="off">
+
+      <div class="rango-fila">
+        <div><label class="mini" for="ajustesCedula">Cédula</label>
+          <input id="ajustesCedula" type="text" maxlength="30" placeholder="1.020.304.050"
+                 autocomplete="off"></div>
+        <div><label class="mini" for="ajustesTelefono">Teléfono <span class="suave">(opcional)</span></label>
+          <input id="ajustesTelefono" type="text" maxlength="30" placeholder="300 123 4567"
+                 autocomplete="off"></div>
+      </div>
+
+      <label class="mini" for="ajustesNota">Nota bajo tu nombre</label>
+      <input id="ajustesNota" type="text" maxlength="160" autocomplete="off">
+
+      <div class="modal-acciones">
+        <button type="button" class="fantasma" id="cancelarAjustes">Cancelar</button>
+        <button type="submit" id="guardarAjustes">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="modal" id="modalFicha" hidden>
   <div class="modal-fondo" data-cerrar-ficha></div>
   <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="fichaTitulo">
@@ -3371,11 +3773,27 @@ export function vistaAdmin(origen) {
       </div>
       <div class="rango-resumen" id="ventaResumen"></div>
 
+      <div class="rango-fila">
+        <div><label class="mini" for="ventaCorreo">Correo del cliente</label>
+          <input id="ventaCorreo" type="email" placeholder="local@correo.com" autocomplete="off"></div>
+        <div><label class="mini" for="ventaNit">NIT o cédula <span class="suave">(opcional)</span></label>
+          <input id="ventaNit" type="text" maxlength="30" placeholder="900123456-7" autocomplete="off"></div>
+      </div>
+
       <div class="modal-acciones">
         <button type="button" class="fantasma" id="cancelarVenta">Cancelar</button>
         <button type="submit" id="guardarVenta">Aceptar la orden</button>
       </div>
     </form>
+
+    <div class="comprobante">
+      <div class="cejilla">Comprobante de venta</div>
+      <div class="modal-acciones acciones-izq">
+        <button type="button" class="fantasma" id="bajarComprobante">Descargar PDF</button>
+        <button type="button" class="fantasma" id="compartirComprobante">Compartir</button>
+        <button type="button" class="leer" id="mandarComprobante">Enviar al correo</button>
+      </div>
+    </div>
   </div>
 </div>
 

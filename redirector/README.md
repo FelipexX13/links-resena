@@ -259,6 +259,68 @@ activo, porque no hay piezas que abrir, cobrar ni liberar.
 El botón lleva el color del estado, como el del NFC: ámbar si está pedida,
 verde si ya está publicada.
 
+## Comprobante de venta
+
+Al cerrar el cobro, el modal de la venta saca un **comprobante de venta** en PDF
+con los ítems de esa orden —acrílicos, stickers y la ficha de Google— y lo manda
+al correo del cliente.
+
+**A propósito no es una factura.** No lleva numeración consecutiva, ni CUFE, ni
+QR de facturación electrónica, y el pie lo dice con todas las letras. La
+«referencia» que aparece arriba es la hora en base 36: sirve para nombrar el
+archivo, no forma serie. Como somos no responsables de IVA (RUT responsabilidad
+49), el cliente que necesite soportar la compra ante la DIAN arma su propio
+*documento soporte en adquisiciones a no obligados a facturar*; eso no sale de
+aquí.
+
+Tres botones, y ninguno se dispara solo: el envío es un clic aparte del guardado,
+porque a veces se cierra la venta antes de tener el correo o hay que corregir un
+precio.
+
+| Botón | Qué hace |
+|---|---|
+| **Descargar PDF** | lo baja al equipo |
+| **Compartir** | en el teléfono abre el menú nativo con el PDF adjunto —de ahí a WhatsApp—; en el escritorio lo descarga y abre `wa.me` con el texto |
+| **Enviar al correo** | lo manda como adjunto desde `greview641@gmail.com` |
+
+El correo y el NIT del local quedan guardados en `b:<negocio>`, así que la
+siguiente vez salen puestos.
+
+### Mis datos
+
+En **Cuentas › Mis datos** van el nombre, la cédula, el teléfono y la nota que
+salen como vendedor. Se guardan en `cfg:vendedor` y no hay comprobante sin ellos.
+
+### El envío del correo
+
+Sale por Brevo, que es de los pocos que dejan verificar un Gmail como remitente
+—los que exigen dominio propio no sirven aquí, porque `gmail.com` no es nuestro—.
+Hace falta una vez:
+
+1. Crear cuenta en [brevo.com](https://www.brevo.com) (el plan gratis da 300
+   correos al día).
+2. **Senders** → añadir `greview641@gmail.com` y confirmar desde ese buzón.
+3. Crear una API key en **SMTP & API**.
+4. Guardarla como secreto, y la escribes tú, que no tiene por qué pasar por el
+   chat:
+
+```bash
+npx wrangler secret put BREVO_API_KEY
+```
+
+Sin ese secreto todo lo demás funciona: solo el botón de enviar responde que
+falta configurarlo. Cambiar de proveedor son quince líneas en `api()`, en el
+bloque `comprobante`.
+
+### El tope de los 3.500 UVT
+
+En **Cuentas** hay una barra con lo vendido en el año contra el tope que sostiene
+ser no responsable de IVA — **$183.309.000 en 2026**. Suma tarjetas cobradas más
+fichas cobradas, así que no guarda nada nuevo: sale de lo que ya hay.
+
+El valor sube cada año. Está en `TOPE_UVT`, arriba de `pintarCuentas`, y hay que
+cambiarlo a mano en enero.
+
 ## Editar un rango
 
 **Editar un rango** escribe el mismo link en varias tarjetas de una vez. Las

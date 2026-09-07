@@ -21,6 +21,11 @@
  *   GET  /api/servicios                                           (sesión)
  *   POST /api/servicio {id?,negocio,precio,fecha,hecha,notas}     (sesión)
  *   POST /api/servicio-borrar {id}                                (sesión)
+ *   GET  /api/ajustes                                             (sesión)
+ *   POST /api/ajustes {nombre,cedula,nota}                        (sesión)
+ *   GET  /api/compradores                                         (sesión)
+ *   POST /api/comprador {negocio,correo,nit}                      (sesión)
+ *   POST /api/comprobante {correo,negocio,archivo,pdf,total}      (sesión)
  *
  * Secreto obligatorio:  ADMIN_PASSWORD
  *
@@ -34,6 +39,8 @@
  *   "s:<id>"        un servicio vendido que no va en plástico: crearle al local su
  *                   ficha de Google con fotos y horarios. fecha vacía = acordado
  *                   pero todavía sin cobrar, igual que una tarjeta sin vender
+ *   "b:<negocio>"   a quién se le manda el comprobante: correo y NIT del local
+ *   "cfg:vendedor"  nombre, cédula y nota del que vende, para el comprobante
  *   "intentos:<ip>" contador de logins fallidos, expira solo a las 24 horas
  */
 
@@ -47,6 +54,12 @@ const MAX_INTENTOS = 3;
 const TIPOS = new Set(["acrilico", "sticker"]);
 const LLAVE_MODO = "modo:prueba";
 const SOCIOS = new Set(["felipe", "nicolas", "ambos"]);
+// El comprobante sale de este buzón. Brevo pide verificar el remitente una vez.
+const CORREO_REMITENTE = "greview641@gmail.com";
+const NOMBRE_REMITENTE = "Google Reviews";
+const FORMATO_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const MAX_PDF = 4 * 1024 * 1024; // en base64; un comprobante real pesa unos 30 KB
+const LLAVE_VENDEDOR = "cfg:vendedor";
 const ESTADOS_GASTO = new Set(["pendiente", "entregado"]);
 const MAX_ITEMS = 8;
 const FORMATO_ID = /^[a-z0-9]{1,24}$/;
@@ -206,6 +219,37 @@ function servicioDe(cuerpo) {
   };
 }
 
+// Un comprobante de venta, no una factura: sin numeración consecutiva, sin CUFE
+// y sin QR. El PDF se arma en el panel y aquí solo se despacha.
+function vendedorDe(cuerpo) {
+  const nombre = String(cuerpo.nombre || "").trim().slice(0, 80);
+  if (!nombre) return { error: "Falta tu nombre completo" };
+  const cedula = String(cuerpo.cedula || "").trim().slice(0, 30);
+  if (!cedula) return { error: "Falta tu número de cédula" };
+  return {
+    vendedor: {
+      nombre: nombre,
+      cedula: cedula,
+      nota: String(cuerpo.nota || "").trim().slice(0, 160),
+      telefono: String(cuerpo.telefono || "").trim().slice(0, 30),
+    },
+  };
+}
+
+function compradorDe(cuerpo) {
+  const negocio = String(cuerpo.negocio || "").trim().slice(0, 60);
+  if (!negocio) return { error: "Falta el nombre del local" };
+  const correo = String(cuerpo.correo || "").trim().slice(0, 120);
+  if (correo && !FORMATO_CORREO.test(correo)) return { error: "Ese correo no es válido" };
+  return {
+    comprador: {
+      negocio: negocio,
+      correo: correo,
+      nit: String(cuerpo.nit || "").trim().slice(0, 30),
+    },
+  };
+}
+
 /* ---------- API ---------- */
 
 async function api(request, env, accion, url, ctx) {
@@ -345,6 +389,72 @@ async function api(request, env, accion, url, ctx) {
     if (!FORMATO_ID.test(id)) return json({ error: "Identificador inválido" }, 400);
     await env.TARJETAS.delete("s:" + id);
     return json({ ok: true });
+  }
+
+  if (accion === "ajustes" && request.method === "GET") {
+    const guardado = await env.TARJETAS.get(LLAVE_VENDEDOR, "json");
+    return json({ vendedor: guardado || null });
+  }
+
+  if (accion === "ajustes" && request.method === "POST") {
+    const cuerpo = await request.json().catch(() => ({}));
+    const hecho = vendedorDe(cuerpo);
+    if (hecho.error) return json({ error: hecho.error }, 400);
+    await env.TARJETAS.put(LLAVE_VENDEDOR, JSON.stringify(hecho.vendedor));
+    return json(Object.assign({ ok: true }, hecho.vendedor));
+  }
+
+  if (accion === "compradores" && request.method === "GET") {
+    const { keys } = await env.TARJETAS.list({ prefix: "b:" });
+    const compradores = keys.map((k) => Object.assign({ negocio: k.name.slice(2) }, k.metadata || {}));
+    return json({ compradores });
+  }
+
+  if (accion === "comprador" && request.method === "POST") {
+    const cuerpo = await request.json().catch(() => ({}));
+    const hecho = compradorDe(cuerpo);
+    if (hecho.error) return json({ error: hecho.error }, 400);
+    const dato = { correo: hecho.comprador.correo, nit: hecho.comprador.nit };
+    await env.TARJETAS.put("b:" + hecho.comprador.negocio, JSON.stringify(dato),
+      { metadata: dato });
+    return json(Object.assign({ ok: true }, hecho.comprador));
+  }
+
+  if (accion === "comprobante" && request.method === "POST") {
+    if (!env.BREVO_API_KEY) {
+      return json({ error: "Falta el secreto BREVO_API_KEY para poder mandar correos" }, 500);
+    }
+    const cuerpo = await request.json().catch(() => ({}));
+    const correo = String(cuerpo.correo || "").trim();
+    if (!FORMATO_CORREO.test(correo)) return json({ error: "Ese correo no es válido" }, 400);
+
+    const pdf = String(cuerpo.pdf || "");
+    if (!pdf || pdf.length > MAX_PDF) return json({ error: "El PDF no llegó completo" }, 400);
+
+    const negocio = String(cuerpo.negocio || "").trim().slice(0, 60) || "tu compra";
+    const archivo = String(cuerpo.archivo || "comprobante.pdf").slice(0, 80);
+    const total = String(cuerpo.total || "").slice(0, 30);
+
+    const r = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: { "api-key": env.BREVO_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sender: { name: NOMBRE_REMITENTE, email: CORREO_REMITENTE },
+        replyTo: { email: CORREO_REMITENTE },
+        to: [{ email: correo }],
+        subject: "Comprobante de venta · " + negocio,
+        htmlContent: "<p>Hola,</p><p>Adjunto el comprobante de la venta" +
+          (total ? " por <b>" + total + "</b>" : "") + ".</p>" +
+          "<p>Cualquier cosa, responde a este correo.</p><p>Gracias.</p>",
+        attachment: [{ name: archivo, content: pdf }],
+      }),
+    });
+
+    if (!r.ok) {
+      const detalle = await r.text().catch(() => "");
+      return json({ error: "El correo no salió (" + r.status + "). " + detalle.slice(0, 200) }, 502);
+    }
+    return json({ ok: true, correo: correo });
   }
 
   if (accion === "gasto-borrar" && request.method === "POST") {
