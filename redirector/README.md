@@ -296,6 +296,25 @@ precio.
 El correo y el NIT del local quedan guardados en `b:<negocio>`, así que la
 siguiente vez salen puestos.
 
+### Enviado el comprobante, la orden se cierra
+
+El papel ya está en manos del cliente, así que a partir de ahí **no se toca
+nada**: ni el link, ni el chip NFC, ni los precios, ni las piezas. Se guarda un
+`r:<negocio>` con a quién se mandó y cuándo, y eso hace de cerrojo.
+
+En la tabla de tarjetas, las de ese local se quedan con **NFC**, **Editar** y
+**Desactivar** apagados; el **QR** sigue, que mirarlo no cambia nada. En órdenes
+se apagan **Orden** y **Cancelar**, y queda **Cobro**, que es por donde se abre
+otra vez: dentro hay un aviso con el correo y la fecha, y un **Borrar
+comprobante** con la confirmación de dos clics.
+
+El Worker lo rechaza aparte del panel, con un 409, en `guardar`, `rango`,
+`desactivar`, `nfc`, `servicio` y `servicio-borrar`. Donde puede lee el registro
+de la tarjeta para saber de quién es; en las operaciones por tandas se fía del
+`desde` que manda el panel, porque leer las veinticinco para comprobarlo se
+saldría de las 50 subpeticiones que da el plan gratis. Es un seguro contra
+equivocaciones entre dos personas, no una frontera de seguridad.
+
 ### Quién vende
 
 Las ventas las hace uno u otro, así que **Cuentas › Mis datos** guarda los datos

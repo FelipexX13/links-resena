@@ -26,6 +26,8 @@
  *   GET  /api/compradores                                         (sesión)
  *   POST /api/comprador {negocio,correo,nit,telefono}             (sesión)
  *   POST /api/comprobante {correo,negocio,archivo,pdf,total}      (sesión)
+ *   GET  /api/comprobantes                                        (sesión)
+ *   POST /api/comprobante-borrar {negocio}                        (sesión)
  *
  * Secreto obligatorio:  ADMIN_PASSWORD
  *
@@ -41,6 +43,8 @@
  *                   ficha de Google con fotos y horarios. fecha vacía = acordado
  *                   pero todavía sin cobrar, igual que una tarjeta sin vender
  *   "b:<negocio>"   a quién se le manda el comprobante: correo, NIT y teléfono
+ *   "r:<negocio>"   comprobante ya enviado: cierra esa orden y no deja tocarle
+ *                   nada hasta que se borre
  *   "cfg:vendedor"  {felipe:{...},nicolas:{...}} — los dos que venden, para
  *                   firmar el comprobante con el que hizo esa venta
  *   "intentos:<ip>" contador de logins fallidos, expira solo a las 24 horas
@@ -352,6 +356,21 @@ function correoComprobante(d) {
     '</table></td></tr></table></body></html>';
 }
 
+// Un comprobante enviado es un papel que ya está en manos del cliente: a partir
+// de ahí la orden no se toca, ni el link, ni el NFC, ni el precio. Para volver a
+// abrirla hay que borrar el comprobante a propósito.
+async function ordenCerrada(env, negocio) {
+  const nombre = String(negocio || "").trim();
+  if (!nombre) return false;
+  return Boolean(await env.TARJETAS.get("r:" + nombre));
+}
+
+function cerrada(negocio) {
+  return json({ error: "Esa orden ya tiene comprobante enviado" +
+    (negocio ? " (" + negocio + ")" : "") +
+    ". Bórralo desde el cobro si de verdad hay que cambiarla." }, 409);
+}
+
 /* ---------- API ---------- */
 
 async function api(request, env, accion, url, ctx) {
@@ -402,6 +421,10 @@ async function api(request, env, accion, url, ctx) {
     const cuerpo = await request.json().catch(() => ({}));
     const codigo = normalizar(cuerpo.codigo);
     if (!codigo) return json({ error: "Código inválido" }, 400);
+
+    const duena = await env.TARJETAS.get("c:" + codigo, "json");
+    if (duena && await ordenCerrada(env, duena.negocio)) return cerrada(duena.negocio);
+
     if (cuerpo.listo) await env.TARJETAS.put("n:" + codigo, "1");
     else await env.TARJETAS.delete("n:" + codigo);
     return json({ ok: true, codigo: codigo, listo: Boolean(cuerpo.listo) });
@@ -418,6 +441,13 @@ async function api(request, env, accion, url, ctx) {
 
     const hecho = registroDe(cuerpo);
     if (hecho.error) return json({ error: hecho.error }, 400);
+
+    // dos puertas: ni se saca una tarjeta de una orden cerrada, ni se mete en ella
+    const antes = await env.TARJETAS.get("c:" + codigo, "json");
+    if (antes && await ordenCerrada(env, antes.negocio)) return cerrada(antes.negocio);
+    if (await ordenCerrada(env, hecho.registro.negocio)) {
+      return cerrada(hecho.registro.negocio);
+    }
 
     await escribir(env, codigo, hecho.registro);
     return json(Object.assign({ ok: true, codigo }, hecho.registro));
@@ -438,6 +468,13 @@ async function api(request, env, accion, url, ctx) {
 
     const hecho = registroDe(cuerpo);
     if (hecho.error) return json({ error: hecho.error }, 400);
+
+    if (await ordenCerrada(env, hecho.registro.negocio)) {
+      return cerrada(hecho.registro.negocio);
+    }
+    // de dónde salen las tarjetas lo sabe el panel, que manda el nombre; leer las
+    // veinticinco aquí para comprobarlo se saldría del presupuesto de subpeticiones
+    if (await ordenCerrada(env, cuerpo.desde)) return cerrada(cuerpo.desde);
 
     for (const codigo of codigos) await escribir(env, codigo, hecho.registro);
     return json({ ok: true, total: codigos.length });
@@ -477,6 +514,9 @@ async function api(request, env, accion, url, ctx) {
     const cuerpo = await request.json().catch(() => ({}));
     const hecho = servicioDe(cuerpo);
     if (hecho.error) return json({ error: hecho.error }, 400);
+    if (await ordenCerrada(env, hecho.servicio.negocio)) {
+      return cerrada(hecho.servicio.negocio);
+    }
 
     const id = FORMATO_ID.test(String(cuerpo.id || ""))
       ? String(cuerpo.id)
@@ -489,8 +529,27 @@ async function api(request, env, accion, url, ctx) {
     const cuerpo = await request.json().catch(() => ({}));
     const id = String(cuerpo.id || "");
     if (!FORMATO_ID.test(id)) return json({ error: "Identificador inválido" }, 400);
+
+    const antes = await env.TARJETAS.get("s:" + id, "json");
+    if (antes && await ordenCerrada(env, antes.negocio)) return cerrada(antes.negocio);
+
     await env.TARJETAS.delete("s:" + id);
     return json({ ok: true });
+  }
+
+  if (accion === "comprobantes" && request.method === "GET") {
+    const { keys } = await env.TARJETAS.list({ prefix: "r:" });
+    const comprobantes = keys.map((k) =>
+      Object.assign({ negocio: k.name.slice(2) }, k.metadata || {}));
+    return json({ comprobantes });
+  }
+
+  if (accion === "comprobante-borrar" && request.method === "POST") {
+    const cuerpo = await request.json().catch(() => ({}));
+    const negocio = String(cuerpo.negocio || "").trim();
+    if (!negocio) return json({ error: "Falta el local" }, 400);
+    await env.TARJETAS.delete("r:" + negocio);
+    return json({ ok: true, negocio: negocio });
   }
 
   if (accion === "ajustes" && request.method === "GET") {
@@ -577,7 +636,17 @@ async function api(request, env, accion, url, ctx) {
       const detalle = await r.text().catch(() => "");
       return json({ error: "El correo no salió (" + r.status + "). " + detalle.slice(0, 200) }, 502);
     }
-    return json({ ok: true, correo: correo });
+
+    const acta = {
+      correo: correo,
+      total: total,
+      fecha: datos.fecha,
+      referencia: datos.referencia,
+      vendedor: datos.vendedor,
+      enviado: new Date().toISOString(),
+    };
+    await env.TARJETAS.put("r:" + negocio, JSON.stringify(acta), { metadata: acta });
+    return json({ ok: true, correo: correo, negocio: negocio, comprobante: acta });
   }
 
   if (accion === "gasto-borrar" && request.method === "POST") {
@@ -597,6 +666,7 @@ async function api(request, env, accion, url, ctx) {
     if (codigos.length > MAX_RANGO) {
       return json({ error: "Máximo " + MAX_RANGO + " tarjetas por tanda" }, 400);
     }
+    if (await ordenCerrada(env, cuerpo.desde)) return cerrada(cuerpo.desde);
 
     const registro = {
       destino: "",

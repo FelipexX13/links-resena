@@ -703,6 +703,7 @@ let SERVICIOS = [];
 let VENDEDORES = { felipe: null, nicolas: null };
 let QUIEN_VENDE = "felipe";
 let COMPRADORES = {};
+let COMPROBANTES = {};
 let NFC = {};
 let METRICA_DINERO = "gastos";
 let GASTO_EDITADO = "";
@@ -1276,7 +1277,7 @@ $("formTarjeta").onsubmit = async (e) => {
           await llamar("desactivar", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ codigos: tanda, tipo: tipo }),
+            body: JSON.stringify({ codigos: tanda, tipo: tipo, desde: plan.base }),
           });
         }
       }
@@ -1705,6 +1706,8 @@ function pintarTabla() {
     const n = indiceDeCodigo(t.codigo);
     const place = placeIdDeDestino(t.destino);
     const tipo = tipoDe(t);
+    // el QR se puede seguir sacando: mirarlo no cambia nada
+    const trabada = cerrada(t.negocio) ? " disabled" : "";
     filas +=
       "<tr><td><div class='cod'>" + c + "</div>" +
       (n < 0 ? "" : "<div class='fila-num'>nº " + (n + 1) + "</div>") +
@@ -1718,10 +1721,12 @@ function pintarTabla() {
       "</td><td><div class='acciones acciones-tarjeta'>" +
       "<button type='button' class='accion-nfc" + (NFC[c] ? " puesto" : "") +
       "' data-nfc='" + c + "' aria-pressed='" + (NFC[c] ? "true" : "false") +
-      "'>NFC</button>" +
+      "'" + trabada + ">NFC</button>" +
       "<button type='button' class='accion-qr' data-qr='" + c + "'>QR</button>" +
-      "<button type='button' class='accion-editar' data-editar='" + c + "'>Editar</button>" +
-      "<button type='button' class='accion-apagar' data-apagar='" + c + "'>Desactivar</button>" +
+      "<button type='button' class='accion-editar' data-editar='" + c + "'" +
+      trabada + ">Editar</button>" +
+      "<button type='button' class='accion-apagar' data-apagar='" + c + "'" +
+      trabada + ">Desactivar</button>" +
       "</div></td></tr>";
   });
 
@@ -1907,6 +1912,12 @@ function dinero(n) {
   return "$" + Math.round(Number(n) || 0).toLocaleString("es-CO");
 }
 
+// Con el comprobante en manos del cliente la orden queda cerrada: ni link, ni
+// NFC, ni precio. El panel apaga los botones y el Worker lo rechaza igual.
+function cerrada(negocio) {
+  return Boolean(COMPROBANTES[String(negocio || "").trim()]);
+}
+
 function fichaDe(negocio) {
   return SERVICIOS.filter((x) => x.negocio === negocio)[0] || null;
 }
@@ -2007,6 +2018,8 @@ function pintarVentas() {
     // sin plástico no hay nada que abrir, cobrar ni liberar: esa fila solo tiene ficha
     // una fila sin piezas y sin ficha no existe, así que los tres botones valen
     const sinCobro = piezas === 0 && !f ? " disabled" : "";
+    // con comprobante enviado solo queda entrar al cobro, que es donde se borra
+    const bloqueo = cerrada(l.negocio) ? " disabled" : sinCobro;
     filas += "<tr><td class='negocio'>" + escHtml(l.negocio) + "</td>" +
       "<td class='piezas'>" + (piezas
         ? plural(l.acrilico, "acrílico", "acrílicos") + "<br>" +
@@ -2021,14 +2034,15 @@ function pintarVentas() {
       "</span>" + (l.cobrado && piezas && l.vendidas < piezas
         ? "<div class='fila-num'>" + l.vendidas + " de " + piezas + " piezas</div>" : "") +
       (f && !f.hecha ? "<div class='fila-num'>ficha sin publicar</div>" : "") +
+      (cerrada(l.negocio) ? "<div class='fila-num'>comprobante enviado</div>" : "") +
       "</td><td class='importe'>" + (l.cobrado ? dinero(l.importe) : "—") + "</td>" +
       "<td><div class='acciones acciones-orden'>" +
       "<button type='button' class='accion-qr' data-piezas='" + escHtml(l.negocio) + "'" +
-      sinCobro + ">Orden</button>" +
+      bloqueo + ">Orden</button>" +
       "<button type='button' class='accion-editar' data-vender='" + escHtml(l.negocio) + "'" +
       sinCobro + ">" + (l.cobrado ? "Cobro" : "Aceptar") + "</button>" +
       "<button type='button' class='accion-apagar' data-cancelar='" + escHtml(l.negocio) +
-      "'" + sinCobro + ">Cancelar</button></div></td></tr>";
+      "'" + bloqueo + ">Cancelar</button></div></td></tr>";
   });
   $("tablaLocales").innerHTML =
     "<table><thead><tr><th>Local</th><th>Piezas</th><th>Estado</th><th>Importe</th><th></th>" +
@@ -2105,6 +2119,9 @@ async function cargarAjustes() {
     const c = await llamar("compradores");
     COMPRADORES = {};
     (c.compradores || []).forEach((x) => { COMPRADORES[x.negocio] = x; });
+    const r = await llamar("comprobantes");
+    COMPROBANTES = {};
+    (r.comprobantes || []).forEach((x) => { COMPROBANTES[x.negocio] = x; });
     pintarCuentas();
   } catch (e) {
     avisar("avisoPanel", e.message, false);
@@ -2371,7 +2388,7 @@ function pintarVista(valor) {
   $("vistaTarjetas").hidden = VISTA !== "tarjetas";
   $("vistaLocales").hidden = VISTA !== "locales";
   $("vistaCuentas").hidden = VISTA !== "cuentas";
-  $("abrirLocal").hidden = VISTA === "cuentas";
+  $("abrirActivar").hidden = VISTA === "cuentas";
   $("abrirRango").hidden = VISTA === "cuentas";
   $("abrirAjustes").hidden = VISTA !== "cuentas";
   if (VISTA === "locales") pintarVentas();
@@ -2430,7 +2447,7 @@ $("tablaLocales").addEventListener("click", async (e) => {
         await llamar("desactivar", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ codigos: tanda, tipo: tipo }),
+          body: JSON.stringify({ codigos: tanda, tipo: tipo, desde: negocio }),
         });
       }
     }
@@ -2678,7 +2695,7 @@ $("mandarComprobante").onclick = async () => {
     if (!d) return;
     const hecho = comprobantePDF(d);
     const base64 = hecho.doc.output("datauristring").split(",")[1];
-    await llamar("comprobante", {
+    const r = await llamar("comprobante", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2694,7 +2711,13 @@ $("mandarComprobante").onclick = async () => {
       }),
     });
     await recordarComprador(d.negocio, correo, d.nit, d.telefono);
-    avisar("avisoPanel", "Comprobante enviado a " + correo, true);
+    if (r && r.comprobante) {
+      COMPROBANTES[d.negocio] = Object.assign({ negocio: d.negocio }, r.comprobante);
+      pintarBloqueoVenta(d.negocio);
+      repintarTodo();
+    }
+    avisar("avisoPanel", "Comprobante enviado a " + correo +
+      " · la orden queda cerrada", true);
   } catch (err) {
     avisar("avisoVenta", err.message, false);
   } finally {
@@ -2826,6 +2849,7 @@ function abrirVenta(negocio) {
   $("ventaCorreo").value = comp.correo || "";
   $("ventaNit").value = comp.nit || "";
   $("ventaTelefono").value = comp.telefono || "";
+  pintarBloqueoVenta(l.negocio);
   limpiarAviso("avisoVenta");
   pintarResumenVenta();
   focoVenta = document.activeElement;
@@ -2841,6 +2865,45 @@ function preciosDeLaVenta() {
     ficha: Math.max(0, Number($("precioFicha").value) || 0),
   };
 }
+
+// Con comprobante enviado la venta se mira, no se toca: los precios y la fecha
+// quedan como salieron en el papel hasta que se borre.
+function pintarBloqueoVenta(negocio) {
+  const acta = COMPROBANTES[negocio];
+  $("bloqueoVenta").hidden = !acta;
+  if (acta) {
+    $("bloqueoTexto").innerHTML = "<b>Comprobante enviado</b> a " + escHtml(acta.correo || "") +
+      (acta.fecha ? " · " + escHtml(acta.fecha) : "") +
+      ". La orden queda cerrada; bórralo para poder cambiarla.";
+  }
+  ["ventaFecha", "precioAcrilico", "precioSticker", "precioFicha", "guardarVenta"]
+    .forEach((id) => { $(id).disabled = Boolean(acta); });
+}
+
+$("borrarComprobante").onclick = async () => {
+  if (!LOCAL_VENTA) return;
+  const negocio = LOCAL_VENTA.negocio;
+  const boton = $("borrarComprobante");
+  if (CONFIRMANDO !== "comprobante") { pedirConfirmacion(boton, "comprobante"); return; }
+
+  olvidarConfirmacion();
+  boton.disabled = true;
+  try {
+    await llamar("comprobante-borrar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ negocio: negocio }),
+    });
+    delete COMPROBANTES[negocio];
+    pintarBloqueoVenta(negocio);
+    repintarTodo();
+    avisar("avisoPanel", "Comprobante de " + negocio + " borrado · la orden vuelve a abrirse", true);
+  } catch (err) {
+    avisar("avisoVenta", err.message, false);
+  } finally {
+    boton.disabled = false;
+  }
+};
 
 function pintarResumenVenta() {
   if (!LOCAL_VENTA) return;
@@ -3447,11 +3510,11 @@ export function vistaAdmin(origen) {
         </span>
       </div>
       <nav class="cabecera-acciones" aria-label="Acciones de la sesión">
-        <button type="button" id="abrirActivar" title="Activar tarjetas">
+        <button type="button" id="abrirLocal" title="Nueva orden">
           <svg class="icono-barra" viewBox="0 0 24 24" width="14" height="14" fill="none"
                stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
             <path d="M12 5v14M5 12h14"/>
-          </svg><span class="etiqueta">Activar tarjetas</span></button>
+          </svg><span class="etiqueta">Nueva orden</span></button>
         <button type="button" class="fantasma" id="togglePruebas" title="Modo pruebas">
           <svg class="icono-barra" viewBox="0 0 24 24" width="14" height="14" fill="none"
                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
@@ -3490,7 +3553,7 @@ export function vistaAdmin(origen) {
           <button type="button" data-valor="cuentas">Cuentas</button>
         </div>
         <div class="cabecera-acciones">
-          <button type="button" id="abrirLocal">Nueva orden</button>
+          <button type="button" id="abrirActivar">Activar tarjetas</button>
           <button type="button" class="fantasma" id="abrirRango">Editar un rango</button>
           <button type="button" class="fantasma" id="abrirAjustes" hidden>Mis datos</button>
           <button type="button" class="fantasma" id="recargar">Refrescar</button>
@@ -3830,6 +3893,11 @@ export function vistaAdmin(origen) {
     <div class="modal-kicker">Venta</div>
     <h1 id="ventaTitulo">Aceptar la orden</h1>
     <p class="modal-subtitulo" id="ventaSubtitulo"></p>
+
+    <div class="banner" id="bloqueoVenta" hidden role="status">
+      <span id="bloqueoTexto"></span>
+      <button type="button" class="fantasma" id="borrarComprobante">Borrar comprobante</button>
+    </div>
 
     <form id="formVenta">
       <label class="mini" for="ventaFecha">Fecha de la venta</label>
