@@ -31,7 +31,8 @@
  *
  * Datos en KV (binding TARJETAS):
  *   "c:A7K2"        {"destino":"https://...","negocio":"...","tipo":"acrilico",
- *                    "vendida":"2026-09-01","precio":25000,"actualizado":"..."}
+ *                    "vendida":"2026-09-01","precio":25000,"vendedor":"felipe",
+ *                    "actualizado":"..."}
  *                   vendida vacía = vinculada pero todavía no cobrada
  *                   + la misma info como metadata, para listar en una sola llamada
  *   "n:A7K2"        existe = el chip NFC de esa tarjeta ya está grabado
@@ -55,6 +56,11 @@ const MAX_INTENTOS = 3;
 const TIPOS = new Set(["acrilico", "sticker"]);
 const LLAVE_MODO = "modo:prueba";
 const SOCIOS = new Set(["felipe", "nicolas", "ambos"]);
+// Quién hizo la venta. Va en el registro porque la declaración de renta la
+// presenta cada uno por su lado, con sus propios ingresos.
+function vendedorValido(valor) {
+  return valor === "felipe" || valor === "nicolas" ? valor : "";
+}
 // El comprobante sale de este buzón. Brevo pide verificar el remitente una vez.
 const CORREO_REMITENTE = "greview641@gmail.com";
 const NOMBRE_REMITENTE = "Google Reviews";
@@ -144,6 +150,7 @@ function registroDe(cuerpo) {
       tipo: tipoValido(cuerpo.tipo),
       vendida: fechaValida(cuerpo.vendida),
       precio: precioValido(cuerpo.precio),
+      vendedor: vendedorValido(String(cuerpo.vendedor || "")),
       actualizado: new Date().toISOString(),
     },
   };
@@ -214,6 +221,7 @@ function servicioDe(cuerpo) {
       negocio: negocio,
       precio: Math.round(precio),
       fecha: fecha,
+      vendedor: vendedorValido(String(cuerpo.vendedor || "")),
       hecha: Boolean(cuerpo.hecha),
       notas: String(cuerpo.notas || "").trim().slice(0, 200),
     },
@@ -596,6 +604,7 @@ async function api(request, env, accion, url, ctx) {
       tipo: tipoValido(cuerpo.tipo),
       vendida: "",
       precio: 0,
+      vendedor: "",
       actualizado: new Date().toISOString(),
     };
     for (const codigo of codigos) await escribir(env, codigo, registro);

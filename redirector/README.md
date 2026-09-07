@@ -330,14 +330,24 @@ Sin ese secreto todo lo demás funciona: solo el botón de enviar responde que
 falta configurarlo. Cambiar de proveedor son quince líneas en `api()`, en el
 bloque `comprobante`.
 
-### El tope de los 3.500 UVT
+### El tope de la declaración de renta
 
-En **Cuentas** hay una barra con lo vendido en el año contra el tope que sostiene
-ser no responsable de IVA — **$183.309.000 en 2026**. Suma tarjetas cobradas más
-fichas cobradas, así que no guarda nada nuevo: sale de lo que ya hay.
+En **Cuentas** hay una barra por cada uno con lo que lleva vendido en el año
+contra los **1.400 UVT de ingresos brutos** que obligan a declarar renta — en
+2026, **$73.323.600** con el UVT en $52.374.
 
-El valor sube cada año. Está en `TOPE_UVT`, arriba de `pintarCuentas`, y hay que
-cambiarlo a mano en enero.
+Va separado porque **cada uno declara por su lado**: la barra de Felipe no cuenta
+lo que vendió Nicolás. De ahí que cada venta guarde un campo `vendedor`, que sale
+del segmentado «quién hizo la venta» del cobro. Lo vendido antes de que existiera
+ese campo aparece como «sin vendedor apuntado», aparte, en vez de repartirlo a
+ojo.
+
+El UVT cambia cada enero. Está en la constante `UVT`, encima de `pintarCuentas`,
+y se cambia a mano.
+
+> Los números de arriba salen de lo que nos pasó Felipe (3.500 UVT = $183.309.000
+> en 2026, de donde sale el UVT). Conviene confirmarlos y mirar a qué año
+> gravable corresponde la declaración antes de fiarse de la barra.
 
 ## Editar un rango
 

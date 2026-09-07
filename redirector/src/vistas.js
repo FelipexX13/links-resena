@@ -406,6 +406,8 @@ const ESTILOS = `
   .acciones-orden{grid-template-columns:repeat(3,minmax(0,1fr));min-width:240px}
   .tope{margin-top:12px;padding:13px 15px;border-radius:var(--r-m);
     background:var(--papel-2);border:1px solid var(--linea)}
+  .tope .cejilla{margin-bottom:11px}
+  .tope-socio+.tope-socio{margin-top:12px}
   .tope-alto{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
     font-size:12.5px;color:var(--tinta-2)}
   .tope-alto b{color:var(--tinta);font-family:"Geist Mono",ui-monospace,monospace;font-weight:500}
@@ -413,7 +415,8 @@ const ESTILOS = `
   .tope-barra i{display:block;height:100%;border-radius:999px;background:var(--verde)}
   .tope.cerca .tope-barra i{background:var(--ambar)}
   .tope.pasado .tope-barra i{background:var(--rojo)}
-  .tope-nota{margin-top:7px;font-size:11.5px;color:var(--tinta-3)}
+  .tope-nota{margin-top:9px;font-size:11.5px;color:var(--tinta-3)}
+  .tope-nota b{color:var(--tinta-2);font-weight:500}
   /* el comprobante no es parte del formulario: se manda con lo que ya está
      guardado, así que va en su propio bloque debajo */
   .comprobante{margin-top:22px;padding-top:18px;border-top:1px solid var(--linea-suave)}
@@ -706,6 +709,8 @@ let GASTO_EDITADO = "";
 const DIAS_DINERO = 30;
 const SOCIO_NOMBRE = { felipe: "Felipe", nicolas: "Nicolás", ambos: "Compartido" };
 let METRICA = "unidades";
+let PAGINA_ORDENES = 1;
+let PAGINA_GASTOS = 1;
 let LOCAL_VENTA = null;
 const DIAS_GRAFICA = 14;
 const POR_PAGINA = 10;
@@ -1291,6 +1296,7 @@ $("formTarjeta").onsubmit = async (e) => {
               negocio: $("negocio").value.trim(),
               precio: previa ? Number(previa.precio) || 0 : 0,
               fecha: previa ? previa.fecha || "" : "",
+              vendedor: previa ? previa.vendedor || "" : "",
               hecha: $("ordenFichaHecha").checked,
               notas: $("ordenFichaNotas").value.trim(),
             }),
@@ -1736,9 +1742,9 @@ function ventanaPaginas(actual, total) {
   return Object.keys(vistas).map(Number).sort((a, b) => a - b);
 }
 
-function paginacion(actual, total) {
+function paginacion(actual, total, que) {
   if (total <= 1) return "";
-  let html = "<nav class='paginacion' aria-label='Paginación de tarjetas'>";
+  let html = "<nav class='paginacion' aria-label='Paginación de " + (que || "tarjetas") + "'>";
   html += "<button type='button' class='pagina' data-pagina='" + (actual - 1) + "'" +
     (actual === 1 ? " disabled" : "") + ">Anterior</button><div class='paginas'>";
   let previa = 0;
@@ -1990,8 +1996,12 @@ function pintarVentas() {
     return;
   }
 
+  const paginas = Math.max(1, Math.ceil(lista.length / POR_PAGINA));
+  if (PAGINA_ORDENES > paginas) PAGINA_ORDENES = paginas;
+  const desde = (PAGINA_ORDENES - 1) * POR_PAGINA;
+
   let filas = "";
-  lista.forEach((l) => {
+  lista.slice(desde, desde + POR_PAGINA).forEach((l) => {
     const piezas = l.piezas;
     const f = l.ficha;
     // sin plástico no hay nada que abrir, cobrar ni liberar: esa fila solo tiene ficha
@@ -2023,7 +2033,8 @@ function pintarVentas() {
   });
   $("tablaLocales").innerHTML =
     "<table><thead><tr><th>Local</th><th>Piezas</th><th>Estado</th><th>Importe</th><th></th>" +
-    "</tr></thead><tbody>" + filas + "</tbody></table>";
+    "</tr></thead><tbody>" + filas + "</tbody></table>" +
+    paginacion(PAGINA_ORDENES, paginas, "órdenes");
 }
 
 function pintarPruebas(activo) {
@@ -2204,34 +2215,58 @@ function inventario() {
     .sort((a, b) => (b.recibido + b.pedido) - (a.recibido + a.pedido));
 }
 
-// El tope de los 3.500 UVT es lo que sostiene ser no responsable de IVA, y con
-// eso, no estar obligado a facturar electrónicamente. Sube cada año: hay que
-// cambiarlo a mano en enero.
-const TOPE_UVT = { anio: 2026, pesos: 183309000 };
+// La declaración de renta la presenta cada uno por su lado, con sus propios
+// ingresos, así que esto va separado por vendedor. El UVT cambia cada enero:
+// hay que actualizarlo a mano. Los 1.400 UVT son el tope de ingresos brutos.
+const UVT = { anio: 2026, pesos: 52374 };
+const RENTA_UVT = 1400;
 
-function vendidoEnElAnio(anio) {
+function topeRenta() {
+  return UVT.pesos * RENTA_UVT;
+}
+
+// Lo de antes de separar por vendedor no tiene dueño: se muestra aparte en vez
+// de repartirlo a ojo.
+function vendidoPorSocio(anio) {
   const desde = String(anio) + "-";
-  const enTarjetas = TARJETAS.reduce((a, t) =>
-    a + (String(t.vendida || "").indexOf(desde) === 0 ? Number(t.precio) || 0 : 0), 0);
-  const enFichas = SERVICIOS.reduce((a, x) =>
-    a + (String(x.fecha || "").indexOf(desde) === 0 ? Number(x.precio) || 0 : 0), 0);
-  return enTarjetas + enFichas;
+  const suma = { felipe: 0, nicolas: 0, sin: 0 };
+  const meter = (quien, cuanto) => {
+    if (quien === "felipe" || quien === "nicolas") suma[quien] += cuanto;
+    else suma.sin += cuanto;
+  };
+  TARJETAS.forEach((t) => {
+    if (String(t.vendida || "").indexOf(desde) === 0) meter(t.vendedor, Number(t.precio) || 0);
+  });
+  SERVICIOS.forEach((x) => {
+    if (String(x.fecha || "").indexOf(desde) === 0) meter(x.vendedor, Number(x.precio) || 0);
+  });
+  return suma;
 }
 
 function pintarTope() {
-  const vendido = vendidoEnElAnio(TOPE_UVT.anio);
-  const parte = vendido / TOPE_UVT.pesos;
+  const suma = vendidoPorSocio(UVT.anio);
+  const tope = topeRenta();
   const caja = $("tope");
-  caja.className = "tope" + (parte >= 1 ? " pasado" : (parte >= 0.8 ? " cerca" : ""));
-  caja.innerHTML = "<div class='tope-alto'><span>Vendido en " + TOPE_UVT.anio +
-    " <b>" + dinero(vendido) + "</b></span><span>Tope <b>" + dinero(TOPE_UVT.pesos) +
-    "</b></span></div>" +
-    "<div class='tope-barra'><i style='width:" + Math.min(100, parte * 100).toFixed(1) +
-    "%'></i></div>" +
-    "<div class='tope-nota'>" + (parte >= 1
-      ? "Pasaste los 3.500 UVT: toca revisar si sigues siendo no responsable de IVA."
-      : "Quedan " + dinero(TOPE_UVT.pesos - vendido) + " antes de los 3.500 UVT.") +
-    "</div>";
+  const mayor = Math.max(suma.felipe, suma.nicolas) / tope;
+  caja.className = "tope" + (mayor >= 1 ? " pasado" : (mayor >= 0.8 ? " cerca" : ""));
+
+  const barra = (socio) => {
+    const cuanto = suma[socio];
+    const parte = cuanto / tope;
+    return "<div class='tope-socio'><div class='tope-alto'><span>" + SOCIO_NOMBRE[socio] +
+      " <b>" + dinero(cuanto) + "</b></span><span>" +
+      (parte >= 1 ? "pasa el tope" : "quedan " + dinero(tope - cuanto)) + "</span></div>" +
+      "<div class='tope-barra'><i style='width:" + Math.min(100, parte * 100).toFixed(1) +
+      "%'></i></div></div>";
+  };
+
+  caja.innerHTML = "<div class='cejilla'>Declaración de renta · " + UVT.anio + "</div>" +
+    barra("felipe") + barra("nicolas") +
+    (suma.sin ? "<div class='tope-nota'>Sin vendedor apuntado: <b>" + dinero(suma.sin) +
+      "</b> — son ventas de antes de separar por quién la hizo.</div>" : "") +
+    "<div class='tope-nota'>Declara quien pase " + RENTA_UVT.toLocaleString("es-CO") +
+    " UVT de ingresos brutos en el " +
+    "año, que en " + UVT.anio + " son " + dinero(tope) + " (UVT " + dinero(UVT.pesos) + ").</div>";
 }
 
 function pintarCuentas() {
@@ -2278,8 +2313,12 @@ function pintarCuentas() {
     return;
   }
 
+  const paginasG = Math.max(1, Math.ceil(GASTOS.length / POR_PAGINA));
+  if (PAGINA_GASTOS > paginasG) PAGINA_GASTOS = paginasG;
+  const desdeG = (PAGINA_GASTOS - 1) * POR_PAGINA;
+
   let filas = "";
-  GASTOS.forEach((g) => {
+  GASTOS.slice(desdeG, desdeG + POR_PAGINA).forEach((g) => {
     const llego = g.estado === "entregado";
     filas += "<tr><td class='piezas'>" + escHtml(g.fecha) +
       (llego && g.entrega ? "<div class='fila-num'>llegó " + escHtml(g.entrega) + "</div>" : "") +
@@ -2297,7 +2336,8 @@ function pintarCuentas() {
   });
   $("tablaGastos").innerHTML =
     "<table><thead><tr><th>Fecha</th><th>De dónde</th><th>Quién puso</th>" +
-    "<th>Estado</th><th>Monto</th><th></th></tr></thead><tbody>" + filas + "</tbody></table>";
+    "<th>Estado</th><th>Monto</th><th></th></tr></thead><tbody>" + filas + "</tbody></table>" +
+    paginacion(PAGINA_GASTOS, paginasG, "gastos");
 
   const inv = inventario();
   if (!inv.length) {
@@ -2356,6 +2396,13 @@ $("metricaVentas").addEventListener("click", (e) => {
 
 $("tablaLocales").addEventListener("click", async (e) => {
   if (e.target.closest("[data-local]")) { $("abrirLocal").click(); return; }
+
+  const pg = e.target.closest("[data-pagina]");
+  if (pg && !pg.disabled) {
+    PAGINA_ORDENES = parseInt(pg.dataset.pagina, 10) || 1;
+    pintarVentas();
+    return;
+  }
 
   const pz = e.target.closest("[data-piezas]");
   if (pz) { abrirOrden(pz.dataset.piezas); return; }
@@ -2861,6 +2908,7 @@ $("formVenta").onsubmit = async (e) => {
             tipo: tipo,
             vendida: fecha,
             precio: precios[tipo],
+            vendedor: QUIEN_VENDE,
           }),
         });
       }
@@ -2879,6 +2927,7 @@ $("formVenta").onsubmit = async (e) => {
           negocio: l.negocio,
           precio: precios.ficha,
           fecha: fecha,
+          vendedor: QUIEN_VENDE,
           hecha: Boolean(previa.hecha),
           notas: previa.notas || "",
         }),
@@ -2891,7 +2940,8 @@ $("formVenta").onsubmit = async (e) => {
     cerrarVenta();
     for (const tipo of ["acrilico", "sticker"]) {
       if (l.codigos[tipo].length) {
-        parchearTarjetas(l.codigos[tipo], { vendida: fecha, precio: precios[tipo] });
+        parchearTarjetas(l.codigos[tipo],
+          { vendida: fecha, precio: precios[tipo], vendedor: QUIEN_VENDE });
       }
     }
     if (fichaNueva) parchearServicio(fichaNueva.id, fichaNueva);
@@ -3073,6 +3123,13 @@ $("formGasto").onsubmit = async (e) => {
 };
 
 $("tablaGastos").addEventListener("click", async (e) => {
+  const pg = e.target.closest("[data-pagina]");
+  if (pg && !pg.disabled) {
+    PAGINA_GASTOS = parseInt(pg.dataset.pagina, 10) || 1;
+    pintarCuentas();
+    return;
+  }
+
   if (e.target.closest("[data-gasto-nuevo]")) { abrirGasto(""); return; }
 
   const ed = e.target.closest("[data-gasto]");
@@ -3544,6 +3601,7 @@ export function vistaAdmin(origen) {
         <label class="casilla" id="filaLlevaFicha">
           <input type="checkbox" id="ordenLlevaFicha"> Lleva ficha de Google</label>
         <div id="detalleFicha" hidden>
+          <p class="mini2 sin-aire">Su precio va con el de las piezas, al aceptar la orden.</p>
           <label class="casilla"><input type="checkbox" id="ordenFichaHecha">
             Ya está publicada</label>
           <label class="mini sobre-buscador" for="ordenFichaNotas">Notas de la ficha</label>
