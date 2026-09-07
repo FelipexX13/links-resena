@@ -431,6 +431,7 @@ const ESTILOS = `
   .casilla input{width:18px;height:18px;flex:0 0 auto;padding:0;margin:0;
     accent-color:var(--azul);cursor:pointer}
   .rango-fila{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+  .rango-fila[hidden]{display:none}
   #rangoOrden{margin-top:14px}
   button.alerta{background:var(--ambar);color:#4a3400}
   button.alerta:hover{background:#e09b00;color:#3a2900}
@@ -1942,7 +1943,9 @@ function pintarVentas() {
     const piezas = l.piezas;
     const f = l.ficha;
     // sin plástico no hay nada que abrir, cobrar ni liberar: esa fila solo tiene ficha
+    // sin plástico no hay nada que abrir ni liberar, pero sí que cobrar
     const soloFicha = piezas === 0 ? " disabled" : "";
+    const sinCobro = piezas === 0 && !f ? " disabled" : "";
     filas += "<tr><td class='negocio'>" + escHtml(l.negocio) + "</td>" +
       "<td class='piezas'>" + (piezas
         ? plural(l.acrilico, "acrílico", "acrílicos") + "<br>" +
@@ -1965,7 +1968,7 @@ function pintarVentas() {
       (f ? (f.hecha ? " lista" : " pedida") : "") +
       "' data-ficha='" + escHtml(l.negocio) + "'>Ficha</button>" +
       "<button type='button' class='accion-editar' data-vender='" + escHtml(l.negocio) + "'" +
-      soloFicha + ">" + (l.vendidas ? "Cobro" : "Aceptar") + "</button>" +
+      sinCobro + ">" + (l.cobrado ? "Cobro" : "Aceptar") + "</button>" +
       "<button type='button' class='accion-apagar' data-cancelar='" + escHtml(l.negocio) +
       "'" + soloFicha + ">Cancelar</button></div></td></tr>";
   });
@@ -2375,9 +2378,12 @@ function itemsDelLocal(l, precios) {
     items.push({ que: "Sticker de mesa con chip NFC",
       cuantos: l.sticker, unitario: precios.sticker });
   }
-  if (l.ficha && l.ficha.precio) {
+  const ficha = precios.ficha !== undefined
+    ? precios.ficha
+    : (l.ficha ? Number(l.ficha.precio) || 0 : 0);
+  if (ficha) {
     items.push({ que: "Montaje de la ficha del negocio en Google",
-      cuantos: 1, unitario: Number(l.ficha.precio) || 0 });
+      cuantos: 1, unitario: ficha });
   }
   return items;
 }
@@ -2481,29 +2487,29 @@ function nombreArchivo(negocio, fecha) {
 // servicio del negocio. No cuelga de ninguna tarjeta: hay locales que solo
 // piden eso, así que se guarda por su cuenta y se une a la orden por el nombre.
 let FICHA_ID = null;
+let FICHA_ACTUAL = null;
 let focoFicha = null;
 
 function fichaDe(negocio) {
   return SERVICIOS.filter((x) => x.negocio === negocio)[0] || null;
 }
 
+// Aquí solo se lee: el cobro vive en la ventana de la venta, con el resto
 function pintarResumenFicha() {
-  const precio = Number($("fichaPrecio").value) || 0;
-  const fecha = $("fichaFecha").value;
-  $("fichaResumen").textContent = fecha
-    ? "Cobrada el " + fecha + " · " + dinero(precio)
-    : "Sin cobrar" + (precio ? " · " + dinero(precio) + " acordados" : "");
+  const f = FICHA_ACTUAL || {};
+  $("fichaResumen").textContent = f.fecha
+    ? "Cobrada el " + f.fecha + " · " + dinero(f.precio)
+    : "Sin cobrar todavía. Se cobra desde la orden, junto con las tarjetas.";
 }
 
 function abrirFicha(negocio) {
   const s = negocio ? fichaDe(negocio) : null;
   FICHA_ID = s ? s.id : null;
+  FICHA_ACTUAL = s;
   // los locales que ya existen, para no reescribir el nombre a mano
   $("localesFicha").innerHTML = locales()
     .map((l) => "<option value='" + escHtml(l.negocio) + "'>").join("");
   $("fichaNegocio").value = s ? s.negocio : (negocio || "");
-  $("fichaPrecio").value = s && s.precio ? s.precio : "";
-  $("fichaFecha").value = s ? s.fecha || "" : "";
   $("fichaNotas").value = s ? s.notas || "" : "";
   $("fichaHecha").checked = Boolean(s && s.hecha);
   $("borrarFicha").hidden = !s;
@@ -2515,7 +2521,7 @@ function abrirFicha(negocio) {
   focoFicha = document.activeElement;
   $("modalFicha").hidden = false;
   document.body.style.overflow = "hidden";
-  ($("fichaNegocio").value ? $("fichaPrecio") : $("fichaNegocio")).focus();
+  $("fichaNegocio").focus();
 }
 
 function cerrarFicha() {
@@ -2526,6 +2532,7 @@ function cerrarFicha() {
   if (focoFicha && focoFicha.focus) focoFicha.focus();
   focoFicha = null;
   FICHA_ID = null;
+  FICHA_ACTUAL = null;
 }
 
 $("abrirFicha").onclick = () => abrirFicha("");
@@ -2534,9 +2541,6 @@ $("cancelarFicha").onclick = cerrarFicha;
 $("modalFicha").addEventListener("click", (e) => {
   if (e.target.hasAttribute("data-cerrar-ficha")) cerrarFicha();
 });
-$("fichaPrecio").addEventListener("input", pintarResumenFicha);
-$("fichaFecha").addEventListener("input", pintarResumenFicha);
-
 $("formFicha").onsubmit = async (e) => {
   e.preventDefault();
   const negocio = $("fichaNegocio").value.trim();
@@ -2544,10 +2548,12 @@ $("formFicha").onsubmit = async (e) => {
     avisar("avisoFicha", "Falta el nombre del local.", false);
     return;
   }
+  // el cobro que ya tuviera se respeta: esta ventana no lo toca
+  const previa = FICHA_ACTUAL || {};
   const cuerpo = {
     negocio: negocio,
-    precio: Math.max(0, Number($("fichaPrecio").value) || 0),
-    fecha: $("fichaFecha").value,
+    precio: Number(previa.precio) || 0,
+    fecha: previa.fecha || "",
     hecha: $("fichaHecha").checked,
     notas: $("fichaNotas").value.trim(),
   };
@@ -2603,16 +2609,15 @@ $("borrarFicha").onclick = async () => {
 // no con lo guardado: así se puede revisar el PDF antes de aceptar la orden.
 function datosDelComprobante() {
   if (!LOCAL_VENTA) return null;
+  // sin los datos del vendedor no hay comprobante, así que en vez de mandarlo a
+  // buscar el botón a otra pestaña, se le abre el formulario aquí mismo
   if (!VENDEDOR || !VENDEDOR.nombre) {
-    avisar("avisoVenta", "Primero pon tu nombre y tu cédula en Cuentas › Mis datos.", false);
+    cerrarVenta();
+    abrirAjustes();
+    avisar("avisoPanel", "Pon tu nombre y tu cédula una vez y ya sale en todos los comprobantes.", false);
     return null;
   }
-  const l = LOCAL_VENTA;
-  const precios = {
-    acrilico: Math.max(0, Number($("precioAcrilico").value) || 0),
-    sticker: Math.max(0, Number($("precioSticker").value) || 0),
-  };
-  const items = itemsDelLocal(l, precios);
+  const items = itemsDelLocal(LOCAL_VENTA, preciosDeLaVenta());
   if (!items.length) {
     avisar("avisoVenta", "Pon los precios antes de sacar el comprobante.", false);
     return null;
@@ -2778,8 +2783,9 @@ function abrirVenta(negocio) {
   if (!l) return;
   LOCAL_VENTA = l;
   $("ventaTitulo").textContent = l.vendidas ? "Editar el cobro" : "Aceptar la orden";
-  $("ventaSubtitulo").textContent = l.negocio + " · " +
-    plural(l.acrilico, "acrílico", "acrílicos") + " y " + plural(l.sticker, "sticker", "stickers");
+  $("ventaSubtitulo").textContent = l.negocio + " · " + (l.piezas
+    ? plural(l.acrilico, "acrílico", "acrílicos") + " y " + plural(l.sticker, "sticker", "stickers")
+    : "sin tarjetas") + (l.ficha ? " · ficha de Google" : "");
   $("ventaFecha").value = l.fecha || hoyISO();
   const unitario = (tipo) => {
     const t = TARJETAS.filter((x) => x.negocio === l.negocio && tipoDe(x) === tipo && x.precio)[0];
@@ -2787,6 +2793,9 @@ function abrirVenta(negocio) {
   };
   $("precioAcrilico").value = unitario("acrilico");
   $("precioSticker").value = unitario("sticker");
+  // un local puede no tener plástico y llevar solo la ficha
+  $("bloquePiezas").hidden = !l.piezas;
+  $("precioFicha").value = l.ficha && l.ficha.precio ? l.ficha.precio : "";
   $("guardarVenta").textContent = l.vendidas ? "Guardar el cobro" : "Aceptar la orden";
   const comp = COMPRADORES[l.negocio] || {};
   $("ventaCorreo").value = comp.correo || "";
@@ -2799,17 +2808,32 @@ function abrirVenta(negocio) {
   $("precioAcrilico").focus();
 }
 
+function preciosDeLaVenta() {
+  return {
+    acrilico: Math.max(0, Number($("precioAcrilico").value) || 0),
+    sticker: Math.max(0, Number($("precioSticker").value) || 0),
+    ficha: Math.max(0, Number($("precioFicha").value) || 0),
+  };
+}
+
 function pintarResumenVenta() {
   if (!LOCAL_VENTA) return;
-  const pa = Number($("precioAcrilico").value) || 0;
-  const ps = Number($("precioSticker").value) || 0;
-  const total = pa * LOCAL_VENTA.acrilico + ps * LOCAL_VENTA.sticker;
-  $("ventaResumen").textContent = LOCAL_VENTA.acrilico + " × " + dinero(pa) + "   +   " +
-    LOCAL_VENTA.sticker + " × " + dinero(ps) + "   =   " + dinero(total);
+  const l = LOCAL_VENTA;
+  const p = preciosDeLaVenta();
+  const partes = [];
+  if (l.piezas) {
+    partes.push(l.acrilico + " × " + dinero(p.acrilico));
+    partes.push(l.sticker + " × " + dinero(p.sticker));
+  }
+  if (p.ficha) partes.push("ficha " + dinero(p.ficha));
+  const total = p.acrilico * l.acrilico + p.sticker * l.sticker + p.ficha;
+  $("ventaResumen").textContent = (partes.join("   +   ") || "sin nada que cobrar") +
+    "   =   " + dinero(total);
 }
 
 $("precioAcrilico").addEventListener("input", pintarResumenVenta);
 $("precioSticker").addEventListener("input", pintarResumenVenta);
+$("precioFicha").addEventListener("input", pintarResumenVenta);
 
 function cerrarVenta() {
   if ($("modalVenta").hidden) return;
@@ -2835,10 +2859,7 @@ $("formVenta").onsubmit = async (e) => {
     return;
   }
   const l = LOCAL_VENTA;
-  const precios = {
-    acrilico: Math.max(0, Number($("precioAcrilico").value) || 0),
-    sticker: Math.max(0, Number($("precioSticker").value) || 0),
-  };
+  const precios = preciosDeLaVenta();
   const boton = $("guardarVenta");
   const etiqueta = boton.textContent;
   boton.disabled = true;
@@ -2865,7 +2886,27 @@ $("formVenta").onsubmit = async (e) => {
         });
       }
     }
-    const importe = precios.acrilico * l.acrilico + precios.sticker * l.sticker;
+    // La ficha se cobra en la misma pasada: es la misma venta. Vaciar el campo no
+    // la borra —para eso está Quitar en su ventana—, solo la deja como estaba.
+    let fichaNueva = null;
+    if (precios.ficha) {
+      boton.textContent = "Cobrando la ficha…";
+      const previa = l.ficha || {};
+      fichaNueva = await llamar("servicio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: previa.id,
+          negocio: l.negocio,
+          precio: precios.ficha,
+          fecha: fecha,
+          hecha: Boolean(previa.hecha),
+          notas: previa.notas || "",
+        }),
+      });
+    }
+
+    const importe = precios.acrilico * l.acrilico + precios.sticker * l.sticker + precios.ficha;
     await recordarComprador(l.negocio, $("ventaCorreo").value.trim(), $("ventaNit").value.trim());
     cerrarVenta();
     for (const tipo of ["acrilico", "sticker"]) {
@@ -2873,6 +2914,7 @@ $("formVenta").onsubmit = async (e) => {
         parchearTarjetas(l.codigos[tipo], { vendida: fecha, precio: precios[tipo] });
       }
     }
+    if (fichaNueva) parchearServicio(fichaNueva.id, fichaNueva);
     avisar("avisoPanel", "Orden de " + l.negocio + " aceptada · " + dinero(importe), true);
   } catch (err) {
     avisar("avisoVenta", err.message, false);
@@ -3648,7 +3690,8 @@ export function vistaAdmin(origen) {
     <button type="button" class="modal-cerrar" id="cerrarFicha" aria-label="Cerrar">✕</button>
     <div class="modal-kicker">Servicio</div>
     <h1 id="fichaTitulo">Ficha de Google</h1>
-    <p class="modal-subtitulo">Montarle el sitio en Google: fotos, horarios y datos.</p>
+    <p class="modal-subtitulo">Montarle el sitio en Google: fotos, horarios y datos.
+      El precio se pone al cobrar la orden.</p>
 
     <form id="formFicha">
       <label class="mini" for="fichaNegocio">Local</label>
@@ -3656,12 +3699,6 @@ export function vistaAdmin(origen) {
              autocomplete="off" list="localesFicha">
       <datalist id="localesFicha"></datalist>
 
-      <div class="rango-fila">
-        <div><label class="mini" for="fichaPrecio">Precio en pesos</label>
-          <input id="fichaPrecio" type="number" min="0" step="1" placeholder="80000"></div>
-        <div><label class="mini" for="fichaFecha">Fecha del cobro</label>
-          <input id="fichaFecha" type="date"></div>
-      </div>
       <div class="rango-resumen" id="fichaResumen"></div>
 
       <label class="mini sobre-buscador" for="fichaNotas">Notas</label>
@@ -3765,12 +3802,16 @@ export function vistaAdmin(origen) {
       <label class="mini" for="ventaFecha">Fecha de la venta</label>
       <input id="ventaFecha" type="date">
 
-      <div class="rango-fila">
+      <div class="rango-fila" id="bloquePiezas">
         <div><label class="mini" for="precioAcrilico">Precio por acrílico</label>
           <input id="precioAcrilico" type="number" min="0" step="100" placeholder="0" autocomplete="off"></div>
         <div><label class="mini" for="precioSticker">Precio por sticker</label>
           <input id="precioSticker" type="number" min="0" step="100" placeholder="0" autocomplete="off"></div>
       </div>
+
+      <label class="mini" for="precioFicha">Ficha de Google
+        <span class="suave">(vacío si no lleva)</span></label>
+      <input id="precioFicha" type="number" min="0" step="1000" placeholder="0" autocomplete="off">
       <div class="rango-resumen" id="ventaResumen"></div>
 
       <div class="rango-fila">

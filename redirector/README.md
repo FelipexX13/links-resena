@@ -252,9 +252,17 @@ las tarjetas. Consecuencia a tener presente: si le cambias el nombre al local en
 las tarjetas, la ficha se queda con el viejo y aparece como una fila aparte.
 
 Sigue la misma regla que una tarjeta para contar como ingreso: **sin fecha es un
-trato hablado, no plata**. Y un local puede tener ficha sin comprar una sola
-tarjeta — entonces su fila sale con «sin tarjetas» y solo el botón **Ficha**
-activo, porque no hay piezas que abrir, cobrar ni liberar.
+trato hablado, no plata**.
+
+**El cobro va todo junto.** El precio de la ficha se pone en la misma ventana que
+el de los acrílicos y los stickers, con la misma fecha, y sale en el mismo
+comprobante. Su ventana propia quedó solo para el trabajo: a qué local es, si ya
+está publicada, notas y quitarla. Dejar el precio vacío al cobrar no la borra —
+la deja como estaba.
+
+Un local puede tener ficha sin comprar una sola tarjeta. Entonces su fila sale con
+«sin tarjetas» y **Piezas** y **Cancelar** desactivados, porque no hay plástico
+que abrir ni liberar; **Aceptar** sigue activo, que es por donde se cobra.
 
 El botón lleva el color del estado, como el del NFC: ámbar si está pedida,
 verde si ya está publicada.
