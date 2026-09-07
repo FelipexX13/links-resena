@@ -522,7 +522,8 @@ async function api(request, env, accion, url, ctx) {
     const datos = {
       negocio: negocio,
       total: total,
-      fecha: String(cuerpo.fecha || "").slice(0, 20),
+      // "12 de septiembre de 2026" son 24: con 20 se comía el año
+      fecha: String(cuerpo.fecha || "").slice(0, 40),
       referencia: String(cuerpo.referencia || "").slice(0, 30),
       vendedor: String(cuerpo.vendedor || "").slice(0, 80),
       telefonoVendedor: String(cuerpo.telefonoVendedor || "").slice(0, 30),
