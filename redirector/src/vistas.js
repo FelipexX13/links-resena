@@ -141,6 +141,9 @@ const ESTILOS = `
   .marca-texto strong{font-size:15px;font-weight:600;letter-spacing:-.015em}
   .marca-host{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;color:var(--tinta-3)}
   .cabecera-acciones{display:flex;gap:9px;flex-wrap:wrap}
+  /* estos tres iconos solo salen cuando el botón se queda sin texto, en el
+     teléfono; en pantalla grande el rótulo se explica solo */
+  .icono-barra{display:none}
 
   .contenido{padding-top:34px;padding-bottom:80px}
   section+section{margin-top:20px}
@@ -512,11 +515,11 @@ const ESTILOS = `
        en 72px. Una tabla de 4 columnas no cabe: cada fila pasa a ser un bloque. */
     table,tbody,tr,td{display:block;width:auto}
     thead{display:none}
-    table{margin-top:10px}
-    tr{padding:14px 0;border-bottom:1px solid var(--linea-suave)}
+    table{margin-top:14px}
+    tr{padding:17px 0;border-bottom:1px solid var(--linea-suave)}
     tr:hover{background:transparent}
     td{border:0;padding:0}
-    td:last-child{width:auto;white-space:normal;padding-top:11px}
+    td:last-child{width:auto;white-space:normal;padding-top:14px}
     /* Las medidas fijas de la tabla llevan #tabla delante y una media query no
        suma especificidad: sin repetir el selector, la celda de los botones se
        quedaba en 338px y "Desactivar" se salía de la pantalla. */
@@ -532,31 +535,40 @@ const ESTILOS = `
 
     /* 132px de cabecera fija en una pantalla de 844 es peaje permanente */
     .cabecera{position:static}
-    .cabecera-fila{padding:12px 0;gap:10px}
+    /* Con .cabecera-fila a secas ganaba .envoltorio, que va más abajo en este
+       mismo bloque y reparte "padding:0 16px": la barra se quedaba sin aire
+       arriba y la marca tocaba el borde de la pantalla. */
+    .cabecera .cabecera-fila{padding:15px 16px;gap:14px}
     .marca .g{width:26px;height:26px}
     /* Estirados a media fila salían cuatro pastillas de 310x74: un cuarto de la
        pantalla para la barra. A su ancho natural caben dos por fila y la
        cabecera baja de 250px a poco más de 150. */
     .cabecera-acciones{width:100%;gap:8px}
     .cabecera-acciones button,.cabecera-acciones a.boton{padding:9px 14px;font-size:12.5px}
-    /* A su ancho natural quedaban dos filas dentadas con cien pixeles muertos a
-       la derecha. En rejilla de dos los cuatro miden lo mismo y los cantos
-       cuadran con el borde de la lámina de abajo. */
-    .cabecera .cabecera-acciones{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+    /* Con rótulo, estos cuatro ocupaban dos filas enteras de la barra. En un
+       teléfono el texto sobra: el icono basta y caben los cuatro en una fila.
+       La etiqueta sigue en el marcado, escondida, porque es de donde el lector
+       de pantalla saca el nombre del botón. */
+    .cabecera .cabecera-acciones{display:flex;gap:14px}
     .cabecera .cabecera-acciones button,
-    .cabecera .cabecera-acciones a.boton{width:100%;justify-content:center}
+    .cabecera .cabecera-acciones a.boton{width:46px;height:46px;flex:0 0 auto;
+      padding:0;border-radius:50%;justify-content:center}
+    .cabecera .icono-barra{display:block}
+    .cabecera .cabecera-acciones svg{width:19px;height:19px}
+    .cabecera .etiqueta{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+      overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 
     .envoltorio{padding:0 16px}
-    .contenido{padding-top:18px;padding-bottom:56px}
-    .panel{padding:16px 14px}
+    .contenido{padding-top:22px;padding-bottom:56px}
+    .panel{padding:20px 14px}
     /* En 390px se llegaba a la primera tarjeta en el pixel 439: media pantalla
        de mandos. Los tres del panel pasan a rejilla —reparten el ancho en vez
        de envolverse 2+1— y los aires de alrededor se aprietan. */
-    .panel-barra{padding-bottom:12px}
+    .panel-barra{padding-bottom:16px}
     .panel-barra .cabecera-acciones{display:grid;gap:6px;
       grid-template-columns:repeat(auto-fit,minmax(88px,1fr))}
     .panel-barra .cabecera-acciones button{width:100%;padding:9px 6px;font-size:12px}
-    .busca{margin-top:12px}
+    .busca{margin-top:16px}
 
     /* menos de 16px y iOS hace zoom al enfocar el campo */
     input{font-size:16px}
@@ -1883,8 +1895,12 @@ function pintarVentas() {
 function pintarPruebas(activo) {
   PRUEBAS = Boolean(activo);
   const b = $("togglePruebas");
-  b.textContent = PRUEBAS ? "Pruebas activas" : "Modo pruebas";
-  b.className = PRUEBAS ? "alerta" : "fantasma";
+  const rotulo = PRUEBAS ? "Pruebas activas" : "Modo pruebas";
+  // solo la etiqueta: textContent entero se llevaría por delante el icono
+  b.querySelector(".etiqueta").textContent = rotulo;
+  b.title = rotulo;
+  b.classList.toggle("alerta", PRUEBAS);
+  b.classList.toggle("fantasma", !PRUEBAS);
   $("bannerPruebas").hidden = !PRUEBAS;
 }
 
@@ -2750,14 +2766,30 @@ export function vistaAdmin(origen) {
         </span>
       </div>
       <nav class="cabecera-acciones" aria-label="Acciones de la sesión">
-        <button type="button" id="abrirActivar">Activar tarjetas</button>
-        <button type="button" class="fantasma" id="togglePruebas">Modo pruebas</button>
-        <a class="boton fantasma" href="https://www.google.com/maps" target="_blank" rel="noopener">
+        <button type="button" id="abrirActivar" title="Activar tarjetas">
+          <svg class="icono-barra" viewBox="0 0 24 24" width="14" height="14" fill="none"
+               stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+            <path d="M12 5v14M5 12h14"/>
+          </svg><span class="etiqueta">Activar tarjetas</span></button>
+        <button type="button" class="fantasma" id="togglePruebas" title="Modo pruebas">
+          <svg class="icono-barra" viewBox="0 0 24 24" width="14" height="14" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true">
+            <path d="M9.6 3v6.4L4.7 17.9A2 2 0 0 0 6.4 21h11.2a2 2 0 0 0 1.7-3.1L14.4 9.4V3"/>
+            <path d="M8.4 3h7.2"/><path d="M7.3 14.4h9.4"/>
+          </svg><span class="etiqueta">Modo pruebas</span></button>
+        <a class="boton fantasma" href="https://www.google.com/maps" target="_blank" rel="noopener"
+           title="Google Maps">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
                stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/>
-          </svg>Google Maps</a>
-        <button type="button" class="fantasma" id="salir">Cerrar sesión</button>
+          </svg><span class="etiqueta">Google Maps</span></a>
+        <button type="button" class="fantasma" id="salir" title="Cerrar sesión">
+          <svg class="icono-barra" viewBox="0 0 24 24" width="14" height="14" fill="none"
+               stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
+               aria-hidden="true">
+            <path d="M15 17l5-5-5-5"/><path d="M20 12H9"/><path d="M12 3H5v18h7"/>
+          </svg><span class="etiqueta">Cerrar sesión</span></button>
       </nav>
     </div>
   </header>
