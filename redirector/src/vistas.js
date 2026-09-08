@@ -872,6 +872,9 @@ function mostrar(dentro) {
   $("pantallaPanel").hidden = !dentro;
   $("pantallaLogin").hidden = dentro;
   if (dentro) {
+    // los botones de la barra los reparte pintarVista, y hasta ahora solo corría
+    // al cambiar de pestaña: al entrar salían todos, en todas
+    pintarVista(VISTA);
     CARGANDO = true;
     pintarTabla();
     listar();
