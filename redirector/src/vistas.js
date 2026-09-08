@@ -2064,7 +2064,9 @@ function pintarVentas() {
       "</span>" + (l.cobrado && piezas && l.vendidas < piezas
         ? "<div class='fila-num'>" + l.vendidas + " de " + piezas + " piezas</div>" : "") +
       (f && !f.hecha ? "<div class='fila-num'>ficha sin publicar</div>" : "") +
-      (cerrada(l.negocio) ? "<div class='fila-num'>comprobante enviado</div>" : "") +
+      (cerrada(l.negocio) ? "<div class='fila-num'>" +
+        (COMPROBANTES[l.negocio].sinEnviar ? "cerrada sin comprobante" : "comprobante enviado") +
+        "</div>" : "") +
       "</td><td class='importe'>" + (l.cobrado ? dinero(l.importe) : "—") + "</td>" +
       "<td><div class='acciones acciones-orden'>" +
       "<button type='button' class='accion-qr' data-piezas='" + escHtml(l.negocio) + "'" +
@@ -2532,9 +2534,16 @@ function itemsDelLocal(l, precios) {
     items.push({ que: "Acrílico personalizado con chip NFC",
       cuantos: l.acrilico, unitario: precios.acrilico, antes: LISTA.acrilico });
   }
-  if (l.sticker && precios.sticker) {
+  const gratis = Math.min(l.sticker, precios.gratis || 0);
+  const cobrados = l.sticker - gratis;
+  if (cobrados && precios.sticker) {
     items.push({ que: "Sticker de mesa con chip NFC",
-      cuantos: l.sticker, unitario: precios.sticker, antes: LISTA.sticker });
+      cuantos: cobrados, unitario: precios.sticker, antes: LISTA.sticker });
+  }
+  if (gratis) {
+    items.push({ que: "Sticker de mesa con chip NFC — regalo de la ruleta",
+      cuantos: gratis, unitario: 0,
+      antes: precios.sticker || precioSticker(l.sticker) });
   }
   const ficha = precios.ficha !== undefined
     ? precios.ficha
@@ -2712,6 +2721,41 @@ $("siEnviar").onclick = async () => {
 };
 
 $("ahoraNo").onclick = cerrarVenta;
+
+// El cliente pagó pero no quiso papel: se cierra igual, sin correo
+$("cerrarSinEnviar").onclick = async () => {
+  if (!LOCAL_VENTA) return;
+  const negocio = LOCAL_VENTA.negocio;
+  const boton = $("cerrarSinEnviar");
+  if (CONFIRMANDO !== "sinEnviar") { pedirConfirmacion(boton, "sinEnviar"); return; }
+
+  olvidarConfirmacion();
+  boton.disabled = true;
+  try {
+    const p = preciosDeLaVenta();
+    const l = LOCAL_VENTA;
+    const importe = p.acrilico * l.acrilico + p.sticker * (l.sticker - p.gratis) + p.ficha;
+    const r = await llamar("comprobante-cerrar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        negocio: negocio,
+        total: dinero(importe),
+        fecha: fechaLarga($("ventaFecha").value || hoyISO()),
+        vendedor: (VENDEDORES[QUIEN_VENDE] || {}).nombre || "",
+      }),
+    });
+    COMPROBANTES[negocio] = Object.assign({ negocio: negocio }, r.comprobante);
+    $("preguntaComprobante").hidden = true;
+    pintarBloqueoVenta(negocio);
+    repintarTodo();
+    avisar("avisoPanel", "Orden de " + negocio + " cerrada sin comprobante", true);
+  } catch (err) {
+    avisar("avisoVenta", err.message, false);
+  } finally {
+    boton.disabled = false;
+  }
+};
 
 $("bajarComprobante").onclick = () => {
   try {
@@ -2915,6 +2959,13 @@ function abrirVenta(negocio) {
   pintarChips();
   // un local puede no tener plástico y llevar solo la ficha
   $("bloquePiezas").hidden = !l.piezas;
+  // los regalados son los vinilos cobrados a cero; si no se ha cobrado, ninguno
+  const regalados = TARJETAS.filter((x) => x.negocio === l.negocio && tipoDe(x) === "sticker" &&
+    x.vendida && !Number(x.precio)).length;
+  $("ventaGratis").value = regalados;
+  $("ventaGratis").max = l.sticker;
+  $("rotuloGratis").hidden = !l.sticker;
+  $("ventaGratis").hidden = !l.sticker;
   $("precioFicha").value = l.ficha && l.ficha.precio ? l.ficha.precio
     : (l.ficha ? PRECIOS.ficha : "");
   $("guardarVenta").textContent = l.vendidas ? "Guardar el cobro" : "Aceptar la orden";
@@ -2994,10 +3045,15 @@ $("modalVenta").addEventListener("click", (e) => {
 });
 
 function preciosDeLaVenta() {
+  const l = LOCAL_VENTA;
+  const tope = l ? l.sticker : 0;
   return {
     acrilico: Math.max(0, Number($("precioAcrilico").value) || 0),
     sticker: Math.max(0, Number($("precioSticker").value) || 0),
     ficha: Math.max(0, Number($("precioFicha").value) || 0),
+    // por cada acrílico el local gira la ruleta y puede sacar uno o dos vinilos;
+    // esos van en la orden como cualquier otro, pero a cero
+    gratis: Math.min(tope, Math.max(0, Math.round(Number($("ventaGratis").value) || 0))),
   };
 }
 
@@ -3007,8 +3063,10 @@ function pintarBloqueoVenta(negocio) {
   const acta = COMPROBANTES[negocio];
   $("bloqueoVenta").hidden = !acta;
   if (acta) {
-    $("bloqueoTexto").innerHTML = "<b>Comprobante enviado</b> a " + escHtml(acta.correo || "") +
-      (acta.fecha ? " · " + escHtml(acta.fecha) : "") +
+    $("bloqueoTexto").innerHTML = (acta.sinEnviar
+      ? "<b>Cerrada sin comprobante</b>" + (acta.fecha ? " · " + escHtml(acta.fecha) : "")
+      : "<b>Comprobante enviado</b> a " + escHtml(acta.correo || "") +
+        (acta.fecha ? " · " + escHtml(acta.fecha) : "")) +
       ". La orden queda cerrada; bórralo para poder cambiarla.";
   }
   ["ventaFecha", "precioAcrilico", "precioSticker", "precioFicha", "guardarVenta"]
@@ -3049,10 +3107,11 @@ function pintarResumenVenta() {
   const partes = [];
   if (l.piezas) {
     partes.push(l.acrilico + " × " + dinero(p.acrilico));
-    partes.push(l.sticker + " × " + dinero(p.sticker));
+    partes.push((l.sticker - p.gratis) + " × " + dinero(p.sticker));
+    if (p.gratis) partes.push(p.gratis + " de regalo");
   }
   if (p.ficha) partes.push("ficha " + dinero(p.ficha));
-  const total = p.acrilico * l.acrilico + p.sticker * l.sticker + p.ficha;
+  const total = p.acrilico * l.acrilico + p.sticker * (l.sticker - p.gratis) + p.ficha;
   $("ventaResumen").textContent = (partes.join("   +   ") || "sin nada que cobrar") +
     "   =   " + dinero(total);
 }
@@ -3075,6 +3134,7 @@ marcarSegmento("quienVende", QUIEN_VENDE);
 $("precioAcrilico").addEventListener("input", pintarResumenVenta);
 $("precioSticker").addEventListener("input", pintarResumenVenta);
 $("precioFicha").addEventListener("input", pintarResumenVenta);
+$("ventaGratis").addEventListener("input", pintarResumenVenta);
 
 function cerrarVenta() {
   if ($("modalVenta").hidden) return;
@@ -3106,11 +3166,16 @@ $("formVenta").onsubmit = async (e) => {
   boton.disabled = true;
   try {
     const total = l.acrilico + l.sticker;
+    // los de regalo son vinilos como los demás, solo que a cero: van en su tanda
+    const grupos = [
+      { tipo: "acrilico", codigos: l.codigos.acrilico, precio: precios.acrilico },
+      { tipo: "sticker", codigos: l.codigos.sticker.slice(0, precios.gratis), precio: 0 },
+      { tipo: "sticker", codigos: l.codigos.sticker.slice(precios.gratis), precio: precios.sticker },
+    ];
     let hechas = 0;
-    for (const tipo of ["acrilico", "sticker"]) {
-      const codigos = l.codigos[tipo];
-      for (let i = 0; i < codigos.length; i += TANDA) {
-        const tanda = codigos.slice(i, i + TANDA);
+    for (const g of grupos) {
+      for (let i = 0; i < g.codigos.length; i += TANDA) {
+        const tanda = g.codigos.slice(i, i + TANDA);
         hechas += tanda.length;
         boton.textContent = "Cobrando " + hechas + " de " + total + "…";
         await llamar("rango", {
@@ -3120,9 +3185,9 @@ $("formVenta").onsubmit = async (e) => {
             codigos: tanda,
             negocio: l.negocio,
             destino: l.destino,
-            tipo: tipo,
+            tipo: g.tipo,
             vendida: fecha,
-            precio: precios[tipo],
+            precio: g.precio,
             vendedor: QUIEN_VENDE,
           }),
         });
@@ -3149,14 +3214,14 @@ $("formVenta").onsubmit = async (e) => {
       });
     }
 
-    const importe = precios.acrilico * l.acrilico + precios.sticker * l.sticker + precios.ficha;
+    const importe = precios.acrilico * l.acrilico +
+      precios.sticker * (l.sticker - precios.gratis) + precios.ficha;
     const correoCliente = $("ventaCorreo").value.trim();
     await recordarComprador(l.negocio, correoCliente,
       $("ventaNit").value.trim(), $("ventaTelefono").value.trim());
-    for (const tipo of ["acrilico", "sticker"]) {
-      if (l.codigos[tipo].length) {
-        parchearTarjetas(l.codigos[tipo],
-          { vendida: fecha, precio: precios[tipo], vendedor: QUIEN_VENDE });
+    for (const g of grupos) {
+      if (g.codigos.length) {
+        parchearTarjetas(g.codigos, { vendida: fecha, precio: g.precio, vendedor: QUIEN_VENDE });
       }
     }
     if (fichaNueva) parchearServicio(fichaNueva.id, fichaNueva);
@@ -4071,6 +4136,10 @@ export function vistaAdmin(origen) {
           <div class="chips" id="chipsSticker"></div></div>
       </div>
 
+      <label class="mini" for="ventaGratis" id="rotuloGratis">Vinilos de regalo
+        <span class="suave">(los que sacó en la ruleta)</span></label>
+      <input id="ventaGratis" type="number" min="0" step="1" value="0" autocomplete="off">
+
       <label class="mini" for="precioFicha">Ficha de Google
         <span class="suave">(vacío si no lleva)</span></label>
       <input id="precioFicha" type="number" min="0" step="1" placeholder="0" autocomplete="off">
@@ -4104,6 +4173,7 @@ export function vistaAdmin(origen) {
         <button type="button" class="fantasma" id="bajarComprobante">Descargar PDF</button>
         <button type="button" class="fantasma" id="compartirComprobante">Compartir</button>
         <button type="button" class="leer" id="mandarComprobante">Enviar al correo</button>
+        <button type="button" class="fantasma" id="cerrarSinEnviar">Cerrar sin enviar</button>
       </div>
     </div>
   </div>

@@ -28,6 +28,7 @@
  *   POST /api/comprobante {correo,negocio,archivo,pdf,total}      (sesión)
  *   GET  /api/comprobantes                                        (sesión)
  *   POST /api/comprobante-borrar {negocio}                        (sesión)
+ *   POST /api/comprobante-cerrar {negocio,total,fecha}            (sesión)
  *
  * Secreto obligatorio:  ADMIN_PASSWORD
  *
@@ -545,6 +546,26 @@ async function api(request, env, accion, url, ctx) {
     const comprobantes = keys.map((k) =>
       Object.assign({ negocio: k.name.slice(2) }, k.metadata || {}));
     return json({ comprobantes });
+  }
+
+  // Hay clientes que no quieren papel —"la contabilidad no, gracias"— pero
+  // pagaron igual. La orden se cierra lo mismo, solo que sin correo.
+  if (accion === "comprobante-cerrar" && request.method === "POST") {
+    const cuerpo = await request.json().catch(() => ({}));
+    const negocio = String(cuerpo.negocio || "").trim().slice(0, 60);
+    if (!negocio) return json({ error: "Falta el local" }, 400);
+
+    const acta = {
+      correo: "",
+      sinEnviar: true,
+      total: String(cuerpo.total || "").slice(0, 30),
+      fecha: String(cuerpo.fecha || "").slice(0, 40),
+      referencia: "",
+      vendedor: String(cuerpo.vendedor || "").slice(0, 80),
+      enviado: new Date().toISOString(),
+    };
+    await env.TARJETAS.put("r:" + negocio, JSON.stringify(acta), { metadata: acta });
+    return json({ ok: true, negocio: negocio, comprobante: acta });
   }
 
   if (accion === "comprobante-borrar" && request.method === "POST") {
