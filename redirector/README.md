@@ -338,11 +338,46 @@ que un descuento propio también se ve.
 
 El tachado se dibuja a mano con `doc.line` sobre el texto: jsPDF no trae tachado.
 
+### Los vinilos de la ruleta
+
+Por cada acrílico que compran, el local gira una ruleta en físico y puede sacar
+uno o dos vinilos de mesa **gratis**. En el cobro hay un campo con cuántos
+salieron.
+
+No son una entidad nueva: son vinilos de la misma orden **cobrados a cero**. Van
+en su propia tanda al guardar, y al reabrir el cobro se recuentan solos —son los
+vendidos con precio cero—. En el comprobante salen en su línea, a $0, y suman al
+«te ahorras» por lo que habrían costado.
+
+### Escanear la pieza con la cámara
+
+En la calle el camino era: escanear el cartel con la cámara del teléfono, leer el
+código de cuatro letras, buscarlo en la lista y de ahí sacar el número. **Escanear
+una pieza**, dentro de Nueva orden, lo hace de una: apunta al QR y deja puesto el
+número de esa pieza en su casilla —acrílico o vinilo, según lo que sea— y dice si
+está libre o de quién es.
+
+Usa `BarcodeDetector`, que trae Chrome de Android sin librería de por medio. Donde
+no está —Safari de iPhone, hoy— lo dice y no rompe nada.
+
+### El link corto de la app de Maps
+
+El botón de compartir del teléfono da `maps.app.goo.gl/xxxx`, que por dentro no
+trae ningún identificador. Antes había que abrirlo en Chrome y copiar la URL
+larga; ahora **Leer la URL** lo sigue por el Worker y se queda con la larga.
+
+La lista de sitios a los que el Worker sigue un enlace va cerrada —los acortadores
+de Google y nada más—: si no, esto sería un proxy para pedir lo que sea desde
+nuestra IP.
+
 ### Enviado el comprobante, la orden se cierra
 
 El papel ya está en manos del cliente, así que a partir de ahí **no se toca
 nada**: ni el link, ni el chip NFC, ni los precios, ni las piezas. Se guarda un
 `r:<negocio>` con a quién se mandó y cuándo, y eso hace de cerrojo.
+
+Hay clientes que pagan pero no quieren papel. **Cerrar sin enviar** guarda el
+mismo registro, sin correo, y la fila lo dice: «cerrada sin comprobante».
 
 En la tabla de tarjetas, las de ese local se quedan con **NFC**, **Editar** y
 **Desactivar** apagados; el **QR** sigue, que mirarlo no cambia nada. En órdenes

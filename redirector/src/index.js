@@ -29,6 +29,7 @@
  *   GET  /api/comprobantes                                        (sesión)
  *   POST /api/comprobante-borrar {negocio}                        (sesión)
  *   POST /api/comprobante-cerrar {negocio,total,fecha}            (sesión)
+ *   POST /api/resolver {url}  → sigue un link corto de Maps          (sesión)
  *
  * Secreto obligatorio:  ADMIN_PASSWORD
  *
@@ -72,6 +73,10 @@ const NOMBRE_REMITENTE = "Google Reviews";
 const FORMATO_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const MAX_PDF = 4 * 1024 * 1024; // en base64; un comprobante real pesa unos 30 KB
 const LLAVE_VENDEDOR = "cfg:vendedor";
+// Los únicos sitios a los que el Worker sigue un enlace por su cuenta. La lista
+// va cerrada a propósito: si no, esto sería un proxy para pedir lo que sea.
+const ACORTADORES = new Set(["maps.app.goo.gl", "goo.gl", "g.co", "maps.google.com",
+  "www.google.com", "google.com"]);
 const ESTADOS_GASTO = new Set(["pendiente", "entregado"]);
 const MAX_ITEMS = 8;
 const FORMATO_ID = /^[a-z0-9]{1,24}$/;
@@ -574,6 +579,36 @@ async function api(request, env, accion, url, ctx) {
     if (!negocio) return json({ error: "Falta el local" }, 400);
     await env.TARJETAS.delete("r:" + negocio);
     return json({ ok: true, negocio: negocio });
+  }
+
+  // El teléfono comparte "maps.app.goo.gl/xxxx", que no lleva dentro ningún
+  // identificador: hay que seguirlo para llegar a la URL larga.
+  if (accion === "resolver" && request.method === "POST") {
+    const cuerpo = await request.json().catch(() => ({}));
+    let destino;
+    try { destino = new URL(String(cuerpo.url || "")); } catch (e) {
+      return json({ error: "Esa no es una URL" }, 400);
+    }
+    if (destino.protocol !== "https:" && destino.protocol !== "http:") {
+      return json({ error: "Solo http o https" }, 400);
+    }
+    if (!ACORTADORES.has(destino.hostname)) {
+      return json({ error: "Solo sigo enlaces de Google Maps" }, 400);
+    }
+
+    try {
+      const r = await fetch(destino.toString(), {
+        redirect: "follow",
+        headers: { "User-Agent": "Mozilla/5.0 (Android 14; Mobile) Chrome/126" },
+      });
+      const largo = r.url || "";
+      if (!largo || largo === destino.toString()) {
+        return json({ error: "El enlace no llevó a ninguna parte" }, 502);
+      }
+      return json({ ok: true, url: largo });
+    } catch (e) {
+      return json({ error: "No se pudo abrir el enlace: " + e.message }, 502);
+    }
   }
 
   if (accion === "ajustes" && request.method === "GET") {

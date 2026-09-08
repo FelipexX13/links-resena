@@ -419,6 +419,17 @@ const ESTILOS = `
   .tope-nota b{color:var(--tinta-2);font-weight:500}
   /* el comprobante no es parte del formulario: se manda con lo que ya está
      guardado, así que va en su propio bloque debajo */
+  /* la cámara para leer el QR impreso: apunta y ya */
+  .camara{position:relative;margin-top:12px;border-radius:var(--r-l);overflow:hidden;
+    background:#0d1522}
+  .camara video{display:block;width:100%;max-height:280px;object-fit:cover}
+  .camara button{position:absolute;top:10px;right:10px;padding:6px 13px;font-size:12.5px}
+  .camara-mira{position:absolute;left:50%;top:50%;width:150px;height:150px;margin:-75px 0 0 -75px;
+    border:2px solid rgba(255,255,255,.85);border-radius:16px;pointer-events:none;
+    box-shadow:0 0 0 2000px rgba(9,15,28,.35)}
+  .escaneo{align-self:center;margin:0}
+  .escaneo.malo{color:var(--rojo-fuerte)}
+
   /* precios a un toque: pastillas pequeñas, la sugerida marcada */
   .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
   .chips button{padding:5px 11px;font-size:12px;font-weight:500;border-radius:999px;
@@ -929,6 +940,12 @@ function placeIdDeDestino(destino) {
   return m ? m[1] : "";
 }
 
+// El botón de compartir de la app de Maps da uno de estos, y por dentro no
+// traen nada: el identificador aparece al seguirlos, que lo hace el Worker.
+function esLinkCorto(url) {
+  return /^https?:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps|g\.co\/kgs)/i.test(String(url).trim());
+}
+
 function analizarMaps(crudo) {
   const url = String(crudo || "").trim();
   if (!url) return { error: "Pega la URL de Google Maps del negocio, o su Place ID." };
@@ -949,9 +966,7 @@ function analizarMaps(crudo) {
     return { negocio: negocio, placeId: dado[1], review: linkResena(dado[1]) };
   }
 
-  if (/maps\.app\.goo\.gl|goo\.gl\/maps/i.test(url)) {
-    return { error: "Es un link corto. Ábrelo en el navegador, espera a que cargue el mapa y copia la URL larga de la barra de direcciones." };
-  }
+  if (esLinkCorto(url)) return { corto: true };
 
   // 2 · identificador hexadecimal: !1s0xAAAA:0xBBBB  o  ftid=0xAAAA:0xBBBB
   const ft = url.match(/(?:!1s|ftid=)(0x[0-9a-f]+:0x[0-9a-f]+)/i);
@@ -1020,8 +1035,38 @@ $("localExistente").addEventListener("change", () => {
   limpiarAviso("aviso");
 });
 
-$("analizar").onclick = () => {
-  const r = analizarMaps($("maps").value);
+$("analizar").onclick = async () => {
+  const boton = $("analizar");
+  let crudo = $("maps").value.trim();
+
+  // un link corto se abre primero y se vuelve a leer con la URL larga
+  if (esLinkCorto(crudo)) {
+    const etiqueta = boton.textContent;
+    boton.disabled = true;
+    boton.textContent = "Abriendo el link…";
+    try {
+      const r = await llamar("resolver", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: crudo }),
+      });
+      crudo = r.url;
+      $("maps").value = crudo;
+    } catch (err) {
+      avisar("aviso", err.message, false);
+      return;
+    } finally {
+      boton.disabled = false;
+      boton.textContent = etiqueta;
+    }
+  }
+
+  const r = analizarMaps(crudo);
+  if (r.corto) {
+    $("ficha").hidden = true;
+    avisar("aviso", "Ese link corto no llevó a una ficha con identificador.", false);
+    return;
+  }
   if (r.error) {
     $("ficha").hidden = true;
     avisar("aviso", r.error, false);
@@ -1029,7 +1074,7 @@ $("analizar").onclick = () => {
   }
   limpiarAviso("aviso");
   $("localExistente").value = "";
-  URL_LEIDA = $("maps").value.trim();
+  URL_LEIDA = crudo;
   $("fichaNombre").textContent = r.negocio || "Link listo";
   $("fichaReview").value = r.review;
   const bits = [];
@@ -1453,6 +1498,95 @@ function editar(codigo) {
 
 // Si ya hay nombre escrito, el enlace abre Maps buscándolo: es lo que se hace a
 // continuación, copiar la URL del sitio.
+/* ---------- leer el QR impreso con la cámara ---------- */
+
+// En la calle el camino era: escanear con la cámara del teléfono, leer el código
+// de cuatro letras, buscarlo en la lista y de ahí sacar el número. Esto lo hace
+// de una: apunta al cartel y deja puesto el número de esa pieza.
+let flujoCamara = null;
+let leyendoQR = false;
+
+function codigoDeQR(texto) {
+  const limpio = String(texto || "").trim().replace(/[?#].*$/, "").replace(/\/+$/, "");
+  const ultimo = limpio.split("/").pop() || "";
+  return normalizarCodigo(ultimo);
+}
+
+function normalizarCodigo(v) {
+  return String(v || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function decirEscaneo(texto, malo) {
+  $("escaneoDicho").textContent = texto;
+  $("escaneoDicho").classList.toggle("malo", Boolean(malo));
+}
+
+function cerrarCamara() {
+  leyendoQR = false;
+  if (flujoCamara) {
+    flujoCamara.getTracks().forEach((t) => t.stop());
+    flujoCamara = null;
+  }
+  $("video").srcObject = null;
+  $("camara").hidden = true;
+}
+
+function usarQR(texto) {
+  const codigo = codigoDeQR(texto);
+  cerrarCamara();
+  if (!codigo) { decirEscaneo("Ese QR no trae ningún código.", true); return; }
+
+  const t = TARJETAS.filter((x) => x.codigo === codigo)[0];
+  if (!t) { decirEscaneo(codigo + " no está en la lista de tarjetas.", true); return; }
+
+  const numero = indiceDeCodigo(codigo) + 1;
+  const tipo = tipoDe(t);
+  $(tipo === "acrilico" ? "desdeAcrilico" : "desdeSticker").value = numero;
+  decirEscaneo((tipo === "acrilico" ? "Acrílico" : "Vinilo") + " nº " + numero + " · " + codigo +
+    (t.negocio ? " · ocupado por " + t.negocio : " · libre"), Boolean(t.negocio));
+  if (MODO === "local") pintarResumenLocal();
+}
+
+async function abrirCamara() {
+  if (!("BarcodeDetector" in window)) {
+    decirEscaneo("Este navegador no lee QR. En Chrome de Android sí.", true);
+    return;
+  }
+  let detector;
+  try {
+    const formatos = await window.BarcodeDetector.getSupportedFormats();
+    if (formatos.indexOf("qr_code") < 0) throw new Error("sin soporte de QR");
+    detector = new window.BarcodeDetector({ formats: ["qr_code"] });
+    flujoCamara = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } },
+    });
+  } catch (e) {
+    decirEscaneo("No se pudo abrir la cámara: " + e.message, true);
+    cerrarCamara();
+    return;
+  }
+
+  const v = $("video");
+  v.srcObject = flujoCamara;
+  $("camara").hidden = false;
+  decirEscaneo("Apunta al QR del cartel.");
+  try { await v.play(); } catch (e) {}
+
+  leyendoQR = true;
+  while (leyendoQR) {
+    try {
+      const vistos = await detector.detect(v);
+      if (vistos.length && vistos[0].rawValue) { usarQR(vistos[0].rawValue); return; }
+    } catch (e) {
+      // un fotograma ilegible no es motivo para cerrar la cámara
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+}
+
+$("escanear").onclick = () => { if ($("camara").hidden) abrirCamara(); else cerrarCamara(); };
+$("cerrarCamara").onclick = cerrarCamara;
+
 function pintarEnlaceMaps() {
   const nombre = $("negocio").value.trim() || $("buscarLocal").value.trim();
   $("enlaceMaps").href = nombre
@@ -1554,6 +1688,7 @@ function abrirTarjetaModal() {
 }
 
 function cerrarTarjeta() {
+  cerrarCamara();
   if ($("modalTarjeta").hidden) return;
   $("modalTarjeta").hidden = true;
   document.body.style.overflow = $("modalQR").hidden ? "" : "hidden";
@@ -3887,6 +4022,16 @@ export function vistaAdmin(origen) {
             </div>
           </div>
         </div>
+        <div class="modal-acciones acciones-izq sin-aire">
+          <button type="button" class="leer" id="escanear">Escanear una pieza</button>
+          <span class="mini2 escaneo" id="escaneoDicho"></span>
+        </div>
+        <div class="camara" id="camara" hidden>
+          <video id="video" playsinline muted></video>
+          <div class="camara-mira"></div>
+          <button type="button" class="fantasma" id="cerrarCamara">Cerrar</button>
+        </div>
+
         <div class="rango-resumen" id="localResumen">Escribe cuántos acrílicos y cuántos stickers lleva la orden.</div>
 
         <label class="casilla" id="filaLlevaFicha">
