@@ -1951,20 +1951,6 @@ $("abrirLocal").onclick = () => {
   $("nAcrilicos").focus();
 };
 
-$("abrirRango").onclick = () => {
-  salirDeEdicion();
-  $("tarjetaModalKicker").textContent = "Varias tarjetas";
-  $("tarjetaModalTitulo").textContent = "Editar un rango";
-  $("tarjetaModalSubtitulo").textContent = "Un local con diez mesas son diez códigos distintos apuntando al mismo link. Se hace de una vez.";
-  pintarTipo("sticker");
-  pintarModo("rango");
-  limpiarAviso("aviso");
-  llenarLocales();
-  focoTarjeta = document.activeElement;
-  $("modalTarjeta").hidden = false;
-  document.body.style.overflow = "hidden";
-  $("desde").focus();
-};
 $("cerrarTarjeta").onclick = cerrarTarjeta;
 $("cancelarTarjeta").onclick = cerrarTarjeta;
 $("modalTarjeta").addEventListener("click", (e) => {
@@ -2893,7 +2879,6 @@ function pintarVista(valor) {
   $("abrirActivar").hidden = VISTA !== "inventario";
   $("togglePruebas").hidden = VISTA !== "inventario";
   $("abrirNFC").hidden = VISTA !== "inventario";
-  $("abrirRango").hidden = VISTA !== "tarjetas" && VISTA !== "locales";
   $("abrirAjustes").hidden = VISTA !== "cuentas";
   if (VISTA === "locales") pintarVentas();
   if (VISTA === "cuentas" || VISTA === "inventario") pintarCuentas();
@@ -4469,7 +4454,6 @@ export function vistaAdmin(origen) {
           <button type="button" id="abrirActivar">Activar tarjetas</button>
           <button type="button" class="fantasma" id="abrirNFC">Grabar chips</button>
           <button type="button" class="fantasma" id="togglePruebas">Modo pruebas</button>
-          <button type="button" class="fantasma" id="abrirRango">Editar un rango</button>
           <button type="button" class="fantasma" id="abrirAjustes" hidden>Mis datos</button>
           <button type="button" class="fantasma" id="recargar">Refrescar</button>
         </div>
