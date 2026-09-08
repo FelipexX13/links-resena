@@ -188,6 +188,31 @@ una pieza del otro tipo, que es el error fácil cuando llevas cincuenta seguidas
 está, la ventana lo dice y no hace nada. Y sellar no tiene vuelta atrás: por eso
 es un paso aparte y va después de comprobar.
 
+## El QR como imagen: `/qr/CODIGO.png`
+
+Una ruta pública que devuelve el QR de esa tarjeta en PNG: negro, sin fondo y con
+el hueco del centro, el mismo dibujo que saca el panel.
+
+```
+https://r.grve.workers.dev/qr/AAFZ.png
+```
+
+Existe porque las herramientas de maquetación rellenan plantillas en lote a
+partir de **una URL por imagen**. Con 401 marcos que llenar en Canva, la
+alternativa era exportarlas del navegador y arrastrarlas una a una.
+
+Es pública a propósito: no dice nada que no esté ya impreso en el plástico.
+
+El Worker no tiene canvas, así que el PNG se arma a mano —CRC32, trozos y los
+píxeles por `CompressionStream("deflate")`, que es la única parte que no compensa
+escribir—. La única dependencia nueva es `qrcode-generator`, la misma librería
+que usa el panel.
+
+> Canva no deja editar por API un diseño de 401 páginas («Editing a Canva Design
+> with a size of 401 pages is not currently supported»), así que colocar las
+> imágenes una por una no era opción. El camino es su **Bulk Create** con un CSV
+> de estas URLs.
+
 ## Modo pruebas
 
 Para revisar un lote impreso hace falta lo contrario de lo normal: que el QR **no**

@@ -50,9 +50,13 @@
  *   "cfg:vendedor"  {felipe:{...},nicolas:{...}} — los dos que venden, para
  *                   firmar el comprobante con el que hizo esa venta
  *   "intentos:<ip>" contador de logins fallidos, expira solo a las 24 horas
+ *
+ * Rutas públicas aparte del salto:
+ *   GET /qr/<CODIGO>.png   el QR de esa tarjeta, negro con hueco y sin fondo
  */
 
 import { vistaInicio, vistaSinConfigurar, vistaAdmin, vistaPrueba } from "./vistas.js";
+import { qrNegroConHueco } from "./qr.js";
 
 const RESERVADAS = new Set(["admin", "api", "favicon.ico", "robots.txt"]);
 const FORMATO_CODIGO = /^[A-Z0-9]{3,12}$/;
@@ -94,6 +98,7 @@ export default {
     if (ruta === "") return html(vistaInicio(url.host));
     if (ruta === "admin") return html(vistaAdmin(url.origin));
     if (ruta.startsWith("api/")) return api(request, env, ruta.slice(4), url, ctx);
+    if (/^qr\//i.test(ruta)) return qrDeTarjeta(ruta.slice(3), url);
     if (RESERVADAS.has(ruta.toLowerCase())) return new Response(null, { status: 404 });
 
     const codigo = normalizar(ruta);
@@ -747,6 +752,28 @@ async function api(request, env, accion, url, ctx) {
   }
 
   return json({ error: "Ruta no encontrada" }, 404);
+}
+
+/* ---------- el QR como imagen ---------- */
+
+// Público a propósito: no dice nada que no esté ya impreso en el plástico, y
+// tiene que poder pedirlo cualquier herramienta de maquetación —Canva, sin ir
+// más lejos— que rellene plantillas a partir de una URL por imagen.
+async function qrDeTarjeta(nombre, url) {
+  const codigo = normalizar(String(nombre || "").replace(/\.png$/i, ""));
+  if (!codigo) return new Response(null, { status: 404 });
+
+  // el mismo texto que imprime el panel, en mayúsculas: así el QR de la web y
+  // el de aquí son el mismo dibujo, bit a bit
+  const { png } = await qrNegroConHueco((url.origin + "/" + codigo).toUpperCase());
+  return new Response(png, {
+    headers: {
+      "Content-Type": "image/png",
+      // el QR de un código no cambia nunca
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
 }
 
 /* ---------- modo pruebas ---------- */
