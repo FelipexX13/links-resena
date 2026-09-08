@@ -2222,8 +2222,7 @@ function pintarPruebas(activo) {
   PRUEBAS = Boolean(activo);
   const b = $("togglePruebas");
   const rotulo = PRUEBAS ? "Pruebas activas" : "Modo pruebas";
-  // solo la etiqueta: textContent entero se llevaría por delante el icono
-  b.querySelector(".etiqueta").textContent = rotulo;
+  b.textContent = rotulo;
   b.title = rotulo;
   b.classList.toggle("alerta", PRUEBAS);
   b.classList.toggle("fantasma", !PRUEBAS);
@@ -2383,6 +2382,28 @@ function dineroPorDia(dias) {
 
 // El inventario no se lleva aparte: sale de sumar lo que trajo cada compra. Lo
 // recibido y lo que viene en camino van separados porque media compra sigue fuera.
+function vendidasPorTipo() {
+  const suma = { acrilico: 0, sticker: 0, total: 0 };
+  TARJETAS.forEach((t) => {
+    if (!t.vendida) return;
+    suma[tipoDe(t)]++;
+    suma.total++;
+  });
+  return suma;
+}
+
+// A qué pieza del inventario le pega cada venta. Se mira por el nombre porque
+// los gastos se escriben a mano y no hay lista cerrada de cosas: un acrílico
+// vendido gasta un acrílico y su vinilo, un vinilo de mesa gasta el suyo, y
+// los dos llevan chip.
+function gastadoPorVentas(que, vendidas) {
+  const n = sinTildes(String(que || "")).toLowerCase();
+  if (n.indexOf("acril") >= 0) return vendidas.acrilico;
+  if (n.indexOf("mesa") >= 0) return vendidas.sticker;
+  if (n.indexOf("nfc") >= 0 || n.indexOf("chip") >= 0) return vendidas.total;
+  return 0;
+}
+
 function inventario() {
   const mapa = {};
   GASTOS.forEach((g) => {
@@ -2397,8 +2418,14 @@ function inventario() {
       }
     });
   });
-  return Object.keys(mapa).map((k) => mapa[k])
-    .sort((a, b) => (b.recibido + b.pedido) - (a.recibido + a.pedido));
+  const vendidas = vendidasPorTipo();
+  return Object.keys(mapa).map((k) => {
+    const i = mapa[k];
+    i.util = i.recibido - i.malos;
+    i.vendido = gastadoPorVentas(i.que, vendidas);
+    i.queda = i.util - i.vendido;
+    return i;
+  }).sort((a, b) => (b.recibido + b.pedido) - (a.recibido + a.pedido));
 }
 
 // La declaración de renta la presenta cada uno por su lado, con sus propios
@@ -2533,16 +2560,16 @@ function pintarCuentas() {
   }
   let invFilas = "";
   inv.forEach((i) => {
-    const util = i.recibido - i.malos;
     invFilas += "<tr><td class='negocio'>" + escHtml(i.que) + "</td>" +
-      "<td class='inv'>" + util +
+      "<td class='inv'>" + i.util +
       (i.malos ? " <span class='inv-malos'>(" + i.malos + " malos)</span>" : "") + "</td>" +
-      "<td class='inv'>" + (i.pedido ? i.pedido : "—") + "</td>" +
-      "<td class='inv'>" + (util + i.pedido) + "</td></tr>";
+      "<td class='inv'>" + (i.vendido ? "−" + i.vendido : "—") + "</td>" +
+      "<td class='inv" + (i.queda < 0 ? " inv-malos" : "") + "'><b>" + i.queda + "</b></td>" +
+      "<td class='inv'>" + (i.pedido ? i.pedido : "—") + "</td></tr>";
   });
   $("tablaInventario").innerHTML =
-    "<table><thead><tr><th>Cosa</th><th>Útiles</th><th>En camino</th><th>Total</th>" +
-    "</tr></thead><tbody>" + invFilas + "</tbody></table>";
+    "<table><thead><tr><th>Cosa</th><th>Útiles</th><th>Vendidos</th><th>Quedan</th>" +
+    "<th>En camino</th></tr></thead><tbody>" + invFilas + "</tbody></table>";
 }
 
 $("metricaDinero").addEventListener("click", (e) => {
@@ -2563,6 +2590,7 @@ function pintarVista(valor) {
   $("vistaInventario").hidden = VISTA !== "inventario";
   // activar tarjetas es reponer plástico: va con el inventario, no con la lista
   $("abrirActivar").hidden = VISTA !== "inventario";
+  $("togglePruebas").hidden = VISTA !== "inventario";
   $("abrirRango").hidden = VISTA !== "tarjetas" && VISTA !== "locales";
   $("abrirAjustes").hidden = VISTA !== "cuentas";
   if (VISTA === "locales") pintarVentas();
@@ -3864,13 +3892,6 @@ export function vistaAdmin(origen) {
                stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
             <path d="M12 5v14M5 12h14"/>
           </svg><span class="etiqueta">Nueva orden</span></button>
-        <button type="button" class="fantasma" id="togglePruebas" title="Modo pruebas">
-          <svg class="icono-barra" viewBox="0 0 24 24" width="14" height="14" fill="none"
-               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-               aria-hidden="true">
-            <path d="M9.6 3v6.4L4.7 17.9A2 2 0 0 0 6.4 21h11.2a2 2 0 0 0 1.7-3.1L14.4 9.4V3"/>
-            <path d="M8.4 3h7.2"/><path d="M7.3 14.4h9.4"/>
-          </svg><span class="etiqueta">Modo pruebas</span></button>
         <a class="boton fantasma" href="https://www.google.com/maps" target="_blank" rel="noopener"
            title="Google Maps">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
@@ -3889,8 +3910,8 @@ export function vistaAdmin(origen) {
 
   <main id="principal" class="envoltorio contenido">
     <div class="banner" id="bannerPruebas" hidden role="status">
-      <span><b>Modo pruebas activo.</b> Ningún escaneo llega a Google: cada tarjeta
-      enseña su código y su número.</span>
+      <span><b>Modo pruebas activo.</b> Las que ya están vendidas siguen llevando a
+      Google; las demás enseñan su código y su número.</span>
       <button type="button" class="fantasma" id="apagarPruebas">Apagar</button>
     </div>
 
@@ -3904,6 +3925,7 @@ export function vistaAdmin(origen) {
         </div>
         <div class="cabecera-acciones">
           <button type="button" id="abrirActivar">Activar tarjetas</button>
+          <button type="button" class="fantasma" id="togglePruebas">Modo pruebas</button>
           <button type="button" class="fantasma" id="abrirRango">Editar un rango</button>
           <button type="button" class="fantasma" id="abrirAjustes" hidden>Mis datos</button>
           <button type="button" class="fantasma" id="recargar">Refrescar</button>

@@ -120,6 +120,17 @@ una línea de saldo que dice quién le debe a quién para quedar iguales.
 Un gasto compartido cuenta mitad para cada uno, así que con todo compartido el
 saldo queda en cero y la línea dice que están en paz.
 
+### Lo que queda, no lo que se compró
+
+La tabla descuenta lo vendido: **útiles − vendidos = quedan**. Como los gastos se
+escriben a mano y no hay lista cerrada de cosas, a qué pieza le pega cada venta se
+decide por el nombre — lo que diga «acríl» gasta acrílicos vendidos, lo que diga
+«mesa» gasta vinilos de mesa, y lo que diga «nfc» o «chip» gasta las dos, que
+todas llevan chip. Lo demás no se toca.
+
+Si «quedan» sale en rojo es que se vendió más de lo comprado: falta apuntar una
+compra.
+
 ### Por qué el inventario no tiene su propia tabla
 
 Igual que con las ventas: un inventario aparte habría que mantenerlo
@@ -155,8 +166,13 @@ escrituras lo habría borrado.
 ## Modo pruebas
 
 Para revisar un lote impreso hace falta lo contrario de lo normal: que el QR **no**
-se vaya a Google, y diga en cambio qué tarjeta es. El botón **Modo pruebas** de la
-cabecera lo enciende para todo el dominio.
+se vaya a Google, y diga en cambio qué tarjeta es. El botón **Modo pruebas**, en
+Inventario junto a *Activar tarjetas*, lo enciende.
+
+**Las vendidas quedan fuera.** Ya están pegadas en la mesa de un local y sus
+clientes las escanean de verdad: probar un lote nuevo no puede apagarles el QR.
+Con las pruebas puestas, una tarjeta con `vendida` sigue redirigiendo como
+siempre y solo las demás enseñan su código.
 
 Con las pruebas puestas, cualquier código enseña una página con su **código**, su
 **número**, el negocio y el tipo, más un botón para ir a la reseña de verdad si

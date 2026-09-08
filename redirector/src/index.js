@@ -101,10 +101,15 @@ export default {
 
     const tarjeta = await leerTarjeta(env, ctx, codigo);
 
-    // Con las pruebas puestas nadie sale del dominio: la tarjeta enseña su código
-    // para casar el plástico impreso con el registro. Va antes de exigir destino,
-    // así se revisa una impresión sin tener que vincularla a ningún negocio.
-    if (await enPruebas(env, ctx)) return html(vistaPrueba(codigo, tarjeta || {}));
+    // Con las pruebas puestas la tarjeta enseña su código, para casar el plástico
+    // impreso con el registro. Va antes de exigir destino, así se revisa una
+    // impresión sin vincularla a ningún negocio.
+    //
+    // Las vendidas quedan fuera: ya están pegadas en la mesa de un local y sus
+    // clientes las escanean de verdad. Probar no puede apagarle el QR a nadie.
+    if (!(tarjeta && tarjeta.vendida) && await enPruebas(env, ctx)) {
+      return html(vistaPrueba(codigo, tarjeta || {}));
+    }
 
     if (!tarjeta || !tarjeta.destino) return html(vistaSinConfigurar(codigo), 404);
 
