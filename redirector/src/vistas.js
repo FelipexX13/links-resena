@@ -614,6 +614,38 @@ const ESTILOS = `
     #tabla th:first-child,#tabla td:first-child,
     #tabla th:last-child,#tabla td:last-child{width:auto}
     .negocio{font-size:15px;margin-top:2px}
+
+    /* Apiladas de arriba abajo, cada gasto ocupaba media pantalla. En fila con
+       envoltura caben en tres renglones: fecha y monto, de dónde, y las
+       etiquetas con los botones al lado. */
+    #tablaGastos tr,#tablaLocales tr{display:flex;flex-wrap:wrap;align-items:center;
+      gap:7px 10px}
+    #tablaGastos td,#tablaLocales td{padding:0;width:auto}
+    #tablaGastos td:last-child,#tablaLocales td:last-child{padding-top:0}
+
+    #tablaGastos td:nth-child(1){order:1}
+    #tablaGastos td:nth-child(5){order:2;margin-left:auto;font-size:15px}
+    #tablaGastos td:nth-child(2){order:3;flex:1 0 100%}
+    #tablaGastos td:nth-child(3){order:4}
+    #tablaGastos td:nth-child(4){order:5}
+    #tablaGastos td:nth-child(6){order:6;margin-left:auto}
+
+    #tablaLocales td:nth-child(1){order:1}
+    #tablaLocales td:nth-child(4){order:2;margin-left:auto;font-size:15px}
+    #tablaLocales td:nth-child(2){order:3;flex:1 0 100%}
+    #tablaLocales td:nth-child(3){order:4}
+    #tablaLocales td:nth-child(5){order:5;flex:1 0 100%}
+
+    /* dos o tres botones sueltos no necesitan la rejilla de la tabla ancha */
+    #tablaGastos .acciones{display:flex;gap:6px;min-width:0}
+    #tablaGastos .acciones button{width:auto;padding:8px 15px}
+
+    /* el inventario son números: sin la cabecera hay que decir cuál es cuál */
+    #tablaInventario tr{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline}
+    #tablaInventario td{padding:0;width:auto}
+    #tablaInventario td:first-child{flex:1 0 100%}
+    #tablaInventario td[data-rotulo]::before{content:attr(data-rotulo) " ";
+      font-size:11px;color:var(--tinta-3);margin-right:3px}
     .acciones{grid-template-columns:repeat(3,minmax(0,1fr));min-width:0}
     /* son cuatro: con tres columnas caían 3+1 */
     .acciones-tarjeta{grid-template-columns:repeat(4,minmax(0,1fr));min-width:0}
@@ -2831,12 +2863,15 @@ function pintarCuentas() {
   }
   let invFilas = "";
   inv.forEach((i) => {
+    // el rótulo va en la celda porque en el teléfono la cabecera de la tabla no
+    // se ve: sin él, cuatro números seguidos no dicen nada
     invFilas += "<tr><td class='negocio'>" + escHtml(i.que) + "</td>" +
-      "<td class='inv'>" + i.util +
+      "<td class='inv' data-rotulo='Útiles'>" + i.util +
       (i.malos ? " <span class='inv-malos'>(" + i.malos + " malos)</span>" : "") + "</td>" +
-      "<td class='inv'>" + (i.vendido ? "−" + i.vendido : "—") + "</td>" +
-      "<td class='inv" + (i.queda < 0 ? " inv-malos" : "") + "'><b>" + i.queda + "</b></td>" +
-      "<td class='inv'>" + (i.pedido ? i.pedido : "—") + "</td></tr>";
+      "<td class='inv' data-rotulo='Vendidos'>" + (i.vendido ? "−" + i.vendido : "—") + "</td>" +
+      "<td class='inv" + (i.queda < 0 ? " inv-malos" : "") +
+      "' data-rotulo='Quedan'><b>" + i.queda + "</b></td>" +
+      "<td class='inv' data-rotulo='En camino'>" + (i.pedido ? i.pedido : "—") + "</td></tr>";
   });
   $("tablaInventario").innerHTML =
     "<table><thead><tr><th>Cosa</th><th>Útiles</th><th>Vendidos</th><th>Quedan</th>" +
