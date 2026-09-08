@@ -376,6 +376,15 @@ está libre o de quién es.
 Usa `BarcodeDetector`, que trae Chrome de Android sin librería de por medio. Donde
 no está —Safari de iPhone, hoy— lo dice y no rompe nada.
 
+**Dentro de una orden se van juntando.** El montón casi nunca está en orden, así
+que escanear pieza por pieza arma la orden con **esas** exactamente, sin rangos:
+cada una entra en la lista, se quita con un toque y los campos de «desde el nº»
+se apagan mientras haya lista. El resumen las enumera en vez de fingir un tramo.
+
+Con lista, `planDelLocal` no calcula bloques: toma las escaneadas que no tenía y
+suelta las que tenía y ya no están. Si alguna es de otro local, lo dice y no deja
+guardar.
+
 ### El link corto de la app de Maps
 
 El botón de compartir del teléfono da `maps.app.goo.gl/xxxx`, que por dentro no

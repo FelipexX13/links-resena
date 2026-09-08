@@ -385,6 +385,12 @@ const ESTILOS = `
     margin-top:14px;padding-top:12px;border-top:1px solid var(--linea-suave);
     font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;color:var(--tinta-3)}
   .grafica-pie b{font-weight:500;color:var(--tinta)}
+  .leyenda{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12.5px;
+    color:var(--tinta-2)}
+  .leyenda span{display:inline-flex;align-items:center;gap:6px}
+  .leyenda span::before{content:"";width:9px;height:9px;border-radius:3px;flex:0 0 auto}
+  .leyenda .marca-entra::before{background:var(--verde)}
+  .leyenda .marca-sale::before{background:var(--rojo)}
 
   .estado{display:inline-block;font-size:11px;font-weight:500;border-radius:999px;
     padding:2px 9px;border:1px solid transparent}
@@ -428,9 +434,26 @@ const ESTILOS = `
     border:2px solid rgba(255,255,255,.85);border-radius:16px;pointer-events:none;
     box-shadow:0 0 0 2000px rgba(9,15,28,.35)}
   .escaneo{align-self:center;margin:0}
+  /* las piezas escogidas una a una, para cuando el montón está revuelto */
+  .chips .pieza{background:var(--azul-piel);color:var(--azul-fuerte);
+    border-color:var(--azul-borde);font-family:"Geist Mono",ui-monospace,monospace}
+  .chips .pieza b{font-weight:500;margin-left:6px;opacity:.7}
   .escaneo.malo{color:var(--rojo-fuerte)}
 
   /* precios a un toque: pastillas pequeñas, la sugerida marcada */
+  /* Lo que va encontrando el buscador, ahí mismo: antes había que abrir el
+     desplegable para ver si algo había coincidido. */
+  .sugerencias{margin-top:6px;border:1px solid var(--linea);border-radius:var(--r-m);
+    background:var(--papel);overflow:hidden;box-shadow:var(--sombra-1)}
+  .sugerencias button{display:block;width:100%;text-align:left;padding:9px 13px;
+    background:var(--papel);color:var(--tinta);border:0;border-radius:0;font-size:13.5px;
+    font-weight:500;white-space:normal}
+  .sugerencias button+button{border-top:1px solid var(--linea-suave)}
+  .sugerencias button:hover{background:var(--azul-piel);color:var(--azul-fuerte)}
+  .sugerencias .detalle{display:block;font-size:11.5px;font-weight:400;color:var(--tinta-3);
+    margin-top:2px}
+  .sugerencias .nada{padding:9px 13px;font-size:12.5px;color:var(--tinta-3)}
+
   .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
   .chips button{padding:5px 11px;font-size:12px;font-weight:500;border-radius:999px;
     background:var(--papel-2);color:var(--tinta-2);border:1px solid var(--linea)}
@@ -733,7 +756,6 @@ let QUIEN_VENDE = "felipe";
 let COMPRADORES = {};
 let COMPROBANTES = {};
 let NFC = {};
-let METRICA_DINERO = "gastos";
 let GASTO_EDITADO = "";
 const DIAS_DINERO = 30;
 const SOCIO_NOMBRE = { felipe: "Felipe", nicolas: "Nicolás", ambos: "Compartido" };
@@ -1016,7 +1038,37 @@ function llenarLocales(filtro) {
   $("ordenRango").value = antes;
 }
 
-$("buscarLocal").addEventListener("input", () => llenarLocales($("buscarLocal").value));
+$("buscarLocal").addEventListener("input", () => {
+  llenarLocales($("buscarLocal").value);
+  pintarSugerencias($("buscarLocal").value);
+});
+
+function pintarSugerencias(filtro) {
+  const busca = sinTildes(String(filtro || "").trim());
+  const caja = $("sugerenciasLocal");
+  if (!busca) { caja.hidden = true; caja.innerHTML = ""; return; }
+
+  const halla = locales().filter((l) => sinTildes(l.negocio).includes(busca)).slice(0, 6);
+  caja.hidden = false;
+  if (!halla.length) {
+    caja.innerHTML = "<div class='nada'>Ningún local con ese nombre. Pega su URL abajo.</div>";
+    return;
+  }
+  caja.innerHTML = halla.map((l) => "<button type='button' data-local-elegido='" +
+    escHtml(l.negocio) + "'>" + escHtml(l.negocio) +
+    "<span class='detalle'>" + plural(l.acrilico + l.sticker, "pieza", "piezas") +
+    (l.cobrado ? " · cobrado" : " · pendiente") + "</span></button>").join("");
+}
+
+$("sugerenciasLocal").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-local-elegido]");
+  if (!b) return;
+  $("localExistente").value = b.dataset.localElegido;
+  $("localExistente").dispatchEvent(new Event("change"));
+  $("buscarLocal").value = "";
+  $("sugerenciasLocal").hidden = true;
+  $("sugerenciasLocal").innerHTML = "";
+});
 
 $("localExistente").addEventListener("change", () => {
   const elegido = $("localExistente").value;
@@ -1145,7 +1197,31 @@ function planDelLocal() {
   const p = pedidasDelLocal();
   const nombre = $("negocio").value.trim();
   const base = locales().filter((x) => x.negocio === nombre)[0] || null;
-  const plan = { base: base, tomar: {}, soltar: {}, falta: [], pedidas: p };
+  const plan = { base: base, tomar: {}, soltar: {}, falta: [], pedidas: p,
+    sueltas: PIEZAS_SUELTAS.length > 0 };
+
+  // Con piezas escaneadas la orden es exactamente esas, sin rangos de por medio.
+  if (plan.sueltas) {
+    const porTipo = { acrilico: [], sticker: [] };
+    PIEZAS_SUELTAS.forEach((c) => {
+      const t = TARJETAS.filter((x) => x.codigo === c)[0];
+      if (t) porTipo[tipoDe(t)].push(c);
+    });
+    ["acrilico", "sticker"].forEach((tipo) => {
+      const tiene = base ? base.codigos[tipo] : [];
+      plan.tomar[tipo] = porTipo[tipo].filter((c) => tiene.indexOf(c) < 0);
+      plan.soltar[tipo] = tiene.filter((c) => porTipo[tipo].indexOf(c) < 0);
+      const ajenas = plan.tomar[tipo].filter((c) => {
+        const t = TARJETAS.filter((x) => x.codigo === c)[0];
+        return t && t.negocio && t.negocio !== nombre;
+      });
+      if (ajenas.length) {
+        plan.falta.push(ajenas.join(", ") + (ajenas.length === 1 ? " ya tiene dueño" : " ya tienen dueño"));
+      }
+    });
+    plan.pedidas = { acrilicos: porTipo.acrilico.length, stickers: porTipo.sticker.length };
+    return plan;
+  }
 
   [["acrilico", p.acrilicos, "acrílico", "acrílicos"],
    ["sticker", p.stickers, "sticker", "stickers"]].forEach((fila) => {
@@ -1182,15 +1258,18 @@ function pintarResumenLocal() {
 
   if (plan.falta.length) { caja.textContent = "No alcanza — " + plan.falta.join(" · "); return; }
 
+  // escaneadas van sueltas y desordenadas: "AAAF → AAAD" se leería como un rango
+  const comoSeVe = (codigos) => plan.sueltas ? codigos.join(", ") : tramo(codigos);
+
   const partes = [];
   ["acrilico", "sticker"].forEach((tipo) => {
     if (plan.tomar[tipo].length) {
       partes.push((plan.base ? "+" : "") + nombreTipo(tipo, plan.tomar[tipo].length) +
-        " · " + tramo(plan.tomar[tipo]));
+        " · " + comoSeVe(plan.tomar[tipo]));
     }
     if (plan.soltar[tipo].length) {
       partes.push("−" + nombreTipo(tipo, plan.soltar[tipo].length) +
-        " · " + tramo(plan.soltar[tipo]) + " quedan libres");
+        " · " + comoSeVe(plan.soltar[tipo]) + " quedan libres");
     }
   });
 
@@ -1198,7 +1277,9 @@ function pintarResumenLocal() {
     caja.textContent = plan.base
       ? plan.base.negocio + " ya tiene esas piezas: " +
         nombreTipo("acrilico", plan.base.acrilico) + " y " + nombreTipo("sticker", plan.base.sticker)
-      : "Escribe cuántos acrílicos y cuántos stickers lleva la orden.";
+      : (plan.sueltas
+        ? "Sigue escaneando piezas para la orden."
+        : "Escribe cuántos acrílicos y cuántos stickers lleva la orden.");
     return;
   }
 
@@ -1505,6 +1586,9 @@ function editar(codigo) {
 // de una: apunta al cartel y deja puesto el número de esa pieza.
 let flujoCamara = null;
 let leyendoQR = false;
+// Cuando el montón está revuelto no hay rangos que valgan: se escanea pieza por
+// pieza y la orden es exactamente esa lista.
+let PIEZAS_SUELTAS = [];
 
 function codigoDeQR(texto) {
   const limpio = String(texto || "").trim().replace(/[?#].*$/, "").replace(/\/+$/, "");
@@ -1531,6 +1615,35 @@ function cerrarCamara() {
   $("camara").hidden = true;
 }
 
+function pintarPiezasSueltas() {
+  const caja = $("piezasSueltas");
+  $("vaciarPiezas").hidden = !PIEZAS_SUELTAS.length;
+  if (!PIEZAS_SUELTAS.length) { caja.innerHTML = ""; return; }
+  caja.innerHTML = PIEZAS_SUELTAS.map((c) => {
+    const t = TARJETAS.filter((x) => x.codigo === c)[0];
+    const n = indiceDeCodigo(c) + 1;
+    return "<button type='button' class='pieza' data-quitar-pieza='" + c + "'>" + c +
+      "<b>nº " + n + (t && tipoDe(t) === "acrilico" ? " · A" : " · V") + "</b> ✕</button>";
+  }).join("");
+}
+
+$("piezasSueltas").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-quitar-pieza]");
+  if (!b) return;
+  PIEZAS_SUELTAS = PIEZAS_SUELTAS.filter((c) => c !== b.dataset.quitarPieza);
+  pintarPiezasSueltas();
+  pintarRangosSegunPiezas();
+  pintarResumenLocal();
+});
+
+$("vaciarPiezas").onclick = () => {
+  PIEZAS_SUELTAS = [];
+  pintarPiezasSueltas();
+  pintarRangosSegunPiezas();
+  decirEscaneo("");
+  pintarResumenLocal();
+};
+
 function usarQR(texto) {
   const codigo = codigoDeQR(texto);
   cerrarCamara();
@@ -1541,10 +1654,27 @@ function usarQR(texto) {
 
   const numero = indiceDeCodigo(codigo) + 1;
   const tipo = tipoDe(t);
+  const comoSeLlama = (tipo === "acrilico" ? "Acrílico" : "Vinilo") + " nº " + numero;
+
+  // en una orden se van juntando; fuera de ella solo dice cuál es
+  if (MODO === "local") {
+    if (PIEZAS_SUELTAS.indexOf(codigo) >= 0) {
+      decirEscaneo(comoSeLlama + " ya estaba en la lista.", true);
+      return;
+    }
+    const ajeno = t.negocio && t.negocio !== $("negocio").value.trim();
+    PIEZAS_SUELTAS.push(codigo);
+    pintarPiezasSueltas();
+    pintarRangosSegunPiezas();
+    pintarResumenLocal();
+    decirEscaneo(comoSeLlama + " · " + codigo + (ajeno ? " · ojo, es de " + t.negocio : "") +
+      "   ·   " + plural(PIEZAS_SUELTAS.length, "pieza", "piezas") + " en la lista", ajeno);
+    return;
+  }
+
   $(tipo === "acrilico" ? "desdeAcrilico" : "desdeSticker").value = numero;
-  decirEscaneo((tipo === "acrilico" ? "Acrílico" : "Vinilo") + " nº " + numero + " · " + codigo +
+  decirEscaneo(comoSeLlama + " · " + codigo +
     (t.negocio ? " · ocupado por " + t.negocio : " · libre"), Boolean(t.negocio));
-  if (MODO === "local") pintarResumenLocal();
 }
 
 async function abrirCamara() {
@@ -1597,6 +1727,12 @@ function pintarEnlaceMaps() {
 $("negocio").addEventListener("input", pintarEnlaceMaps);
 $("buscarLocal").addEventListener("input", pintarEnlaceMaps);
 
+function pintarRangosSegunPiezas() {
+  const hay = PIEZAS_SUELTAS.length > 0;
+  ["desdeAcrilico", "nAcrilicos", "desdeSticker", "nStickers"]
+    .forEach((id) => { $(id).disabled = hay; });
+}
+
 function pintarModo(valor) {
   MODO = valor === "rango" || valor === "local" ? valor : "una";
   marcarSegmento("modoTarjeta", MODO);
@@ -1613,6 +1749,7 @@ function pintarModo(valor) {
   if (MODO === "rango") pintarOrigenRango(ORIGEN_RANGO);
   else $("bloqueTipo").hidden = MODO === "local";   // en un local van los dos tipos
   if (MODO === "local") pintarResumenLocal();
+  pintarRangosSegunPiezas();
   pintarEnlaceMaps();
 }
 
@@ -1689,6 +1826,9 @@ function abrirTarjetaModal() {
 
 function cerrarTarjeta() {
   cerrarCamara();
+  PIEZAS_SUELTAS = [];
+  pintarPiezasSueltas();
+  decirEscaneo("");
   if ($("modalTarjeta").hidden) return;
   $("modalTarjeta").hidden = true;
   document.body.style.overflow = $("modalQR").hidden ? "" : "hidden";
@@ -2120,6 +2260,56 @@ function ventasPorDia(dias) {
 
 // Barras pill, rejilla punteada solo horizontal, sin líneas de eje: el SVG se
 // dibuja a mano porque aquí no hay librería de gráficas ni hace falta.
+// Ingresos y gastos no son dos cosas que mirar por turnos: son la misma
+// pregunta —qué entra y qué sale— así que van en el mismo eje, uno hacia arriba
+// y otro hacia abajo. Con el interruptor de antes había que recordar la otra
+// mitad de memoria para saber si un día fue bueno.
+function svgFlujo(serie) {
+  const ancho = 660, medio = 78, pieAlto = 18;
+  const alto = medio * 2;
+  const tope = Math.max(1, Math.max.apply(null,
+    serie.map((p) => Math.max(p.ingresos, p.gastos))));
+  const paso = ancho / serie.length;
+  const grosor = Math.max(6, Math.min(16, paso - 7));
+  let piezas = "";
+
+  // la línea del cero, que es de donde nacen las dos mitades
+  piezas += "<line x1='0' y1='" + medio + "' x2='" + ancho + "' y2='" + medio +
+    "' stroke='var(--linea)' stroke-width='1'></line>";
+  [0.5, 1].forEach((f) => {
+    [medio - medio * f, medio + medio * f].forEach((y) => {
+      piezas += "<line x1='0' y1='" + y + "' x2='" + ancho + "' y2='" + y +
+        "' stroke='rgba(22,32,46,.06)' stroke-width='1' stroke-dasharray='2 3'></line>";
+    });
+  });
+
+  serie.forEach((p, i) => {
+    const x = i * paso + (paso - grosor) / 2;
+    if (p.ingresos > 0) {
+      const h = Math.max(3, (p.ingresos / tope) * (medio - 6));
+      piezas += "<rect x='" + x.toFixed(1) + "' y='" + (medio - h).toFixed(1) +
+        "' width='" + grosor.toFixed(1) + "' height='" + h.toFixed(1) +
+        "' rx='3' fill='var(--verde)'><title>" + p.fecha + " · entra " +
+        dinero(p.ingresos) + "</title></rect>";
+    }
+    if (p.gastos > 0) {
+      const h = Math.max(3, (p.gastos / tope) * (medio - 6));
+      piezas += "<rect x='" + x.toFixed(1) + "' y='" + medio +
+        "' width='" + grosor.toFixed(1) + "' height='" + h.toFixed(1) +
+        "' rx='3' fill='var(--rojo)'><title>" + p.fecha + " · sale " +
+        dinero(p.gastos) + "</title></rect>";
+    }
+    const cada = serie.length > 20 ? 5 : (serie.length > 10 ? 2 : 1);
+    if (i % cada === 0 || i === serie.length - 1) {
+      piezas += "<text x='" + (i * paso + paso / 2).toFixed(1) + "' y='" + (alto + 13) +
+        "' text-anchor='middle' font-size='10' fill='var(--tinta-3)'>" + p.dia + "</text>";
+    }
+  });
+
+  return "<svg viewBox='0 0 " + ancho + " " + (alto + pieAlto) + "' role='img' " +
+    "aria-label='Lo que entra y lo que sale cada día'>" + piezas + "</svg>";
+}
+
 function svgBarras(serie, campo) {
   const ancho = 660, alto = 150, pieAlto = 18;
   const tope = Math.max(1, Math.max.apply(null, serie.map((p) => p[campo])));
@@ -2485,11 +2675,17 @@ function pintarTope() {
 function pintarCuentas() {
   const c = cuentas();
   const serie = dineroPorDia(DIAS_DINERO);
-  const suma = serie.reduce((a, punto) => a + punto[METRICA_DINERO], 0);
+  const entra = serie.reduce((a, punto) => a + punto.ingresos, 0);
+  const sale = serie.reduce((a, punto) => a + punto.gastos, 0);
+  const neto = entra - sale;
 
-  $("dineroMetrica").innerHTML = dinero(suma) +
-    "<span class='unidad'>en " + DIAS_DINERO + " días</span>";
-  $("pozoDinero").innerHTML = svgBarras(serie, METRICA_DINERO);
+  $("dineroMetrica").innerHTML = dinero(Math.abs(neto)) +
+    "<span class='unidad'>" + (neto >= 0 ? "de más" : "de menos") +
+    " en " + DIAS_DINERO + " días</span>";
+  $("pozoDinero").innerHTML = svgFlujo(serie);
+  $("dineroLeyenda").innerHTML =
+    "<span class='marca-entra'>Entra " + dinero(entra) + "</span>" +
+    "<span class='marca-sale'>Sale " + dinero(sale) + "</span>";
   $("dineroPie").innerHTML = "<span>Ingresos <b>" + dinero(c.ingresos) +
     "</b> · Gastos <b>" + dinero(c.gastos) + "</b></span><span>" +
     (c.utilidad >= 0 ? "Utilidad " : "Va perdiendo ") + "<b>" +
@@ -2571,14 +2767,6 @@ function pintarCuentas() {
     "<table><thead><tr><th>Cosa</th><th>Útiles</th><th>Vendidos</th><th>Quedan</th>" +
     "<th>En camino</th></tr></thead><tbody>" + invFilas + "</tbody></table>";
 }
-
-$("metricaDinero").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-valor]");
-  if (!b) return;
-  METRICA_DINERO = b.dataset.valor;
-  marcarSegmento("metricaDinero", METRICA_DINERO);
-  pintarCuentas();
-});
 
 function pintarVista(valor) {
   const conocidas = { locales: 1, cuentas: 1, inventario: 1 };
@@ -3961,10 +4149,7 @@ export function vistaAdmin(origen) {
               <p class="cejilla">Dinero por día</p>
               <div class="metrica" id="dineroMetrica">—</div>
             </div>
-            <div class="segmento" id="metricaDinero" role="group" aria-label="Qué se mide">
-              <button type="button" class="activa" data-valor="gastos">Gastos</button>
-              <button type="button" data-valor="ingresos">Ingresos</button>
-            </div>
+            <div class="leyenda" id="dineroLeyenda"></div>
           </div>
           <div class="pozo" id="pozoDinero"></div>
           <div class="grafica-pie" id="dineroPie"></div>
@@ -4049,8 +4234,10 @@ export function vistaAdmin(origen) {
         </div>
         <div class="modal-acciones acciones-izq sin-aire">
           <button type="button" class="leer" id="escanear">Escanear una pieza</button>
+          <button type="button" class="fantasma" id="vaciarPiezas" hidden>Vaciar la lista</button>
           <span class="mini2 escaneo" id="escaneoDicho"></span>
         </div>
+        <div class="chips" id="piezasSueltas"></div>
         <div class="camara" id="camara" hidden>
           <video id="video" playsinline muted></video>
           <div class="camara-mira"></div>
@@ -4102,6 +4289,8 @@ export function vistaAdmin(origen) {
       <label class="paso" for="buscarLocal"><span class="n n2">2</span>A qué local apunta</label>
       <input id="buscarLocal" type="search" placeholder="Buscar local" autocomplete="off"
              aria-label="Buscar entre los locales registrados">
+      <div class="sugerencias" id="sugerenciasLocal" hidden role="listbox"
+           aria-label="Locales que coinciden"></div>
       <select id="localExistente" class="sobre-buscador" size="1" aria-label="Local ya registrado"></select>
       <input class="c2" id="maps" placeholder="https://www.google.com/maps/place/…" autocomplete="off" required>
 
