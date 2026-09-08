@@ -2310,6 +2310,51 @@ function svgFlujo(serie) {
     "aria-label='Lo que entra y lo que sale cada día'>" + piezas + "</svg>";
 }
 
+// Las unidades se cuentan por día: una barra por día responde bien. La plata no
+// —lo que importa es cómo va sumando—, así que va como línea que crece. Con
+// barras, dos ventas grandes seguidas y una semana en blanco se leen igual de
+// mal; acumulada se ve el ritmo.
+function svgAcumulado(serie, campo) {
+  const ancho = 660, alto = 150, pieAlto = 18;
+  let suma = 0;
+  const puntos = serie.map((p) => { suma += p[campo]; return suma; });
+  const tope = Math.max(1, suma);
+  const paso = serie.length > 1 ? ancho / (serie.length - 1) : ancho;
+  const enY = (v) => alto - (v / tope) * (alto - 8);
+
+  let piezas = "";
+  for (let g = 1; g <= 3; g++) {
+    const y = (alto / 3) * (3 - g);
+    piezas += "<line x1='0' y1='" + y + "' x2='" + ancho + "' y2='" + y +
+      "' stroke='rgba(22,32,46,.06)' stroke-width='1' stroke-dasharray='2 3'></line>";
+  }
+
+  const linea = puntos.map((v, i) => (i * paso).toFixed(1) + "," + enY(v).toFixed(1));
+  piezas += "<path d='M0," + alto + " L" + linea.join(" L") + " L" + ancho + "," + alto +
+    " Z' fill='var(--verde-piel)'></path>";
+  piezas += "<polyline points='" + linea.join(" ") +
+    "' fill='none' stroke='var(--verde)' stroke-width='2.5' stroke-linejoin='round' " +
+    "stroke-linecap='round'></polyline>";
+
+  // el último punto es el que se mira: dónde va la cuenta hoy
+  const ultimoX = (serie.length - 1) * paso;
+  const ultimoY = enY(puntos[puntos.length - 1] || 0);
+  piezas += "<circle cx='" + ultimoX.toFixed(1) + "' cy='" + ultimoY.toFixed(1) +
+    "' r='4.5' fill='var(--verde)' stroke='#fff' stroke-width='2'></circle>";
+
+  serie.forEach((p, i) => {
+    const cada = serie.length > 20 ? 5 : (serie.length > 10 ? 2 : 1);
+    if (i % cada === 0 || i === serie.length - 1) {
+      piezas += "<text x='" + (i * paso).toFixed(1) + "' y='" + (alto + 13) +
+        "' text-anchor='" + (i === 0 ? "start" : (i === serie.length - 1 ? "end" : "middle")) +
+        "' font-size='10' fill='var(--tinta-3)'>" + p.dia + "</text>";
+    }
+  });
+
+  return "<svg viewBox='0 0 " + ancho + " " + (alto + pieAlto) + "' role='img' " +
+    "aria-label='Cómo va sumando el dinero'>" + piezas + "</svg>";
+}
+
 function svgBarras(serie, campo) {
   const ancho = 660, alto = 150, pieAlto = 18;
   const tope = Math.max(1, Math.max.apply(null, serie.map((p) => p[campo])));
@@ -2344,8 +2389,11 @@ function pintarVentas() {
   const campo = METRICA;
   const suma = serie.reduce((a, p) => a + p[campo], 0);
   $("graficaMetrica").innerHTML = (campo === "ingresos" ? dinero(suma) : suma) +
-    "<span class='unidad'>" + (campo === "ingresos" ? "en " : "unidades en ") + DIAS_GRAFICA + " días</span>";
-  $("pozoGrafica").innerHTML = svgBarras(serie, campo);
+    "<span class='unidad'>" + (campo === "ingresos" ? "sumados en " : "unidades en ") +
+    DIAS_GRAFICA + " días</span>";
+  $("pozoGrafica").innerHTML = campo === "ingresos"
+    ? svgAcumulado(serie, campo)
+    : svgBarras(serie, campo);
 
   const lista = locales();
   const vendidos = lista.filter((l) => l.cobrado).length;
