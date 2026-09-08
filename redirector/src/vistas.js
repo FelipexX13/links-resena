@@ -606,7 +606,7 @@ const ESTILOS = `
     table,tbody,tr,td{display:block;width:auto}
     thead{display:none}
     table{margin-top:14px}
-    tr{padding:17px 0;border-bottom:1px solid var(--linea-suave)}
+    tr{padding:13px 0;border-bottom:1px solid var(--linea-suave)}
     tr:hover{background:transparent}
     td{border:0;padding:0}
     td:last-child{width:auto;white-space:normal;padding-top:14px}
@@ -617,11 +617,17 @@ const ESTILOS = `
     #tabla th:last-child,#tabla td:last-child{width:auto}
     .negocio{font-size:15px;margin-top:2px}
 
-    /* Apiladas de arriba abajo, cada gasto ocupaba media pantalla. En fila con
-       envoltura caben en tres renglones: fecha y monto, de dónde, y las
-       etiquetas con los botones al lado. */
+    /* el código y su número son el mismo dato dicho de dos formas: van juntos */
+    #tabla td:first-child{display:flex;align-items:baseline;gap:8px}
+    #tabla .fila-num{margin-top:0}
+    #tabla td:nth-child(2){margin-top:3px}
+    #tabla td:last-child{padding-top:10px}
+
+    /* Tres renglones por fila y ni uno más: qué es, de quién, y el estado con
+       los botones al lado. Apilado de arriba abajo, un gasto se comía media
+       pantalla y en un listado eso significa no ver nunca dos seguidos. */
     #tablaGastos tr,#tablaLocales tr{display:flex;flex-wrap:wrap;align-items:center;
-      gap:7px 10px}
+      gap:5px 9px}
     #tablaGastos td,#tablaLocales td{padding:0;width:auto}
     #tablaGastos td:last-child,#tablaLocales td:last-child{padding-top:0}
 
@@ -636,11 +642,13 @@ const ESTILOS = `
     #tablaLocales td:nth-child(4){order:2;margin-left:auto;font-size:15px}
     #tablaLocales td:nth-child(2){order:3;flex:1 0 100%}
     #tablaLocales td:nth-child(3){order:4}
-    #tablaLocales td:nth-child(5){order:5;flex:1 0 100%}
+    /* los botones a la derecha del estado, no en su propio renglón */
+    #tablaLocales td:nth-child(5){order:5;margin-left:auto}
 
     /* dos o tres botones sueltos no necesitan la rejilla de la tabla ancha */
-    #tablaGastos .acciones{display:flex;gap:6px;min-width:0}
-    #tablaGastos .acciones button{width:auto;padding:8px 15px}
+    #tablaGastos .acciones,#tablaLocales .acciones{display:flex;gap:5px;min-width:0}
+    #tablaGastos .acciones button,#tablaLocales .acciones button{width:auto;
+      padding:7px 11px;font-size:12px}
 
     /* el inventario son números: sin la cabecera hay que decir cuál es cuál */
     #tablaInventario tr{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline}
@@ -2476,8 +2484,9 @@ function pintarVentas() {
     const bloqueo = cerrada(l.negocio) ? " disabled" : sinCobro;
     filas += "<tr><td class='negocio'>" + escHtml(l.negocio) + "</td>" +
       "<td class='piezas'>" + (piezas
-        ? plural(l.acrilico, "acrílico", "acrílicos") + "<br>" +
-          plural(l.sticker, "sticker", "stickers")
+        ? [l.acrilico ? plural(l.acrilico, "acrílico", "acrílicos") : "",
+           l.sticker ? plural(l.sticker, "sticker", "stickers") : ""]
+          .filter(Boolean).join(" · ")
         : "<span class='sin-dato'>sin tarjetas</span>") +
       (f ? "<div class='fila-num'>ficha de Google" +
         (f.precio ? " · " + dinero(f.precio) : "") + "</div>" : "") +
