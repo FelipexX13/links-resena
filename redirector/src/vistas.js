@@ -325,16 +325,36 @@ const ESTILOS = `
     border-radius:50%;background:var(--papel-2);color:var(--tinta-2);font-size:14px;line-height:1;
     border:1px solid var(--linea)}
   .modal-cerrar:hover{background:var(--linea-suave);color:var(--tinta)}
-  .modal-tarjeta{max-width:620px}
+  .modal-tarjeta{max-width:620px;padding-top:0}
+
+  /* La orden se rellena de arriba abajo y el botón de crear tiene que seguir
+     ahí al final: la cabecera no se va con el scroll. Los márgenes negativos
+     son para que la banda blanca llegue a los dos bordes de la ventana. */
+  .orden-alto{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:10px;
+    margin:0 -30px 6px;padding:22px 30px 13px;background:var(--papel);
+    box-shadow:0 1px 0 var(--linea)}
+  .orden-alto::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;
+    background:linear-gradient(90deg,var(--logo-azul) 0 25%,var(--logo-rojo) 25% 50%,
+      var(--logo-amarillo) 50% 75%,var(--logo-verde) 75% 100%)}
+  .orden-alto h1{margin:0;min-width:0;font-size:19px;letter-spacing:-.02em;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .orden-alto #guardar{margin-left:auto;flex:0 0 auto;padding:9px 16px;font-size:13px}
+  .orden-alto .modal-cerrar{position:static;flex:0 0 auto;width:30px;height:30px}
+
+  /* De todo el formulario, este es el campo que decide la orden: se ve de lejos
+     y no se confunde con el buscador de locales que tiene encima. */
+  #maps{background:var(--azul-piel);border-color:var(--azul);font-weight:500}
+  #maps::placeholder{color:var(--tinta-2);font-weight:400}
+  #maps:focus{background:var(--papel);border-color:var(--azul);
+    box-shadow:0 0 0 3px var(--azul-piel)}
+
+  /* menos aire entre pasos: el formulario cabe de una en el teléfono */
+  .modal-tarjeta label.paso{margin:15px 0 5px;font-size:13px}
+  .modal-tarjeta label.paso .n{width:19px;height:19px;font-size:11px}
   .modal-subtitulo{margin-bottom:20px;font-size:13.5px}
   .modal-kicker{display:inline-block;font-size:11.5px;font-weight:600;color:var(--azul-fuerte);
     background:var(--azul-piel);border-radius:999px;padding:4px 12px;margin-bottom:12px}
   .modal-acciones{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:24px}
-  /* radial y no lineal: un degradado recto de lado a lado se lee como plantilla */
-  .modal-tarjeta::after{content:"";position:absolute;top:0;left:0;right:0;height:190px;
-    pointer-events:none;z-index:0;
-    background:radial-gradient(120% 100% at 22% 0%,rgba(26,115,232,.10),rgba(26,115,232,0) 62%)}
-  .modal-tarjeta > *:not(.modal-cerrar){position:relative;z-index:1}
 
   /* los tres pasos, cada uno con su color */
   label.paso{display:flex;align-items:center;gap:10px;margin:20px 0 6px}
@@ -348,7 +368,6 @@ const ESTILOS = `
     font-size:11.5px;color:var(--ambar-tinta);background:var(--ambar-piel);
     border:1px solid var(--ambar-borde);border-radius:999px;padding:2px 10px}
   .c1:focus{border-color:var(--azul);box-shadow:0 0 0 3px var(--azul-piel)}
-  .c2:focus{border-color:var(--rojo);box-shadow:0 0 0 3px var(--rojo-piel)}
   .c3:focus{border-color:var(--verde);box-shadow:0 0 0 3px var(--verde-piel)}
   .n4{background:var(--ambar);color:#4a3400}
 
@@ -532,14 +551,17 @@ const ESTILOS = `
   .vacio-marca .m3{background:var(--logo-amarillo)}
   .vacio-marca .m4{background:var(--logo-verde)}
 
-  .ficha{margin-top:18px;padding:15px 16px;border-radius:var(--r-l);background:var(--verde-piel);
+  .ficha{margin-top:12px;padding:11px 13px;border-radius:var(--r-l);background:var(--verde-piel);
     border:1px solid var(--verde-borde);font-size:13px}
   .ficha b{display:block;font-size:15px;font-weight:600;margin-bottom:2px;color:var(--verde-fuerte);
     letter-spacing:-.015em}
   .ficha label{margin-top:12px;color:var(--verde-fuerte)}
   .ficha input{background:var(--papel);border-color:var(--verde-borde)}
+  /* los identificadores son la prueba de que el link se leyó, no algo que se lea:
+     una línea cortada basta y ahorra tres en el teléfono */
   .ficha .meta{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;
-    color:var(--tinta-2);margin-top:9px;word-break:break-all}
+    color:var(--tinta-2);margin-top:5px;white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis}
 
   /* ---------- ventana del QR ---------- */
   .qr-negocio{text-align:center;font-size:clamp(26px,5.2vw,36px);font-weight:600;line-height:1.1;
@@ -707,7 +729,12 @@ const ESTILOS = `
     input{font-size:16px}
 
     .modal{padding:12px}
-    .modal-caja{padding:24px 18px;max-height:92vh}
+    .modal-caja{padding:22px 16px;max-height:92vh}
+    /* la media query no añade especificidad: hay que repetir el selector */
+    .modal-tarjeta{padding-top:0}
+    .orden-alto{margin:0 -16px 6px;padding:18px 16px 11px;gap:8px}
+    .orden-alto h1{font-size:17px}
+    .orden-alto #guardar{padding:9px 13px;font-size:12.5px}
     .qr-negocio{margin-left:8px;margin-right:34px}
     .qr-pair{grid-template-columns:1fr;justify-items:center}
     .rango-fila{grid-template-columns:1fr}
@@ -1318,6 +1345,11 @@ function pintarResumenLocal() {
 
   if (plan.falta.length) { caja.textContent = "No alcanza — " + plan.falta.join(" · "); return; }
 
+  // Las fichas de arriba ya dicen cuáles son. Repetir los mismos códigos en un
+  // recuadro de color es decir dos veces lo mismo, así que en una orden nueva
+  // el resumen calla; en una que ya existía sí cuenta algo: qué entra y qué sale.
+  if (plan.sueltas && !plan.base) { caja.hidden = true; return; }
+
   // escaneadas van sueltas y desordenadas: "AAAF → AAAD" se leería como un rango
   const comoSeVe = (codigos) => plan.sueltas ? codigos.join(", ") : tramo(codigos);
 
@@ -1630,9 +1662,7 @@ function editar(codigo) {
   $("fichaReview").value = t.destino;
   $("ficha").hidden = false;
 
-  $("tarjetaModalKicker").textContent = "Editar " + t.codigo;
-  $("tarjetaModalTitulo").textContent = "Editar configuración";
-  $("tarjetaModalSubtitulo").textContent = "Cambia el negocio o el link de reseña al que apunta esta tarjeta.";
+  $("tarjetaModalTitulo").textContent = "Editar " + t.codigo;
   $("guardar").textContent = "Guardar cambios";
   limpiarAviso("aviso");
   abrirTarjetaModal();
@@ -1902,9 +1932,7 @@ function prepararNuevaTarjeta() {
   $("numeroTarjeta").textContent = sig.numero ? "nº " + sig.numero : "";
   pintarTipo(tipoPorDefecto(sig.codigo));
   pintarModo("una");
-  $("tarjetaModalKicker").textContent = "Nueva tarjeta";
   $("tarjetaModalTitulo").textContent = "Activar una tarjeta";
-  $("tarjetaModalSubtitulo").textContent = "Apunta el código impreso al link de reseña de un negocio.";
   $("guardar").textContent = "Activar tarjeta";
   limpiarAviso("aviso");
   abrirTarjetaModal();
@@ -1937,11 +1965,7 @@ function abrirOrden(negocio) {
   salirDeEdicion();
   llenarLocales();
   const l = locales().filter((x) => x.negocio === negocio)[0];
-  $("tarjetaModalKicker").textContent = l ? "Orden de " + l.negocio : "Orden";
-  $("tarjetaModalTitulo").textContent = l ? "Cambiar la orden" : "Nueva orden";
-  $("tarjetaModalSubtitulo").textContent = l
-    ? "Sube o baja cuántas piezas lleva y si va con ficha de Google. Las que sobren quedan libres para otra orden."
-    : "Ocupa acrílicos y stickers libres y los apunta a la ficha del local. Queda pendiente hasta que la aceptes o la canceles.";
+  $("tarjetaModalTitulo").textContent = l ? "Orden de " + l.negocio : "Nueva orden";
   if (l) {
     $("localExistente").value = l.negocio;
     $("localExistente").dispatchEvent(new Event("change"));
@@ -1971,9 +1995,7 @@ function ponerFichaEnOrden(ficha) {
 $("abrirLocal").onclick = () => {
   salirDeEdicion();
   ponerFichaEnOrden(null);
-  $("tarjetaModalKicker").textContent = "Orden";
   $("tarjetaModalTitulo").textContent = "Nueva orden";
-  $("tarjetaModalSubtitulo").textContent = "Escanea las piezas y pega el link del local. El nombre sale solo.";
   pintarModo("local");
   limpiarAviso("aviso");
   llenarLocales();
@@ -1987,7 +2009,6 @@ $("abrirLocal").onclick = () => {
 };
 
 $("cerrarTarjeta").onclick = cerrarTarjeta;
-$("cancelarTarjeta").onclick = cerrarTarjeta;
 $("modalTarjeta").addEventListener("click", (e) => {
   if (e.target.hasAttribute("data-cerrar-tarjeta")) cerrarTarjeta();
 });
@@ -4590,13 +4611,14 @@ export function vistaAdmin(origen) {
 
 <div class="modal" id="modalTarjeta" hidden>
   <div class="modal-fondo" data-cerrar-tarjeta></div>
-  <div class="modal-caja modal-tarjeta franja" role="dialog" aria-modal="true" aria-labelledby="tarjetaModalTitulo" aria-describedby="tarjetaModalSubtitulo">
-    <button type="button" class="modal-cerrar" id="cerrarTarjeta" aria-label="Cerrar">✕</button>
-    <div class="modal-kicker" id="tarjetaModalKicker">Nueva tarjeta</div>
-    <h1 id="tarjetaModalTitulo">Activar una tarjeta</h1>
-    <p class="modal-subtitulo" id="tarjetaModalSubtitulo">Apunta el código impreso al link de reseña de un negocio.</p>
-
+  <div class="modal-caja modal-tarjeta" role="dialog" aria-modal="true" aria-labelledby="tarjetaModalTitulo">
     <form id="formTarjeta">
+      <div class="orden-alto">
+        <h1 id="tarjetaModalTitulo">Activar una tarjeta</h1>
+        <button type="submit" id="guardar">Activar tarjeta</button>
+        <button type="button" class="modal-cerrar" id="cerrarTarjeta" aria-label="Cerrar">✕</button>
+      </div>
+
       <div class="segmento" id="modoTarjeta" role="group" aria-label="Qué se va a editar">
         <button type="button" class="activa" data-valor="una">Una tarjeta</button>
         <button type="button" data-valor="local">Una orden</button>
@@ -4660,23 +4682,21 @@ export function vistaAdmin(origen) {
       </div>
 
       <label class="paso" for="buscarLocal"><span class="n n2">2</span>A qué local apunta</label>
-      <input id="buscarLocal" type="search" placeholder="Buscar local" autocomplete="off"
-             aria-label="Buscar entre los locales registrados">
+      <input id="buscarLocal" type="search" placeholder="Busca un local ya registrado"
+             autocomplete="off" aria-label="Buscar entre los locales registrados">
       <div class="sugerencias" id="sugerenciasLocal" hidden role="listbox"
            aria-label="Locales que coinciden"></div>
-      <select id="localExistente" class="sobre-buscador" size="1" aria-label="Local ya registrado"></select>
-      <input class="c2" id="maps" placeholder="https://www.google.com/maps/place/…" autocomplete="off" required>
+      <select id="localExistente" aria-label="Local ya registrado" hidden></select>
+      <input id="maps" placeholder="Pega aquí el link de Google Maps" autocomplete="off" required>
 
-      <div class="modal-acciones acciones-izq">
-        <button type="button" class="leer" id="analizar">Leer la URL</button>
+      <div class="modal-acciones acciones-izq sin-aire">
+        <button type="button" class="leer mini" id="analizar">Leer la URL</button>
         <a class="boton fantasma mini" id="enlaceMaps" target="_blank" rel="noopener"
            href="https://www.google.com/maps">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor"
                stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/>
-          </svg>Google Maps</a>
-        <a class="boton fantasma mini" target="_blank" rel="noopener"
-           href="https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder">Buscador de Place ID</a>
+          </svg>Buscar en Maps</a>
       </div>
 
       <div class="ficha" id="ficha" hidden>
@@ -4690,7 +4710,6 @@ export function vistaAdmin(origen) {
 
       <div id="campoCuantas" hidden>
         <label class="paso"><span class="n n4">4</span>O tómalas por número</label>
-        <p class="ayuda ayuda-alta">Solo si el montón viene en orden y no quieres escanear.</p>
         <div class="rango-fila">
           <div>
             <div class="mini">Acrílicos de mesa</div>
@@ -4723,11 +4742,6 @@ export function vistaAdmin(origen) {
           <button type="button" class="activa" data-valor="acrilico">Acrílico</button>
           <button type="button" data-valor="sticker">Sticker</button>
         </div>
-      </div>
-
-      <div class="modal-acciones">
-        <button type="button" class="fantasma" id="cancelarTarjeta">Cancelar</button>
-        <button type="submit" id="guardar">Activar tarjeta</button>
       </div>
 
     </form>

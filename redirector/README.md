@@ -277,6 +277,31 @@ Abrirse con el teclado sobre «cuántos acrílicos» pedía el dato que menos im
 con las piezas escaneadas la orden es exactamente esa lista, y el bloque de
 números se retira de la vista.
 
+**El título y «Crear la orden» van fijos arriba.** La ventana se rellena de
+arriba abajo y el botón de crear tiene que seguir a mano al llegar al final, así
+que la cabecera no se va con el scroll. Ahí está también la ✕: cerrar y crear son
+las dos únicas salidas, y un «Cancelar» al pie era una tercera que decía lo mismo
+que la ✕.
+
+**El campo del link va en azul.** De todo el formulario es el que decide a qué
+ficha apuntan las tarjetas, y tenía el mismo gris que los demás. Ahora se ve de
+lejos y no se confunde con el buscador de locales que lleva encima.
+
+Lo que se quitó por el camino, todo por la misma razón —decía dos veces lo
+mismo—:
+
+| Se fue | Dónde seguía estando |
+|---|---|
+| el chip «Orden» sobre el título | en el propio título: «Orden de Panadería El Trigal» |
+| el párrafo de explicación | en los rótulos de cada paso |
+| el desplegable de locales | en el buscador de arriba, que enseña las coincidencias al escribir |
+| el resumen de piezas escaneadas | en las fichas de arriba, que ya listan los códigos |
+| el enlace al buscador de Place ID | en ningún sitio: era una herramienta de desarrollo |
+| «Cancelar» al pie | en la ✕ de la cabecera |
+
+Con eso una orden entera —dos piezas escaneadas, el link leído y el nombre
+puesto— cabe en una pantalla de teléfono sin desplazarse.
+
 El bloque de números pide, por cada tipo, **desde qué número** y **cuántas**. El
 número inicial viene puesto con la primera tarjeta libre, así que dejarlo como
 está se comporta como antes; se cambia cuando vas a entregar unas piezas
