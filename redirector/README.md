@@ -139,6 +139,28 @@ mintiendo. Sumando lo que trajo cada compra eso no puede pasar. Cada gasto
 admite hasta ocho cosas, y el gasto entero cabe en la metadata de KV, así que el
 listado es una sola llamada.
 
+### El inventario en el teléfono
+
+La tabla tiene cinco columnas y en el teléfono no se ve la cabecera, así que
+cada fila repetía los cuatro rótulos —Útiles, Vendidos, Quedan, En camino— con
+el mismo peso visual que los números. Cuatro palabras y cuatro cifras por cosa,
+cuando lo que se viene a mirar es una sola: **cuánto queda**.
+
+Ahora ese número va grande a la derecha del nombre y el desglose debajo, en
+pequeño, con cada cifra llevando su palabra pegada (`140 útiles`, `2 vendidos`).
+Lo que no tiene nada que contar no aparece: si no se ha vendido nada, «útiles» y
+«quedan» serían el mismo número dicho dos veces, y la fila se queda solo con el
+grande.
+
+Dos detalles de maquetación que costaron un intento cada uno:
+
+- El renglón se parte con una celda vacía (`.corte`) que en el teléfono vale
+  `flex:1 0 100%`. En la tabla ancha va en `display:none`, así que no descuadra
+  las cabeceras —pero justo por eso hay que devolverle el `display` dentro de la
+  media query, o el salto de línea no ocurre.
+- Cada dato lleva `white-space:nowrap`. Sin eso, `(26 malos)` se partía por la
+  mitad y dejaba un hueco que desalineaba todo lo que venía detrás.
+
 ## Por qué el panel no vuelve a preguntar tras guardar
 
 KV es de **consistencia eventual**: lo que se acaba de escribir puede tardar

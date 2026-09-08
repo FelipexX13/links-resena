@@ -536,6 +536,8 @@ const ESTILOS = `
     flex-wrap:wrap;margin:26px 0 0;padding-top:20px;border-top:1px solid var(--linea-suave)}
   .inv{font-family:"Geist Mono",ui-monospace,monospace;font-size:13px}
   .inv-malos{color:var(--rojo-fuerte)}
+  .rot{display:none}
+  .corte{display:none}
   .items-fila{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-top:8px}
   .sin-aire{margin-top:0}
   .par{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -672,12 +674,28 @@ const ESTILOS = `
     #tablaGastos .acciones button,#tablaLocales .acciones button{width:auto;
       padding:7px 11px;font-size:12px}
 
-    /* el inventario son números: sin la cabecera hay que decir cuál es cuál */
-    #tablaInventario tr{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline}
-    #tablaInventario td{padding:0;width:auto}
-    #tablaInventario td:first-child{flex:1 0 100%}
-    #tablaInventario td[data-rotulo]::before{content:attr(data-rotulo) " ";
-      font-size:11px;color:var(--tinta-3);margin-right:3px}
+    /* El inventario contesta una sola pregunta: cuánto queda. Ese número va
+       grande a la derecha del nombre y el desglose debajo, en pequeño. Antes
+       cada fila repetía los cuatro rótulos de la tabla, con el mismo peso que
+       los números, que es lo único que se viene a mirar aquí. */
+    #tablaInventario tr{display:flex;flex-wrap:wrap;align-items:baseline;
+      gap:2px 13px;padding:11px 0}
+    /* cada dato entero o al renglón siguiente: partir "(26 malos)" por la mitad
+       dejaba huecos y desalineaba lo que venía detrás */
+    #tablaInventario td{padding:0;width:auto;white-space:nowrap}
+    #tablaInventario td:nth-child(1){order:1;min-width:0;overflow:hidden;
+      text-overflow:ellipsis}
+    #tablaInventario td:nth-child(4){order:2;margin-left:auto}
+    /* .corte nace en display:none para la tabla ancha: aqui hay que revivirlo */
+    #tablaInventario td:nth-child(6){display:block;order:3;flex:1 0 100%;height:0}
+    #tablaInventario td:nth-child(2){order:4}
+    #tablaInventario td:nth-child(3){order:5}
+    #tablaInventario td:nth-child(5){order:6}
+    #tablaInventario .inv{font-size:12px;color:var(--tinta-2)}
+    #tablaInventario .queda{font-size:19px;color:var(--tinta)}
+    #tablaInventario .inv-cero{display:none}
+    .rot{display:inline;margin-left:4px;font-size:11px;color:var(--tinta-3);
+      font-family:"Geist","Inter",system-ui,-apple-system,"Segoe UI",sans-serif}
     .acciones{grid-template-columns:repeat(3,minmax(0,1fr));min-width:0}
     /* son cuatro: con tres columnas caían 3+1 */
     .acciones-tarjeta{grid-template-columns:repeat(4,minmax(0,1fr));min-width:0}
@@ -2908,16 +2926,25 @@ function pintarCuentas() {
     return;
   }
   let invFilas = "";
+  // En el teléfono no se ve la cabecera de la tabla, así que cada número lleva
+  // su palabra pegada. Va en un span y no en un ::before para poder ponerla
+  // detrás del número y dejar los "(26 malos)" al final, donde se leen.
+  const rot = (t) => "<span class='rot'>" + t + "</span>";
   inv.forEach((i) => {
-    // el rótulo va en la celda porque en el teléfono la cabecera de la tabla no
-    // se ve: sin él, cuatro números seguidos no dicen nada
+    // si nada se ha vendido, "útiles" y "quedan" son el mismo número dicho dos
+    // veces: la fila se queda solo con el grande
+    const utilMudo = i.util === i.queda && !i.malos;
     invFilas += "<tr><td class='negocio'>" + escHtml(i.que) + "</td>" +
-      "<td class='inv' data-rotulo='Útiles'>" + i.util +
+      "<td class='inv" + (utilMudo ? " inv-cero" : "") + "'>" + i.util +
+      rot(i.util === 1 ? "útil" : "útiles") +
       (i.malos ? " <span class='inv-malos'>(" + i.malos + " malos)</span>" : "") + "</td>" +
-      "<td class='inv' data-rotulo='Vendidos'>" + (i.vendido ? "−" + i.vendido : "—") + "</td>" +
-      "<td class='inv" + (i.queda < 0 ? " inv-malos" : "") +
-      "' data-rotulo='Quedan'><b>" + i.queda + "</b></td>" +
-      "<td class='inv' data-rotulo='En camino'>" + (i.pedido ? i.pedido : "—") + "</td></tr>";
+      "<td class='inv" + (i.vendido ? "" : " inv-cero") + "'>" + (i.vendido || "—") +
+      rot(i.vendido === 1 ? "vendido" : "vendidos") + "</td>" +
+      "<td class='inv queda" + (i.queda < 0 ? " inv-malos" : "") +
+      "'><b>" + i.queda + "</b></td>" +
+      "<td class='inv" + (i.pedido ? "" : " inv-cero") + "'>" + (i.pedido || "—") +
+      rot("en camino") + "</td>" +
+      (utilMudo && !i.vendido && !i.pedido ? "" : "<td class='corte'></td>") + "</tr>";
   });
   $("tablaInventario").innerHTML =
     "<table><thead><tr><th>Cosa</th><th>Útiles</th><th>Vendidos</th><th>Quedan</th>" +
