@@ -298,8 +298,8 @@ const ESTILOS = `
 
   .ayuda{font-size:12px;line-height:1.5;color:var(--tinta-2);margin:9px 0 0;max-width:62ch}
   .ayuda-alta{margin:0 0 8px}
-  .enlace-mini{align-self:center;font-size:12px;color:var(--azul);text-decoration:none}
-  .enlace-mini:hover{text-decoration:underline}
+  /* junto a "Leer la URL" son ayudas, no la acción: mismo botón, un punto menos */
+  .boton.mini{padding:8px 14px;font-size:12.5px}
   .sobre-buscador{margin-top:8px}
   .ayuda code{background:var(--papel-2);border:1px solid var(--linea);border-radius:5px;
     padding:1px 5px;font-size:11px}
@@ -4419,12 +4419,6 @@ export function vistaAdmin(origen) {
                stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
             <path d="M12 5v14M5 12h14"/>
           </svg><span class="etiqueta">Nueva orden</span></button>
-        <a class="boton fantasma" href="https://www.google.com/maps" target="_blank" rel="noopener"
-           title="Google Maps">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
-               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/>
-          </svg><span class="etiqueta">Google Maps</span></a>
         <button type="button" class="fantasma" id="salir" title="Cerrar sesión">
           <svg class="icono-barra" viewBox="0 0 24 24" width="14" height="14" fill="none"
                stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
@@ -4635,9 +4629,13 @@ export function vistaAdmin(origen) {
 
       <div class="modal-acciones acciones-izq">
         <button type="button" class="leer" id="analizar">Leer la URL</button>
-        <a class="enlace-mini" id="enlaceMaps" target="_blank" rel="noopener"
-           href="https://www.google.com/maps">Google Maps</a>
-        <a class="enlace-mini" target="_blank" rel="noopener"
+        <a class="boton fantasma mini" id="enlaceMaps" target="_blank" rel="noopener"
+           href="https://www.google.com/maps">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor"
+               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/>
+          </svg>Google Maps</a>
+        <a class="boton fantasma mini" target="_blank" rel="noopener"
            href="https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder">Buscador de Place ID</a>
       </div>
 
