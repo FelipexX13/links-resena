@@ -555,7 +555,8 @@ const ESTILOS = `
   .qr-pair{display:grid;grid-template-columns:repeat(2,max-content);gap:16px;
     justify-content:center;margin-top:20px}
   .qr-tile{margin:0;flex:0 0 auto;text-align:center}
-  .qr-art{display:inline-block;line-height:0;border:1px solid var(--linea);border-radius:var(--r-l);
+  .qr-art{display:inline-block;line-height:0;cursor:pointer;border:1px solid var(--linea);
+    border-radius:var(--r-l);
     padding:11px;background-color:#fff;
     background-image:linear-gradient(45deg,#eaeef6 25%,transparent 25%,transparent 75%,#eaeef6 75%),
                      linear-gradient(45deg,#eaeef6 25%,transparent 25%,transparent 75%,#eaeef6 75%);
@@ -563,6 +564,7 @@ const ESTILOS = `
   .qr-tile.inv .qr-art{border-color:#2b3140;background-color:#151922;
     background-image:linear-gradient(45deg,#222834 25%,transparent 25%,transparent 75%,#222834 75%),
                      linear-gradient(45deg,#222834 25%,transparent 25%,transparent 75%,#222834 75%)}
+  .qr-art:hover{border-color:var(--azul);box-shadow:0 0 0 3px var(--azul-piel)}
   .qr-art img{width:150px;height:150px;display:block}
   .qr-dl{display:block;margin-top:9px;font-size:11.5px;font-weight:500;color:var(--azul);
     text-decoration:none;border:1px solid var(--linea);border-radius:999px;padding:5px 13px;
@@ -4307,7 +4309,8 @@ function qrPng(texto, color, cell, quiet, hueco) {
 
 function tile(mod, src, etiqueta, archivo) {
   return "<figure class='qr-tile " + mod + "'>" +
-    "<div class='qr-art'><img src='" + src + "' alt='QR de la tarjeta, " + etiqueta + "'></div>" +
+    "<div class='qr-art' title='Toca para copiar la imagen'>" +
+    "<img src='" + src + "' alt='QR de la tarjeta, " + etiqueta + "'></div>" +
     "<a class='qr-dl' href='" + src + "' download='" + archivo + "'>" + etiqueta + "</a>" +
     "</figure>";
 }
@@ -4358,7 +4361,34 @@ $("copiarNfc").onclick = async () => {
 
 $("cerrarQR").onclick = cerrarQR;
 $("modalQR").addEventListener("click", (e) => {
-  if (e.target.hasAttribute("data-cerrar")) cerrarQR();
+  if (e.target.hasAttribute("data-cerrar")) { cerrarQR(); return; }
+
+  // Un toque encima copia la imagen, que es lo que se hacía con clic derecho y
+  // "copiar imagen". El ClipboardItem lleva la promesa dentro a propósito: si se
+  // espera al blob antes de llamar, Safari ya no lo cuenta como gesto del dedo.
+  const arte = e.target.closest(".qr-art");
+  if (!arte) return;
+  const img = arte.querySelector("img");
+  if (!img) return;
+
+  if (!navigator.clipboard || !window.ClipboardItem) {
+    avisar("avisoPanel", "Este navegador no deja copiar imágenes. Usa Descargar.", false);
+    return;
+  }
+  navigator.clipboard.write([
+    new window.ClipboardItem({ "image/png": fetch(img.src).then((r) => r.blob()) }),
+  ]).then(() => {
+    avisar("avisoPanel", "QR copiado. Ya lo puedes pegar.", true);
+  }).catch((err) => {
+    // los mensajes del navegador vienen en inglés y de poca ayuda
+    const dice = String(err && err.message || "");
+    const claro = dice.indexOf("not focused") >= 0
+      ? "Toca la ventana y vuelve a intentarlo."
+      : (err && err.name === "NotAllowedError"
+        ? "El navegador no dejó copiar. Usa Descargar."
+        : dice);
+    avisar("avisoPanel", "No se pudo copiar. " + claro, false);
+  });
 });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
