@@ -163,6 +163,31 @@ código, que no cambia nunca. Sigue siendo verdad aunque la tarjeta se reasigne 
 otro negocio o se desactive — y dentro del registro, cualquiera de esas
 escrituras lo habría borrado.
 
+## Grabar los chips
+
+Antes eran dos teléfonos: uno con NFC Tools escribiendo el link y cambiando la
+letra a mano, otro bloqueando. **Grabar chips**, en Inventario, lo hace desde el
+propio panel con la Web NFC de Chrome de Android.
+
+**Manda el QR.** Primero se escanea el cartel, y lo que se graba es el link de esa
+pieza — no hay forma de escribir uno que no le corresponda. Cuatro pasos, cada uno
+con su botón, y cada uno se abre cuando el anterior salió bien:
+
+1. **Escanea el QR** — dice qué pieza es y qué link va a grabar
+2. **Graba el chip** — `NDEFReader.write()` con ese link
+3. **Revisa que quedó** — lo lee y compara con el QR; si no coincide, no deja sellar
+4. **Séllalo** — `makeReadOnly()`, con confirmación de dos toques
+
+Al sellar, la tarjeta queda marcada como grabada en KV, igual que si hubieras
+tocado el botón amarillo. Hay un *Sin sellar, siguiente* para dejarlo abierto.
+
+El segmentado de arriba se queda en acrílicos o en stickers y avisa si escaneas
+una pieza del otro tipo, que es el error fácil cuando llevas cincuenta seguidas.
+
+**Solo Chrome de Android.** Web NFC no existe en Safari ni en escritorio; donde no
+está, la ventana lo dice y no hace nada. Y sellar no tiene vuelta atrás: por eso
+es un paso aparte y va después de comprobar.
+
 ## Modo pruebas
 
 Para revisar un lote impreso hace falta lo contrario de lo normal: que el QR **no**

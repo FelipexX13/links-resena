@@ -434,6 +434,20 @@ const ESTILOS = `
     border:2px solid rgba(255,255,255,.85);border-radius:16px;pointer-events:none;
     box-shadow:0 0 0 2000px rgba(9,15,28,.35)}
   .escaneo{align-self:center;margin:0}
+  /* los cuatro pasos de grabar un chip, cada uno con su botón y su respuesta */
+  .pasos-nfc{list-style:none;margin:18px 0 0;padding:0}
+  .paso-nfc{padding:13px 0;border-top:1px solid var(--linea-suave)}
+  .paso-nfc:first-child{border-top:0}
+  .paso-nfc-alto{display:flex;align-items:center;gap:10px}
+  /* la bolita es hija de un flex: sin esto se estruja hasta ser una raya */
+  .paso-nfc-alto .n{flex:0 0 auto}
+  .paso-nfc-alto b{font-size:14px;font-weight:600}
+  .paso-nfc-alto button{margin-left:auto}
+  .paso-nfc-dice{margin:7px 0 0 31px;font-size:12.5px;color:var(--tinta-3);line-height:1.45}
+  .paso-nfc-dice.bien{color:var(--verde-fuerte)}
+  .paso-nfc-dice.mal{color:var(--rojo-fuerte)}
+  .paso-nfc .camara{margin-left:31px}
+  .paso-nfc.apagado{opacity:.45}
   /* las piezas escogidas una a una, para cuando el montón está revuelto */
   .chips .pieza{background:var(--azul-piel);color:var(--azul-fuerte);
     border-color:var(--azul-borde);font-family:"Geist Mono",ui-monospace,monospace}
@@ -1605,14 +1619,18 @@ function decirEscaneo(texto, malo) {
   $("escaneoDicho").classList.toggle("malo", Boolean(malo));
 }
 
+// La misma cámara sirve a la ventana de la orden y a la de grabar chips, así que
+// quién la pidió y qué hacer con lo leído van en esta configuración.
+let CAMARA = { caja: "camara", video: "video", alLeer: null };
+
 function cerrarCamara() {
   leyendoQR = false;
   if (flujoCamara) {
     flujoCamara.getTracks().forEach((t) => t.stop());
     flujoCamara = null;
   }
-  $("video").srcObject = null;
-  $("camara").hidden = true;
+  $(CAMARA.video).srcObject = null;
+  $(CAMARA.caja).hidden = true;
 }
 
 function pintarPiezasSueltas() {
@@ -1677,9 +1695,12 @@ function usarQR(texto) {
     (t.negocio ? " · ocupado por " + t.negocio : " · libre"), Boolean(t.negocio));
 }
 
-async function abrirCamara() {
+async function abrirCamara(conf) {
+  cerrarCamara();
+  CAMARA = conf || { caja: "camara", video: "video", alLeer: null };
+  const decir = CAMARA.decir || decirEscaneo;
   if (!("BarcodeDetector" in window)) {
-    decirEscaneo("Este navegador no lee QR. En Chrome de Android sí.", true);
+    decir("Este navegador no lee QR. En Chrome de Android sí.", true);
     return;
   }
   let detector;
@@ -1691,22 +1712,25 @@ async function abrirCamara() {
       video: { facingMode: { ideal: "environment" } },
     });
   } catch (e) {
-    decirEscaneo("No se pudo abrir la cámara: " + e.message, true);
+    decir("No se pudo abrir la cámara: " + e.message, true);
     cerrarCamara();
     return;
   }
 
-  const v = $("video");
+  const v = $(CAMARA.video);
   v.srcObject = flujoCamara;
-  $("camara").hidden = false;
-  decirEscaneo("Apunta al QR del cartel.");
+  $(CAMARA.caja).hidden = false;
+  decir("Apunta al QR del cartel.");
   try { await v.play(); } catch (e) {}
 
   leyendoQR = true;
   while (leyendoQR) {
     try {
       const vistos = await detector.detect(v);
-      if (vistos.length && vistos[0].rawValue) { usarQR(vistos[0].rawValue); return; }
+      if (vistos.length && vistos[0].rawValue) {
+        (CAMARA.alLeer || usarQR)(vistos[0].rawValue);
+        return;
+      }
     } catch (e) {
       // un fotograma ilegible no es motivo para cerrar la cámara
     }
@@ -1714,7 +1738,10 @@ async function abrirCamara() {
   }
 }
 
-$("escanear").onclick = () => { if ($("camara").hidden) abrirCamara(); else cerrarCamara(); };
+$("escanear").onclick = () => {
+  if ($("camara").hidden) abrirCamara({ caja: "camara", video: "video", alLeer: usarQR });
+  else cerrarCamara();
+};
 $("cerrarCamara").onclick = cerrarCamara;
 
 function pintarEnlaceMaps() {
@@ -2827,6 +2854,7 @@ function pintarVista(valor) {
   // activar tarjetas es reponer plástico: va con el inventario, no con la lista
   $("abrirActivar").hidden = VISTA !== "inventario";
   $("togglePruebas").hidden = VISTA !== "inventario";
+  $("abrirNFC").hidden = VISTA !== "inventario";
   $("abrirRango").hidden = VISTA !== "tarjetas" && VISTA !== "locales";
   $("abrirAjustes").hidden = VISTA !== "cuentas";
   if (VISTA === "locales") pintarVentas();
@@ -3240,6 +3268,245 @@ async function enviarComprobante(boton) {
     boton.textContent = etiqueta;
   }
 };
+
+/* ---------- grabar los chips NFC ---------- */
+
+// Antes: dos teléfonos, uno con NFC Tools escribiendo y cambiando la letra a
+// mano, otro bloqueando. Aquí el QR manda: lo que diga el cartel es lo que se
+// graba, así no hay forma de escribir un link que no sea el suyo.
+//
+// Web NFC solo existe en Chrome de Android. Y sellar no tiene vuelta atrás, por
+// eso va en su propio paso, después de comprobar que el chip quedó bien.
+let NFC_PIEZA = null;
+let TIPO_NFC = "acrilico";
+let focoNFC = null;
+let cortarNFC = null;
+
+function hayWebNFC() {
+  return typeof window.NDEFReader === "function";
+}
+
+function decirPaso(id, texto, estado) {
+  const caja = $(id);
+  caja.textContent = texto;
+  caja.classList.toggle("bien", estado === "bien");
+  caja.classList.toggle("mal", estado === "mal");
+}
+
+function pintarPasosNFC() {
+  const hay = Boolean(NFC_PIEZA);
+  $("grabarNFC").disabled = !hay;
+  $("leerNFC").disabled = !hay || !NFC_PIEZA.grabada;
+  $("sellarNFC").disabled = !hay || !NFC_PIEZA.revisada;
+  $("siguienteNFC").disabled = !hay;
+  $("saltarSello").hidden = !hay || !NFC_PIEZA.revisada;
+  $("pasoGrabar").classList.toggle("apagado", !hay);
+  $("pasoLeer").classList.toggle("apagado", !hay || !NFC_PIEZA.grabada);
+  $("pasoSellar").classList.toggle("apagado", !hay || !NFC_PIEZA.revisada);
+}
+
+function nuevaPiezaNFC() {
+  pararNFC();
+  NFC_PIEZA = null;
+  decirQR("La pieza que vas a grabar.");
+  decirPaso("diceGrabar", "Acerca el chip por detrás del teléfono.");
+  decirPaso("diceLeer", "Vuelve a acercarlo y comprueba el link.");
+  decirPaso("diceSellar", "No tiene vuelta atrás: nadie podrá reescribirlo.");
+  pintarPasosNFC();
+}
+
+function decirQR(texto, estado) {
+  decirPaso("diceQR", texto, estado);
+}
+
+// el QR trae el link entero, pero se rearma desde el código para no grabar
+// nunca una variante rara de lo que venga impreso
+function tomarPiezaDelQR(crudo) {
+  cerrarCamara();
+  const codigo = codigoDeQR(crudo);
+  if (!codigo) { decirQR("Ese QR no trae ningún código.", "mal"); return; }
+
+  const t = TARJETAS.filter((x) => x.codigo === codigo)[0];
+  if (!t) { decirQR(codigo + " no está en la lista de tarjetas.", "mal"); return; }
+
+  const tipo = tipoDe(t);
+  const numero = indiceDeCodigo(codigo) + 1;
+  // el QR va en mayúsculas porque así entra en modo alfanumérico y sale más
+  // limpio de imprimir; el chip no tiene esa limitación y lleva la forma normal
+  const url = ORIGEN + "/" + codigo;
+
+  if (tipo !== TIPO_NFC) {
+    decirQR(codigo + " es " + (tipo === "acrilico" ? "un acrílico" : "un sticker") +
+      " y estás en " + (TIPO_NFC === "acrilico" ? "acrílicos" : "stickers") +
+      ". Cambia arriba si es a propósito.", "mal");
+    return;
+  }
+
+  NFC_PIEZA = { codigo: codigo, tipo: tipo, numero: numero, url: url,
+    grabada: false, revisada: false };
+  decirQR(codigo + " · nº " + numero + " · " + url +
+    (NFC[codigo] ? "  ·  ojo, ya estaba marcada como grabada" : ""), "bien");
+  pintarPasosNFC();
+}
+
+function pararNFC() {
+  if (cortarNFC) { cortarNFC.abort(); cortarNFC = null; }
+}
+
+function sinWebNFC(id) {
+  decirPaso(id, "Este navegador no graba chips. Hace falta Chrome de Android.", "mal");
+}
+
+$("grabarNFC").onclick = async () => {
+  if (!NFC_PIEZA) return;
+  if (!hayWebNFC()) { sinWebNFC("diceGrabar"); return; }
+
+  pararNFC();
+  cortarNFC = new AbortController();
+  decirPaso("diceGrabar", "Acerca el chip…");
+  try {
+    const nfc = new window.NDEFReader();
+    await nfc.write({ records: [{ recordType: "url", data: NFC_PIEZA.url }] },
+      { signal: cortarNFC.signal });
+    NFC_PIEZA.grabada = true;
+    NFC_PIEZA.revisada = false;
+    decirPaso("diceGrabar", "Grabado con " + NFC_PIEZA.url, "bien");
+  } catch (e) {
+    decirPaso("diceGrabar", "No se grabó: " + e.message, "mal");
+  } finally {
+    cortarNFC = null;
+    pintarPasosNFC();
+  }
+};
+
+$("leerNFC").onclick = async () => {
+  if (!NFC_PIEZA) return;
+  if (!hayWebNFC()) { sinWebNFC("diceLeer"); return; }
+
+  pararNFC();
+  cortarNFC = new AbortController();
+  decirPaso("diceLeer", "Acerca el chip para leerlo…");
+  try {
+    const nfc = new window.NDEFReader();
+    const leido = await new Promise(async (listo, falla) => {
+      nfc.onreading = (e) => {
+        for (const r of e.message.records) {
+          if (r.recordType === "url" || r.recordType === "absolute-url") {
+            listo(new TextDecoder().decode(r.data));
+            return;
+          }
+        }
+        listo("");
+      };
+      nfc.onreadingerror = () => falla(new Error("el chip no se dejó leer"));
+      try { await nfc.scan({ signal: cortarNFC.signal }); } catch (err) { falla(err); }
+    });
+
+    if (leido.toUpperCase() === NFC_PIEZA.url.toUpperCase()) {
+      NFC_PIEZA.revisada = true;
+      decirPaso("diceLeer", "Dice " + leido + " — coincide con el QR.", "bien");
+    } else {
+      NFC_PIEZA.revisada = false;
+      decirPaso("diceLeer", "Dice " + (leido || "nada") + ", que no es lo del QR. " +
+        "Vuelve a grabarlo.", "mal");
+    }
+  } catch (e) {
+    decirPaso("diceLeer", "No se pudo leer: " + e.message, "mal");
+  } finally {
+    pararNFC();
+    pintarPasosNFC();
+  }
+};
+
+$("sellarNFC").onclick = async () => {
+  if (!NFC_PIEZA || !NFC_PIEZA.revisada) return;
+  if (!hayWebNFC()) { sinWebNFC("diceSellar"); return; }
+  if (CONFIRMANDO !== "sellar") {
+    pedirConfirmacion($("sellarNFC"), "sellar");
+    decirPaso("diceSellar", "Es para siempre. Toca otra vez para sellarlo.", "mal");
+    return;
+  }
+
+  olvidarConfirmacion();
+  pararNFC();
+  cortarNFC = new AbortController();
+  decirPaso("diceSellar", "Acerca el chip para sellarlo…");
+  try {
+    const nfc = new window.NDEFReader();
+    await nfc.makeReadOnly({ signal: cortarNFC.signal });
+    decirPaso("diceSellar", "Sellado. Ya nadie puede reescribirlo.", "bien");
+    await apuntarNFCPuesto();
+  } catch (e) {
+    decirPaso("diceSellar", "No se selló: " + e.message, "mal");
+  } finally {
+    cortarNFC = null;
+    pintarPasosNFC();
+  }
+};
+
+async function apuntarNFCPuesto() {
+  if (!NFC_PIEZA || NFC[NFC_PIEZA.codigo]) return;
+  try {
+    await llamar("nfc", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ codigo: NFC_PIEZA.codigo, listo: true }),
+    });
+    NFC[NFC_PIEZA.codigo] = 1;
+    pintarTabla();
+  } catch (e) {
+    avisar("avisoPanel", "El chip quedó, pero no se pudo marcar: " + e.message, false);
+  }
+}
+
+$("saltarSello").onclick = async () => { await apuntarNFCPuesto(); nuevaPiezaNFC(); };
+$("siguienteNFC").onclick = nuevaPiezaNFC;
+
+$("escanearNFC").onclick = () => {
+  if ($("camaraNFC").hidden) {
+    abrirCamara({ caja: "camaraNFC", video: "videoNFC", alLeer: tomarPiezaDelQR,
+      decir: decirQR });
+  } else {
+    cerrarCamara();
+  }
+};
+$("cerrarCamaraNFC").onclick = cerrarCamara;
+
+$("tipoNFC").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-valor]");
+  if (!b) return;
+  TIPO_NFC = b.dataset.valor;
+  marcarSegmento("tipoNFC", TIPO_NFC);
+});
+
+function abrirNFC() {
+  marcarSegmento("tipoNFC", TIPO_NFC);
+  nuevaPiezaNFC();
+  if (!hayWebNFC()) {
+    decirQR("Este navegador no graba chips: hace falta Chrome de Android.", "mal");
+  }
+  limpiarAviso();
+  focoNFC = document.activeElement;
+  $("modalNFC").hidden = false;
+  document.body.style.overflow = "hidden";
+}
+
+function cerrarNFC() {
+  if ($("modalNFC").hidden) return;
+  pararNFC();
+  cerrarCamara();
+  olvidarConfirmacion();
+  $("modalNFC").hidden = true;
+  document.body.style.overflow = "";
+  if (focoNFC && focoNFC.focus) focoNFC.focus();
+  focoNFC = null;
+}
+
+$("abrirNFC").onclick = abrirNFC;
+$("cerrarNFCModal").onclick = cerrarNFC;
+$("modalNFC").addEventListener("click", (e) => {
+  if (e.target.hasAttribute("data-cerrar-nfc")) cerrarNFC();
+});
 
 /* ---------- mis datos, los del que vende ---------- */
 
@@ -4072,7 +4339,8 @@ $("modalQR").addEventListener("click", (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  if (!$("modalActivar").hidden) cerrarActivar();
+  if (!$("modalNFC").hidden) cerrarNFC();
+  else if (!$("modalActivar").hidden) cerrarActivar();
   else if (!$("modalGasto").hidden) cerrarGasto();
   else if (!$("modalAjustes").hidden) cerrarAjustes();
   else if (!$("modalVenta").hidden) cerrarVenta();
@@ -4161,6 +4429,7 @@ export function vistaAdmin(origen) {
         </div>
         <div class="cabecera-acciones">
           <button type="button" id="abrirActivar">Activar tarjetas</button>
+          <button type="button" class="fantasma" id="abrirNFC">Grabar chips</button>
           <button type="button" class="fantasma" id="togglePruebas">Modo pruebas</button>
           <button type="button" class="fantasma" id="abrirRango">Editar un rango</button>
           <button type="button" class="fantasma" id="abrirAjustes" hidden>Mis datos</button>
@@ -4394,6 +4663,65 @@ export function vistaAdmin(origen) {
         <button type="submit" id="guardarActivar">Activar</button>
       </div>
     </form>
+  </div>
+</div>
+
+<div class="modal" id="modalNFC" hidden>
+  <div class="modal-fondo" data-cerrar-nfc></div>
+  <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="nfcTitulo">
+    <button type="button" class="modal-cerrar" id="cerrarNFCModal" aria-label="Cerrar">✕</button>
+    <div class="modal-kicker">Chips</div>
+    <h1 id="nfcTitulo">Grabar chips</h1>
+    <p class="modal-subtitulo">Escanea el QR de la pieza y el chip se graba con ese mismo link.</p>
+
+    <div class="segmento" id="tipoNFC" role="group" aria-label="Con qué estás trabajando">
+      <button type="button" class="activa" data-valor="acrilico">Acrílicos</button>
+      <button type="button" data-valor="sticker">Stickers</button>
+    </div>
+
+    <ol class="pasos-nfc">
+      <li class="paso-nfc" id="pasoQR">
+        <div class="paso-nfc-alto">
+          <span class="n n1">1</span><b>Escanea el QR</b>
+          <button type="button" class="leer" id="escanearNFC">Escanear</button>
+        </div>
+        <div class="paso-nfc-dice" id="diceQR">La pieza que vas a grabar.</div>
+        <div class="camara" id="camaraNFC" hidden>
+          <video id="videoNFC" playsinline muted></video>
+          <div class="camara-mira"></div>
+          <button type="button" class="fantasma" id="cerrarCamaraNFC">Cerrar</button>
+        </div>
+      </li>
+
+      <li class="paso-nfc" id="pasoGrabar">
+        <div class="paso-nfc-alto">
+          <span class="n n2">2</span><b>Graba el chip</b>
+          <button type="button" class="leer" id="grabarNFC" disabled>Grabar</button>
+        </div>
+        <div class="paso-nfc-dice" id="diceGrabar">Acerca el chip por detrás del teléfono.</div>
+      </li>
+
+      <li class="paso-nfc" id="pasoLeer">
+        <div class="paso-nfc-alto">
+          <span class="n n3">3</span><b>Revisa que quedó</b>
+          <button type="button" class="leer" id="leerNFC" disabled>Leer</button>
+        </div>
+        <div class="paso-nfc-dice" id="diceLeer">Vuelve a acercarlo y comprueba el link.</div>
+      </li>
+
+      <li class="paso-nfc" id="pasoSellar">
+        <div class="paso-nfc-alto">
+          <span class="n n4">4</span><b>Séllalo</b>
+          <button type="button" class="alerta" id="sellarNFC" disabled>Bloquear</button>
+        </div>
+        <div class="paso-nfc-dice" id="diceSellar">No tiene vuelta atrás: nadie podrá reescribirlo.</div>
+      </li>
+    </ol>
+
+    <div class="modal-acciones">
+      <button type="button" class="fantasma" id="saltarSello" hidden>Sin sellar, siguiente</button>
+      <button type="button" id="siguienteNFC" disabled>Siguiente pieza</button>
+    </div>
   </div>
 </div>
 
