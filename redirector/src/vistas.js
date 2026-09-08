@@ -2001,9 +2001,10 @@ $("tabla").addEventListener("click", async (e) => {
     await llamar("desactivar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ codigos: [codigo], tipo: t ? tipoDe(t) : "" }),
+      body: JSON.stringify({ codigos: [codigo], tipo: t ? tipoDe(t) : "",
+        desde: t ? t.negocio : "" }),
     });
-    parchearTarjetas([codigo], { negocio: "", destino: "", vendida: "", precio: 0 });
+    parchearTarjetas([codigo], { negocio: "", destino: "", vendida: "", precio: 0, vendedor: "" });
     avisar("avisoPanel", "Tarjeta " + codigo + " desactivada. Queda libre para reasignar.", true);
     cerrarQR();
   } catch (err) {
@@ -2289,7 +2290,9 @@ async function cargarAjustes() {
     const r = await llamar("comprobantes");
     COMPROBANTES = {};
     (r.comprobantes || []).forEach((x) => { COMPROBANTES[x.negocio] = x; });
-    pintarCuentas();
+    // repinta todo, no solo cuentas: las tablas ya se dibujaron antes de que
+    // llegaran los comprobantes, así que los cerrojos no se veían hasta tocar algo
+    repintarTodo();
   } catch (e) {
     avisar("avisoPanel", e.message, false);
   }
