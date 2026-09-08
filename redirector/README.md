@@ -264,9 +264,23 @@ entonces se acepta o se cancela:
 | **Aceptada** | pagó: lleva fecha e importe | ocupadas |
 | *(cancelada)* | no pagó | **libres otra vez**, listas para la siguiente orden |
 
-**Nueva orden** pide, por cada tipo, **desde qué número** y **cuántas**. El número
-inicial viene puesto con la primera tarjeta libre, así que dejarlo como está se
-comporta como antes; se cambia cuando vas a entregar unas piezas concretas.
+**Nueva orden** se abre con la cámara puesta. En la puerta de un local lo primero
+es escanear la pieza que vas a dejar y pegar el link de su ficha; el nombre sale
+solo de la URL. Ese es el formulario, en ese orden:
+
+1. **Qué piezas lleva** — la cámara ya está abierta, escaneas una tras otra
+2. **A qué local apunta** — pegas el link y se lee solo, sin darle a ningún botón
+3. **Nombre del negocio** — puesto por el link
+4. **O tómalas por número** — solo aparece si no escaneaste nada
+
+Abrirse con el teclado sobre «cuántos acrílicos» pedía el dato que menos importa:
+con las piezas escaneadas la orden es exactamente esa lista, y el bloque de
+números se retira de la vista.
+
+El bloque de números pide, por cada tipo, **desde qué número** y **cuántas**. El
+número inicial viene puesto con la primera tarjeta libre, así que dejarlo como
+está se comporta como antes; se cambia cuando vas a entregar unas piezas
+concretas.
 
 El bloque tiene que estar **libre entero**. Si dentro hay una ocupada, o el bloque
 se sale de su tipo, el resumen lo dice con el número exacto y no deja guardar:
@@ -424,7 +438,14 @@ número de esa pieza en su casilla —acrílico o vinilo, según lo que sea— y
 está libre o de quién es.
 
 Usa `BarcodeDetector`, que trae Chrome de Android sin librería de por medio. Donde
-no está —Safari de iPhone, hoy— lo dice y no rompe nada.
+no está —Safari de iPhone, hoy— el botón se queda como estaba y la cámara no se
+abre sola: abrirla para soltar un error nada más entrar no ayuda a nadie.
+
+**La cámara no se cierra entre pieza y pieza.** Una orden son varias del mismo
+montón, y un toque por pieza sobraba. El guardián es el código anterior: mientras
+el QR a la vista sea el mismo no se vuelve a leer, así que apuntar a la siguiente
+es todo lo que hay que hacer. Quien atiende la lectura decide si sigue o cierra
+—grabar chips cierra, porque ahí se trabaja de una en una—.
 
 **Dentro de una orden se van juntando.** El montón casi nunca está en orden, así
 que escanear pieza por pieza arma la orden con **esas** exactamente, sin rangos:
@@ -434,6 +455,10 @@ se apagan mientras haya lista. El resumen las enumera en vez de fingir un tramo.
 Con lista, `planDelLocal` no calcula bloques: toma las escaneadas que no tenía y
 suelta las que tenía y ya no están. Si alguna es de otro local, lo dice y no deja
 guardar.
+
+**Pegar el link ya es la orden de leerlo.** Nadie pega media URL, así que el
+campo de Maps se analiza solo al pegar; «Leer la URL» sigue ahí para cuando se
+escribe a mano.
 
 ### El link corto de la app de Maps
 

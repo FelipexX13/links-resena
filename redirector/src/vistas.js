@@ -1314,6 +1314,7 @@ function nombreTipo(tipo, n) {
 function pintarResumenLocal() {
   const plan = planDelLocal();
   const caja = $("localResumen");
+  caja.hidden = false;
 
   if (plan.falta.length) { caja.textContent = "No alcanza — " + plan.falta.join(" · "); return; }
 
@@ -1333,12 +1334,13 @@ function pintarResumenLocal() {
   });
 
   if (!partes.length) {
+    // en una orden recién abierta el botón ya dice qué hacer: repetirlo aquí
+    // sería un recuadro de color para no decir nada
+    caja.hidden = !plan.base && !plan.sueltas;
     caja.textContent = plan.base
       ? plan.base.negocio + " ya tiene esas piezas: " +
         nombreTipo("acrilico", plan.base.acrilico) + " y " + nombreTipo("sticker", plan.base.sticker)
-      : (plan.sueltas
-        ? "Sigue escaneando piezas para la orden."
-        : "Escribe cuántos acrílicos y cuántos stickers lleva la orden.");
+      : "Sigue escaneando piezas para la orden.";
     return;
   }
 
@@ -1709,7 +1711,7 @@ $("vaciarPiezas").onclick = () => {
 
 function usarQR(texto) {
   const codigo = codigoDeQR(texto);
-  cerrarCamara();
+  if (MODO !== "local") cerrarCamara();
   if (!codigo) { decirEscaneo("Ese QR no trae ningún código.", true); return; }
 
   const t = TARJETAS.filter((x) => x.codigo === codigo)[0];
@@ -1769,18 +1771,29 @@ async function abrirCamara(conf) {
   try { await v.play(); } catch (e) {}
 
   leyendoQR = true;
+  let anterior = "";
   while (leyendoQR) {
     try {
       const vistos = await detector.detect(v);
-      if (vistos.length && vistos[0].rawValue) {
-        (CAMARA.alLeer || usarQR)(vistos[0].rawValue);
-        return;
+      const crudo = vistos.length ? vistos[0].rawValue : "";
+      // el mismo cartel sigue delante hasta que apuntas al siguiente: leerlo una
+      // vez basta, y quien lo atiende decide si cierra la cámara o sigue
+      if (crudo && crudo !== anterior) {
+        anterior = crudo;
+        (CAMARA.alLeer || usarQR)(crudo);
       }
     } catch (e) {
       // un fotograma ilegible no es motivo para cerrar la cámara
     }
     await new Promise((r) => setTimeout(r, 200));
   }
+}
+
+// Chrome de Android y poco más. Sin esto, abrir la cámara sola en el escritorio
+// solo serviría para soltar un error nada más entrar.
+function puedeLeerQR() {
+  return "BarcodeDetector" in window &&
+    Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 }
 
 $("escanear").onclick = () => {
@@ -1796,6 +1809,11 @@ function pintarEnlaceMaps() {
     : "https://www.google.com/maps";
 }
 
+// Pegar es inequívoco: nadie pega media URL. Un botón menos en la calle.
+$("maps").addEventListener("paste", () => {
+  setTimeout(() => { if ($("maps").value.trim()) $("analizar").click(); }, 0);
+});
+
 $("negocio").addEventListener("input", pintarEnlaceMaps);
 $("buscarLocal").addEventListener("input", pintarEnlaceMaps);
 
@@ -1803,6 +1821,9 @@ function pintarRangosSegunPiezas() {
   const hay = PIEZAS_SUELTAS.length > 0;
   ["desdeAcrilico", "nAcrilicos", "desdeSticker", "nStickers"]
     .forEach((id) => { $(id).disabled = hay; });
+  // con piezas escaneadas la orden ya está dicha; cuatro campos apagados solo
+  // estorban, así que el camino viejo se retira del todo
+  $("campoCuantas").hidden = MODO !== "local" || hay;
 }
 
 function pintarModo(valor) {
@@ -1810,7 +1831,8 @@ function pintarModo(valor) {
   marcarSegmento("modoTarjeta", MODO);
   $("campoUna").hidden = MODO !== "una";
   $("campoRango").hidden = MODO !== "rango";
-  $("campoLocal").hidden = MODO !== "local";
+  $("campoPiezas").hidden = MODO !== "local";   // de campoCuantas se encarga
+                                                // pintarRangosSegunPiezas
   $("guardar").textContent = MODO === "rango" ? "Aplicar al rango"
     : MODO === "local" ? "Crear la orden"
     : (EDITANDO_CODIGO ? "Guardar cambios" : "Activar tarjeta");
@@ -1934,7 +1956,7 @@ function abrirOrden(negocio) {
   focoTarjeta = document.activeElement;
   $("modalTarjeta").hidden = false;
   document.body.style.overflow = "hidden";
-  $("nAcrilicos").focus();
+  $("escanear").focus();
 }
 
 // La ficha es parte de lo que lleva la orden, así que se edita aquí y no en una
@@ -1951,14 +1973,17 @@ $("abrirLocal").onclick = () => {
   ponerFichaEnOrden(null);
   $("tarjetaModalKicker").textContent = "Orden";
   $("tarjetaModalTitulo").textContent = "Nueva orden";
-  $("tarjetaModalSubtitulo").textContent = "Ocupa acrílicos y stickers libres y los apunta a la ficha del local. Queda pendiente hasta que la aceptes o la canceles.";
+  $("tarjetaModalSubtitulo").textContent = "Escanea las piezas y pega el link del local. El nombre sale solo.";
   pintarModo("local");
   limpiarAviso("aviso");
   llenarLocales();
   focoTarjeta = document.activeElement;
   $("modalTarjeta").hidden = false;
   document.body.style.overflow = "hidden";
-  $("nAcrilicos").focus();
+  $("escanear").focus();
+  // el clic en "+" es el gesto que le hace falta a la cámara, así que se abre
+  // aquí mismo; donde no hay lector de QR el botón se queda como estaba
+  if (puedeLeerQR()) $("escanear").click();
 };
 
 $("cerrarTarjeta").onclick = cerrarTarjeta;
@@ -4578,45 +4603,21 @@ export function vistaAdmin(origen) {
         <button type="button" data-valor="rango">Un rango</button>
       </div>
 
-      <div id="campoLocal" hidden>
-        <label class="paso"><span class="n n1">1</span>Qué lleva la orden</label>
-        <div class="rango-fila">
-          <div>
-            <div class="mini">Acrílicos de mesa</div>
-            <div class="par">
-              <div><div class="mini2">desde el nº</div>
-                <input class="c1" id="desdeAcrilico" type="number" min="1" placeholder="1"
-                       aria-label="Acrílicos, desde qué número" autocomplete="off"></div>
-              <div><div class="mini2">cuántos</div>
-                <input class="c1" id="nAcrilicos" type="number" min="0" placeholder="2"
-                       aria-label="Cuántos acrílicos" autocomplete="off"></div>
-            </div>
-          </div>
-          <div>
-            <div class="mini">Stickers de mesa</div>
-            <div class="par">
-              <div><div class="mini2">desde el nº</div>
-                <input class="c1" id="desdeSticker" type="number" min="1" placeholder="101"
-                       aria-label="Stickers, desde qué número" autocomplete="off"></div>
-              <div><div class="mini2">cuántos</div>
-                <input class="c1" id="nStickers" type="number" min="0" placeholder="10"
-                       aria-label="Cuántos stickers" autocomplete="off"></div>
-            </div>
-          </div>
-        </div>
+      <div id="campoPiezas" hidden>
+        <label class="paso"><span class="n n1">1</span>Qué piezas lleva</label>
         <div class="modal-acciones acciones-izq sin-aire">
           <button type="button" class="leer" id="escanear">Escanear una pieza</button>
           <button type="button" class="fantasma" id="vaciarPiezas" hidden>Vaciar la lista</button>
           <span class="mini2 escaneo" id="escaneoDicho"></span>
         </div>
-        <div class="chips" id="piezasSueltas"></div>
         <div class="camara" id="camara" hidden>
           <video id="video" playsinline muted></video>
           <div class="camara-mira"></div>
           <button type="button" class="fantasma" id="cerrarCamara">Cerrar</button>
         </div>
+        <div class="chips" id="piezasSueltas"></div>
 
-        <div class="rango-resumen" id="localResumen">Escribe cuántos acrílicos y cuántos stickers lleva la orden.</div>
+        <div class="rango-resumen" id="localResumen">Escanea las piezas del montón, una tras otra.</div>
 
         <label class="casilla" id="filaLlevaFicha">
           <input type="checkbox" id="ordenLlevaFicha"> Lleva ficha de Google</label>
@@ -4686,6 +4687,35 @@ export function vistaAdmin(origen) {
 
       <label class="paso" for="negocio"><span class="n n3">3</span>Nombre del negocio</label>
       <input class="c3" id="negocio" placeholder="Mercacentro Av. Guabinal" autocomplete="off" required>
+
+      <div id="campoCuantas" hidden>
+        <label class="paso"><span class="n n4">4</span>O tómalas por número</label>
+        <p class="ayuda ayuda-alta">Solo si el montón viene en orden y no quieres escanear.</p>
+        <div class="rango-fila">
+          <div>
+            <div class="mini">Acrílicos de mesa</div>
+            <div class="par">
+              <div><div class="mini2">desde el nº</div>
+                <input class="c1" id="desdeAcrilico" type="number" min="1" placeholder="1"
+                       aria-label="Acrílicos, desde qué número" autocomplete="off"></div>
+              <div><div class="mini2">cuántos</div>
+                <input class="c1" id="nAcrilicos" type="number" min="0" placeholder="2"
+                       aria-label="Cuántos acrílicos" autocomplete="off"></div>
+            </div>
+          </div>
+          <div>
+            <div class="mini">Stickers de mesa</div>
+            <div class="par">
+              <div><div class="mini2">desde el nº</div>
+                <input class="c1" id="desdeSticker" type="number" min="1" placeholder="101"
+                       aria-label="Stickers, desde qué número" autocomplete="off"></div>
+              <div><div class="mini2">cuántos</div>
+                <input class="c1" id="nStickers" type="number" min="0" placeholder="10"
+                       aria-label="Cuántos stickers" autocomplete="off"></div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div id="bloqueTipo">
         <label class="paso"><span class="n n4">4</span>Tipo de tarjeta</label>
