@@ -1790,24 +1790,89 @@ function usarQR(texto) {
     (t.negocio ? " · ocupado por " + t.negocio : " · libre"), Boolean(t.negocio));
 }
 
+// Chrome de Android trae BarcodeDetector, que lee el QR sin descargar nada.
+// Safari del iPhone no lo tiene ni lo va a tener pronto, así que allí se baja un
+// lector suelto —una sola vez, y solo en esos teléfonos— y se le pasan los
+// fotogramas por un lienzo. De fuera las dos formas son la misma función:
+// recibe el vídeo, devuelve lo que ponga el QR o cadena vacía.
+let LECTOR_QR = null;
+let BAJANDO_LECTOR = null;
+
+function bajarLectorSuelto() {
+  if (window.jsQR) return Promise.resolve(window.jsQR);
+  if (!BAJANDO_LECTOR) {
+    BAJANDO_LECTOR = new Promise((listo, falla) => {
+      const guion = document.createElement("script");
+      guion.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js";
+      guion.onload = () => listo(window.jsQR);
+      guion.onerror = () => falla(new Error("sin conexión para bajarlo"));
+      document.head.appendChild(guion);
+    });
+  }
+  return BAJANDO_LECTOR;
+}
+
+async function lectorDeQR() {
+  if (LECTOR_QR) return LECTOR_QR;
+
+  if ("BarcodeDetector" in window) {
+    const formatos = await window.BarcodeDetector.getSupportedFormats();
+    if (formatos.indexOf("qr_code") >= 0) {
+      const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
+      LECTOR_QR = async (v) => {
+        const vistos = await detector.detect(v);
+        return vistos.length ? vistos[0].rawValue : "";
+      };
+      return LECTOR_QR;
+    }
+  }
+
+  const jsQR = await bajarLectorSuelto();
+  const lienzo = document.createElement("canvas");
+  const pincel = lienzo.getContext("2d", { willReadFrequently: true });
+  LECTOR_QR = async (v) => {
+    const ancho = v.videoWidth, alto = v.videoHeight;
+    if (!ancho || !alto) return "";
+    // a media resolución: el cartel impreso es grande y cada vuelta cuesta la
+    // mitad, que en un teléfono se nota
+    lienzo.width = Math.round(ancho / 2);
+    lienzo.height = Math.round(alto / 2);
+    pincel.drawImage(v, 0, 0, lienzo.width, lienzo.height);
+    const px = pincel.getImageData(0, 0, lienzo.width, lienzo.height);
+    // los nuestros son negros sobre claro: buscar también el negativo sería el
+    // doble de trabajo para nada
+    const visto = jsQR(px.data, px.width, px.height, { inversionAttempts: "dontInvert" });
+    return visto ? visto.data : "";
+  };
+  return LECTOR_QR;
+}
+
 async function abrirCamara(conf) {
   cerrarCamara();
   CAMARA = conf || { caja: "camara", video: "video", alLeer: null };
   const decir = CAMARA.decir || decirEscaneo;
-  if (!("BarcodeDetector" in window)) {
-    decir("Este navegador no lee QR. En Chrome de Android sí.", true);
+  if (!puedeLeerQR()) {
+    decir("Este navegador no da acceso a la cámara.", true);
     return;
   }
-  let detector;
+
+  // La cámara, lo primero. En el iPhone el permiso cuelga del toque que abrió
+  // esto, y ponerse a esperar una descarga antes se lo llevaría por delante.
   try {
-    const formatos = await window.BarcodeDetector.getSupportedFormats();
-    if (formatos.indexOf("qr_code") < 0) throw new Error("sin soporte de QR");
-    detector = new window.BarcodeDetector({ formats: ["qr_code"] });
     flujoCamara = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal: "environment" } },
     });
   } catch (e) {
     decir("No se pudo abrir la cámara: " + e.message, true);
+    cerrarCamara();
+    return;
+  }
+
+  let leerFotograma;
+  try {
+    leerFotograma = await lectorDeQR();
+  } catch (e) {
+    decir("No se pudo cargar el lector de QR: " + e.message, true);
     cerrarCamara();
     return;
   }
@@ -1821,27 +1886,30 @@ async function abrirCamara(conf) {
   leyendoQR = true;
   let anterior = "";
   while (leyendoQR) {
+    let crudo = "";
     try {
-      const vistos = await detector.detect(v);
-      const crudo = vistos.length ? vistos[0].rawValue : "";
-      // el mismo cartel sigue delante hasta que apuntas al siguiente: leerlo una
-      // vez basta, y quien lo atiende decide si cierra la cámara o sigue
-      if (crudo && crudo !== anterior) {
-        anterior = crudo;
-        (CAMARA.alLeer || usarQR)(crudo);
-      }
+      crudo = await leerFotograma(v);
     } catch (e) {
       // un fotograma ilegible no es motivo para cerrar la cámara
+    }
+    // el mismo cartel sigue delante hasta que apuntas al siguiente: leerlo una
+    // vez basta, y quien lo atiende decide si cierra la cámara o sigue
+    if (crudo && crudo !== anterior) {
+      anterior = crudo;
+      (CAMARA.alLeer || usarQR)(crudo);
     }
     await new Promise((r) => setTimeout(r, 200));
   }
 }
 
-// Chrome de Android y poco más. Sin esto, abrir la cámara sola en el escritorio
-// solo serviría para soltar un error nada más entrar.
 function puedeLeerQR() {
-  return "BarcodeDetector" in window &&
-    Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  return Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+}
+
+// En el escritorio no hay cartel que apuntar: la cámara se abre sola donde se
+// trabaja de pie, con el teléfono en la mano. En el computador el botón sigue.
+function enLaMano() {
+  return window.matchMedia && window.matchMedia("(pointer:coarse)").matches;
 }
 
 $("escanear").onclick = () => {
@@ -2022,8 +2090,8 @@ $("abrirLocal").onclick = () => {
   document.body.style.overflow = "hidden";
   $("escanear").focus();
   // el clic en "+" es el gesto que le hace falta a la cámara, así que se abre
-  // aquí mismo; donde no hay lector de QR el botón se queda como estaba
-  if (puedeLeerQR()) $("escanear").click();
+  // aquí mismo; en el computador se queda esperando al botón
+  if (puedeLeerQR() && enLaMano()) $("escanear").click();
 };
 
 $("cerrarTarjeta").onclick = cerrarTarjeta;

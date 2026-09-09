@@ -484,9 +484,31 @@ una pieza**, dentro de Nueva orden, lo hace de una: apunta al QR y deja puesto e
 número de esa pieza en su casilla —acrílico o vinilo, según lo que sea— y dice si
 está libre o de quién es.
 
-Usa `BarcodeDetector`, que trae Chrome de Android sin librería de por medio. Donde
-no está —Safari de iPhone, hoy— el botón se queda como estaba y la cámara no se
-abre sola: abrirla para soltar un error nada más entrar no ayuda a nadie.
+#### Los dos lectores
+
+Chrome de Android trae `BarcodeDetector` y lee el QR sin descargar nada. Safari
+del iPhone no lo tiene, y ahí no había escaneo: el botón decía «este navegador no
+lee QR» y se acabó.
+
+Ahora, cuando falta, se baja [jsQR](https://github.com/cozmo/jsQR) —una vez, y
+solo en esos teléfonos— y se le pasan los fotogramas por un lienzo. De fuera las
+dos formas son la misma función: recibe el vídeo y devuelve lo que ponga el QR.
+Android no descarga nada de más.
+
+Tres detalles que hacen que funcione en el iPhone:
+
+- **La cámara se pide primero, antes de bajar el lector.** El permiso cuelga del
+  toque que abrió la ventana, y ponerse a esperar una descarga en medio se lo
+  lleva por delante.
+- **El fotograma se lee a media resolución.** El cartel impreso es grande, se
+  decodifica igual, y cada vuelta cuesta la mitad —que en un teléfono se nota—.
+- **`inversionAttempts: "dontInvert"`.** Los nuestros son negros sobre claro;
+  buscar también el negativo sería el doble de trabajo para nada.
+
+**La cámara se abre sola solo donde se trabaja de pie.** Antes el gatillo era
+«¿hay `BarcodeDetector`?», que de paso dejaba fuera el escritorio. Ahora que
+cualquier navegador lee QR, el gatillo es `(pointer:coarse)`: en el computador no
+hay cartel que apuntar, así que el botón se queda esperando.
 
 **La cámara no se cierra entre pieza y pieza.** Una orden son varias del mismo
 montón, y un toque por pieza sobraba. El guardián es el código anterior: mientras
