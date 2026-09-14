@@ -436,14 +436,20 @@ aquí.
 **El correo decide, y no hay que pulsar nada más.** Cobrar y mandar el
 comprobante son el mismo gesto:
 
+**Aceptar es cobrar**, así que de ahí en adelante la orden no se toca. Las dos
+salidas cierran:
+
 | El campo de correo | Al aceptar la orden |
 |---|---|
-| Tiene correo | se guarda la venta **y** sale el comprobante —y la orden queda cerrada— |
-| Está vacío | se guarda la venta y ya; la orden sigue abierta |
+| Tiene correo | se guarda la venta, sale el comprobante y queda `r:<negocio>` con a quién se mandó |
+| Está vacío | se guarda la venta y queda el mismo cerrojo sin correo: «cerrada sin comprobante» |
 
-El botón lo dice antes de hacerlo —*Aceptar y enviar* en vez de *Aceptar la
-orden*—, porque mandar el comprobante cierra la orden y eso no se deshace sin
-borrarlo.
+Que el cliente no quiera papel no cambia que pagó. Para volver a tocarla hay que
+entrar al **Cobro** y borrar el cerrojo, que es la única puerta que sigue abierta
+en esa fila.
+
+El botón avisa de la parte que no es obvia —*Aceptar y enviar* en vez de *Aceptar
+la orden*—, porque el correo sale de verdad y eso no se deshace.
 
 Si el envío falla —sin señal, Brevo caído— **la venta ya quedó guardada** y la
 ventana se queda abierta con el error: el mismo botón vuelve a intentarlo.
@@ -610,12 +616,10 @@ El papel ya está en manos del cliente, así que a partir de ahí **no se toca
 nada**: ni el link, ni el chip NFC, ni los precios, ni las piezas. Se guarda un
 `r:<negocio>` con a quién se mandó y cuándo, y eso hace de cerrojo.
 
-Hay clientes que pagan pero no quieren papel. Para esos existía *Cerrar sin
-enviar*, que guardaba el mismo registro sin correo y dejaba la fila diciendo
-«cerrada sin comprobante». **Ese botón ya no está**: al unificar el cobro en un
-solo gesto se quedó sin puerta. El endpoint `comprobante-cerrar` y la función
-`cerrarSinComprobante()` siguen ahí, sin nadie que los llame, por si hay que
-devolverlo.
+Hay clientes que pagan pero no quieren papel. Esos cierran igual, por
+`comprobante-cerrar`: el mismo registro sin correo, y la fila lo dice «cerrada
+sin comprobante». No hace falta pulsar nada —ya no existe *Cerrar sin enviar*—:
+lo dispara el propio aceptar cuando el campo de correo está vacío.
 
 En la tabla de tarjetas, las de ese local se quedan con **NFC**, **Editar** y
 **Desactivar** apagados; el **QR** sigue, que mirarlo no cambia nada. En órdenes

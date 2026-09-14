@@ -3477,11 +3477,10 @@ async function recordarComprador(negocio, correo, nit, telefono) {
   }
 }
 
-// PENDIENTE: sin botón que lo llame. Cerrar una orden pagada sin comprobante
-// —el cliente no quiso papel— dejó de tener puerta al unificar el cobro en un
-// solo gesto. El endpoint del Worker sigue ahí por si hay que devolverlo.
+// El cliente pagó pero no quiso papel. Se guarda el mismo cerrojo, sin correo, y
+// la fila lo dice: «cerrada sin comprobante».
 async function cerrarSinComprobante() {
-  if (!LOCAL_VENTA) return;
+  if (!LOCAL_VENTA) return false;
   const negocio = LOCAL_VENTA.negocio;
   try {
     const p = preciosDeLaVenta();
@@ -3500,9 +3499,10 @@ async function cerrarSinComprobante() {
     COMPROBANTES[negocio] = Object.assign({ negocio: negocio }, r.comprobante);
     pintarBloqueoVenta(negocio);
     repintarTodo();
-    avisar("avisoPanel", "Orden de " + negocio + " cerrada sin comprobante", true);
+    return true;
   } catch (err) {
     avisar("avisoVenta", err.message, false);
+    return false;
   }
 }
 
@@ -4195,13 +4195,16 @@ $("formVenta").onsubmit = async (e) => {
     }
     if (fichaNueva) parchearServicio(fichaNueva.id, fichaNueva);
     avisar("avisoPanel", "Orden de " + l.negocio + " aceptada · " + dinero(importe), true);
-    // El correo decide. Puesto, el comprobante sale en el mismo gesto; vacío, la
-    // orden se acepta y ya. Preguntarlo después era un botón y una pregunta para
-    // algo que el propio campo ya contesta.
-    if (correoCliente && !cerrada(l.negocio)) {
-      // si el envío falla, la venta ya está guardada y el error queda a la
-      // vista: el mismo botón vuelve a intentarlo
-      const fue = await enviarComprobante(boton);
+    // Aceptar es cobrar: de aquí en adelante la orden no se toca. Con correo sale
+    // el comprobante y eso mismo la cierra; sin correo se cierra igual, porque el
+    // cliente pagó aunque no quisiera papel.
+    //
+    // Si falla —sin señal, Brevo caído— la venta ya está guardada y el error queda
+    // a la vista: el mismo botón vuelve a intentarlo.
+    if (!cerrada(l.negocio)) {
+      const fue = correoCliente
+        ? await enviarComprobante(boton)
+        : await cerrarSinComprobante();
       if (!fue) return;
     }
     cerrarVenta();
