@@ -505,6 +505,9 @@ const ESTILOS = `
   .casilla input{width:18px;height:18px;flex:0 0 auto;padding:0;margin:0;
     accent-color:var(--azul);cursor:pointer}
   .rango-fila{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+  /* con un solo tipo de pieza, el campo ocupa el ancho entero en vez de dejar
+     media fila vacía al lado */
+  #bloquePiezas.solo-uno{grid-template-columns:1fr}
   .rango-fila[hidden]{display:none}
   #rangoOrden{margin-top:14px}
   button.alerta{background:var(--ambar);color:#4a3400}
@@ -3518,39 +3521,6 @@ $("cerrarSinEnviar").onclick = async () => {
   }
 };
 
-$("bajarComprobante").onclick = () => {
-  try {
-    const d = datosDelComprobante();
-    if (!d) return;
-    comprobantePDF(d).doc.save(nombreArchivo(d.negocio, d.fecha));
-  } catch (err) {
-    avisar("avisoVenta", err.message, false);
-  }
-};
-
-// En el teléfono el menú nativo de compartir sí puede meter el PDF en WhatsApp;
-// wa.me solo lleva texto, así que ese es el plan de repuesto.
-$("compartirComprobante").onclick = async () => {
-  try {
-    const d = datosDelComprobante();
-    if (!d) return;
-    const hecho = comprobantePDF(d);
-    const archivo = new File([hecho.doc.output("blob")], nombreArchivo(d.negocio, d.fecha),
-      { type: "application/pdf" });
-    const texto = "Comprobante de venta · " + d.negocio + " · " + dinero(hecho.total);
-    if (navigator.canShare && navigator.canShare({ files: [archivo] })) {
-      await navigator.share({ files: [archivo], title: "Comprobante de venta", text: texto });
-      return;
-    }
-    hecho.doc.save(nombreArchivo(d.negocio, d.fecha));
-    window.open("https://wa.me/?text=" + encodeURIComponent(texto +
-      " — te lo adjunto en este chat."), "_blank", "noopener");
-  } catch (err) {
-    if (err && err.name === "AbortError") return;
-    avisar("avisoVenta", err.message, false);
-  }
-};
-
 async function enviarComprobante(boton) {
   const correo = $("ventaCorreo").value.trim();
   if (!correo) {
@@ -3946,7 +3916,8 @@ function abrirVenta(negocio) {
   LOCAL_VENTA = l;
   $("ventaTitulo").textContent = l.vendidas ? "Editar el cobro" : "Aceptar la orden";
   $("ventaSubtitulo").textContent = l.negocio + " · " + (l.piezas
-    ? plural(l.acrilico, "acrílico", "acrílicos") + " y " + plural(l.sticker, "sticker", "stickers")
+    ? [l.acrilico ? plural(l.acrilico, "acrílico", "acrílicos") : "",
+       l.sticker ? plural(l.sticker, "sticker", "stickers") : ""].filter(Boolean).join(" y ")
     : "sin tarjetas") + (l.ficha ? " · ficha de Google" : "");
   $("ventaFecha").value = l.fecha || hoyISO();
   const unitario = (tipo) => {
@@ -3957,8 +3928,13 @@ function abrirVenta(negocio) {
   $("precioAcrilico").value = unitario("acrilico") || (l.acrilico ? PRECIOS.acrilico : "");
   $("precioSticker").value = unitario("sticker") || (l.sticker ? precioSticker(l.sticker) : "");
   pintarChips();
-  // un local puede no tener plástico y llevar solo la ficha
+  // El cobro pregunta por lo que la orden lleva y por nada más: un campo de
+  // ficha en una orden sin ficha es una invitación a cobrarla por error.
+  $("bloqueAcrilico").hidden = !l.acrilico;
+  $("bloqueSticker").hidden = !l.sticker;
   $("bloquePiezas").hidden = !l.piezas;
+  $("bloquePiezas").classList.toggle("solo-uno",
+    Boolean(l.acrilico) !== Boolean(l.sticker));
   // los regalados son los vinilos cobrados a cero; si no se ha cobrado, ninguno
   const regalados = TARJETAS.filter((x) => x.negocio === l.negocio && tipoDe(x) === "sticker" &&
     x.vendida && !Number(x.precio)).length;
@@ -3968,6 +3944,7 @@ function abrirVenta(negocio) {
   $("ventaGratis").hidden = !l.sticker;
   $("precioFicha").value = l.ficha && l.ficha.precio ? l.ficha.precio
     : (l.ficha ? PRECIOS.ficha : "");
+  $("bloqueFicha").hidden = !l.ficha;
   $("guardarVenta").textContent = l.vendidas ? "Guardar el cobro" : "Aceptar la orden";
   const comp = COMPRADORES[l.negocio] || {};
   $("ventaCorreo").value = comp.correo || "";
@@ -3980,7 +3957,7 @@ function abrirVenta(negocio) {
   focoVenta = document.activeElement;
   $("modalVenta").hidden = false;
   document.body.style.overflow = "hidden";
-  $("precioAcrilico").focus();
+  $(l.acrilico ? "precioAcrilico" : (l.sticker ? "precioSticker" : "precioFicha")).focus();
 }
 
 // La lista de precios de la publicidad. El vinilo baja por cantidad, así que el
@@ -4104,11 +4081,9 @@ function pintarResumenVenta() {
   const l = LOCAL_VENTA;
   const p = preciosDeLaVenta();
   const partes = [];
-  if (l.piezas) {
-    partes.push(l.acrilico + " × " + dinero(p.acrilico));
-    partes.push((l.sticker - p.gratis) + " × " + dinero(p.sticker));
-    if (p.gratis) partes.push(p.gratis + " de regalo");
-  }
+  if (l.acrilico) partes.push(l.acrilico + " × " + dinero(p.acrilico));
+  if (l.sticker - p.gratis > 0) partes.push((l.sticker - p.gratis) + " × " + dinero(p.sticker));
+  if (p.gratis) partes.push(p.gratis + " de regalo");
   if (p.ficha) partes.push("ficha " + dinero(p.ficha));
   const total = p.acrilico * l.acrilico + p.sticker * (l.sticker - p.gratis) + p.ficha;
   $("ventaResumen").textContent = (partes.join("   +   ") || "sin nada que cobrar") +
@@ -5225,10 +5200,10 @@ export function vistaAdmin(origen) {
       <input id="ventaFecha" type="date">
 
       <div class="rango-fila" id="bloquePiezas">
-        <div><label class="mini" for="precioAcrilico">Precio por acrílico</label>
+        <div id="bloqueAcrilico"><label class="mini" for="precioAcrilico">Precio por acrílico</label>
           <input id="precioAcrilico" type="number" min="0" step="1" placeholder="0" autocomplete="off">
           <div class="chips" id="chipsAcrilico"></div></div>
-        <div><label class="mini" for="precioSticker">Precio por sticker</label>
+        <div id="bloqueSticker"><label class="mini" for="precioSticker">Precio por sticker</label>
           <input id="precioSticker" type="number" min="0" step="1" placeholder="0" autocomplete="off">
           <div class="chips" id="chipsSticker"></div></div>
       </div>
@@ -5237,10 +5212,11 @@ export function vistaAdmin(origen) {
         <span class="suave">(los que sacó en la ruleta)</span></label>
       <input id="ventaGratis" type="number" min="0" step="1" value="0" autocomplete="off">
 
-      <label class="mini" for="precioFicha">Ficha de Google
-        <span class="suave">(vacío si no lleva)</span></label>
-      <input id="precioFicha" type="number" min="0" step="1" placeholder="0" autocomplete="off">
-      <div class="chips" id="chipsFicha"></div>
+      <div id="bloqueFicha">
+        <label class="mini" for="precioFicha">Ficha de Google</label>
+        <input id="precioFicha" type="number" min="0" step="1" placeholder="0" autocomplete="off">
+        <div class="chips" id="chipsFicha"></div>
+      </div>
       <div class="rango-resumen" id="ventaResumen"></div>
 
       <label class="mini" for="ventaCorreo">Correo del cliente</label>
@@ -5268,8 +5244,6 @@ export function vistaAdmin(origen) {
         <button type="button" data-valor="alexander">Alexander</button>
       </div>
       <div class="modal-acciones acciones-izq">
-        <button type="button" class="fantasma" id="bajarComprobante">Descargar PDF</button>
-        <button type="button" class="fantasma" id="compartirComprobante">Compartir</button>
         <button type="button" class="leer" id="mandarComprobante">Enviar al correo</button>
         <button type="button" class="fantasma" id="cerrarSinEnviar">Cerrar sin enviar</button>
       </div>

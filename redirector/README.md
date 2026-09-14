@@ -439,14 +439,24 @@ se cierra**: si hay correo del cliente, pregunta ahí mismo si mandarlo, con
 y sin la pregunta tocaba volver a entrar al cobro. Sin correo guardado, se cierra
 como siempre.
 
-| Botón | Qué hace |
-|---|---|
-| **Descargar PDF** | lo baja al equipo |
-| **Compartir** | en el teléfono abre el menú nativo con el PDF adjunto —de ahí a WhatsApp—; en el escritorio lo descarga y abre `wa.me` con el texto |
-| **Enviar al correo** | lo manda como adjunto desde `greview641@gmail.com` |
+El comprobante sale por una sola puerta: **Enviar al correo**, que lo manda como
+adjunto desde `greview641@gmail.com`. Hubo también *Descargar PDF* y *Compartir*
+—el menú nativo del teléfono, para meterlo en WhatsApp— y se quitaron por no
+usarse: tres botones para una cosa que siempre se hace igual.
 
 El correo y el NIT del local quedan guardados en `b:<negocio>`, así que la
 siguiente vez salen puestos.
+
+### El cobro solo pregunta por lo que la orden lleva
+
+Los campos de acrílico, vinilo y ficha aparecen según lo que tenga la orden. Un
+campo de ficha en una orden sin ficha es una invitación a cobrarla por error, y
+el rotulito de *«vacío si no lleva»* era la señal de que sobraba.
+
+Con un solo tipo de pieza el campo ocupa el ancho entero en vez de dejar media
+fila vacía al lado, el foco entra en el primero que exista, y el resumen y el
+subtítulo tampoco cuentan lo que hay cero: *«0 acrílicos y 2 stickers»* gastaba
+tres palabras en decir nada.
 
 ### La lista de precios
 
