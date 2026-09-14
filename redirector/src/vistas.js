@@ -1131,10 +1131,10 @@ function analizarMaps(crudo) {
 
   const cd = url.match(/(?:[?&](?:lu)?cid=)(\d{5,})/i);
   if (cd) {
-    return { error: "Esa URL solo trae el CID, no el identificador completo. Abre la ficha del negocio en Google Maps y copia la URL larga, o pega su Place ID." };
+    return { error: "Esa URL solo trae el CID, no el identificador completo. Abre el sitio del negocio en Google Maps y copia la URL larga, o pega su Place ID." };
   }
 
-  return { error: "No se encontró el identificador del negocio en esa URL. Abre su ficha en Google Maps (clic en el nombre del lugar) y copia la URL completa, o pega el Place ID del buscador." };
+  return { error: "No se encontró el identificador del negocio en esa URL. Abre su sitio en Google Maps (clic en el nombre del lugar) y copia la URL completa, o pega el Place ID del buscador." };
 }
 
 // Un local que ya está en el sistema tiene su link guardado. Volver a pegar la
@@ -1243,7 +1243,7 @@ $("analizar").onclick = async () => {
   const r = analizarMaps(crudo);
   if (r.corto) {
     $("ficha").hidden = true;
-    avisar("aviso", "Ese link corto no llevó a una ficha con identificador.", false);
+    avisar("aviso", "Ese link corto no llevó a un sitio con identificador.", false);
     return;
   }
   if (r.error) {
@@ -1565,7 +1565,7 @@ $("formTarjeta").onsubmit = async (e) => {
       if (!aTomar && !aSoltar && !fichaCambia) {
         avisar("aviso", plan.base
           ? "Esa orden ya tiene esas piezas. Cambia algo antes de guardar."
-          : "Escribe cuántas piezas lleva la orden, o márcale la ficha.", false);
+          : "Escribe cuántas piezas lleva la orden, o márcale el sitio.", false);
         return;
       }
 
@@ -1611,7 +1611,7 @@ $("formTarjeta").onsubmit = async (e) => {
       let fichaNueva = null;
       let fichaFuera = null;
       if (fichaCambia) {
-        boton.textContent = "Guardando la ficha…";
+        boton.textContent = "Guardando el sitio…";
         if (lleva) {
           fichaNueva = await llamar("servicio", {
             method: "POST",
@@ -1653,8 +1653,8 @@ $("formTarjeta").onsubmit = async (e) => {
       const cola = [];
       if (aTomar) cola.push(plural(aTomar, "tarjeta ocupada", "tarjetas ocupadas"));
       if (aSoltar) cola.push(plural(aSoltar, "tarjeta liberada", "tarjetas liberadas"));
-      if (fichaNueva) cola.push("ficha de Google");
-      if (fichaFuera) cola.push("ficha quitada");
+      if (fichaNueva) cola.push("sitio en Google Maps");
+      if (fichaFuera) cola.push("sitio quitado");
       avisar("avisoPanel", "Orden de " + $("negocio").value +
         (plan.base ? " actualizada · " : " creada · ") + cola.join(" y "), true);
       return;
@@ -2738,7 +2738,7 @@ function pintarVentas() {
         "<button type='button' data-ver-todas>Ver todas</button></div>"
       : "<div class='vacio'><h2>Todavía no hay órdenes</h2>" +
         "<p>Crea una orden para un local: sus tarjetas quedan ocupadas y apuntando a su " +
-        "ficha de Google, listas para la visita.</p>" +
+        "sitio en Google Maps, listas para la visita.</p>" +
         "<button type='button' data-local>Crear una orden</button></div>";
     return;
   }
@@ -2762,7 +2762,7 @@ function pintarVentas() {
            l.sticker ? plural(l.sticker, "sticker", "stickers") : ""]
           .filter(Boolean).join(" · ")
         : "<span class='sin-dato'>sin tarjetas</span>") +
-      (f ? "<div class='fila-num'>ficha de Google" +
+      (f ? "<div class='fila-num'>sitio en Google Maps" +
         (f.precio ? " · " + dinero(f.precio) : "") + "</div>" : "") +
       "</td>" +
       "<td class='quien'>" + (l.vendedores.length
@@ -2773,7 +2773,7 @@ function pintarVentas() {
         : "estado-pendiente'>Pendiente") +
       "</span>" + (l.cobrado && piezas && l.vendidas < piezas
         ? "<div class='fila-num'>" + l.vendidas + " de " + piezas + " piezas</div>" : "") +
-      (f && !f.hecha ? "<div class='fila-num'>ficha sin publicar</div>" : "") +
+      (f && !f.hecha ? "<div class='fila-num'>sitio sin publicar</div>" : "") +
       (cerrada(l.negocio) ? "<div class='fila-num'>" +
         (COMPROBANTES[l.negocio].sinEnviar ? "cerrada sin comprobante" : "comprobante enviado") +
         "</div>" : "") +
@@ -3255,7 +3255,7 @@ $("tablaLocales").addEventListener("click", async (e) => {
     // la fila seguía viva y cobrada, y con Cancelar apagado no había cómo
     // limpiarla.
     if (l.ficha) {
-      c.textContent = "Quitando la ficha…";
+      c.textContent = "Quitando el sitio…";
       await llamar("servicio-borrar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -3313,7 +3313,7 @@ function itemsDelLocal(l, precios) {
     ? precios.ficha
     : (l.ficha ? Number(l.ficha.precio) || 0 : 0);
   if (ficha) {
-    items.push({ que: "Montaje de la ficha del negocio en Google",
+    items.push({ que: "Creación del sitio del negocio en Google Maps",
       cuantos: 1, unitario: ficha, antes: LISTA.ficha });
   }
   return items;
@@ -3903,7 +3903,7 @@ function abrirVenta(negocio) {
   $("ventaSubtitulo").textContent = l.negocio + " · " + (l.piezas
     ? [l.acrilico ? plural(l.acrilico, "acrílico", "acrílicos") : "",
        l.sticker ? plural(l.sticker, "sticker", "stickers") : ""].filter(Boolean).join(" y ")
-    : "sin tarjetas") + (l.ficha ? " · ficha de Google" : "");
+    : "sin tarjetas") + (l.ficha ? " · sitio en Google Maps" : "");
   $("ventaFecha").value = l.fecha || hoyISO();
   const unitario = (tipo) => {
     const t = TARJETAS.filter((x) => x.negocio === l.negocio && tipoDe(x) === tipo && x.precio)[0];
@@ -4082,7 +4082,7 @@ function pintarResumenVenta() {
   if (l.acrilico) partes.push(l.acrilico + " × " + dinero(p.acrilico));
   if (l.sticker - p.gratis > 0) partes.push((l.sticker - p.gratis) + " × " + dinero(p.sticker));
   if (p.gratis) partes.push(p.gratis + " de regalo");
-  if (p.ficha) partes.push("ficha " + dinero(p.ficha));
+  if (p.ficha) partes.push("sitio " + dinero(p.ficha));
   const total = p.acrilico * l.acrilico + p.sticker * (l.sticker - p.gratis) + p.ficha;
   $("ventaResumen").textContent = (partes.join("   +   ") || "sin nada que cobrar") +
     "   =   " + dinero(total);
@@ -4166,7 +4166,7 @@ $("formVenta").onsubmit = async (e) => {
     // la borra —para eso está Quitar en su ventana—, solo la deja como estaba.
     let fichaNueva = null;
     if (precios.ficha) {
-      boton.textContent = "Cobrando la ficha…";
+      boton.textContent = "Cobrando el sitio…";
       const previa = l.ficha || {};
       fichaNueva = await llamar("servicio", {
         method: "POST",
@@ -4874,12 +4874,12 @@ export function vistaAdmin(origen) {
         <div class="rango-resumen" id="localResumen">Escanea las piezas del montón, una tras otra.</div>
 
         <label class="casilla" id="filaLlevaFicha">
-          <input type="checkbox" id="ordenLlevaFicha"> Lleva ficha de Google</label>
+          <input type="checkbox" id="ordenLlevaFicha"> Crear sitio en Google Maps</label>
         <div id="detalleFicha" hidden>
           <p class="mini2 sin-aire">Su precio va con el de las piezas, al aceptar la orden.</p>
           <label class="casilla"><input type="checkbox" id="ordenFichaHecha">
             Ya está publicada</label>
-          <label class="mini sobre-buscador" for="ordenFichaNotas">Notas de la ficha</label>
+          <label class="mini sobre-buscador" for="ordenFichaNotas">Notas del sitio</label>
           <input id="ordenFichaNotas" type="text" maxlength="200"
                  placeholder="Faltan las fotos del local" autocomplete="off">
         </div>
@@ -5211,7 +5211,7 @@ export function vistaAdmin(origen) {
       <input id="ventaGratis" type="number" min="0" step="1" value="0" autocomplete="off">
 
       <div id="bloqueFicha">
-        <label class="mini" for="precioFicha">Ficha de Google</label>
+        <label class="mini" for="precioFicha">Crear sitio en Google Maps</label>
         <input id="precioFicha" type="number" min="0" step="1" placeholder="0" autocomplete="off">
         <div class="chips" id="chipsFicha"></div>
       </div>

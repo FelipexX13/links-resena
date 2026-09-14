@@ -168,7 +168,7 @@ Dos detalles de maquetación que costaron un intento cada uno:
 ### Editar no puede borrar la venta
 
 El endpoint `rango` reescribe el registro entero de cada tarjeta, así que **lo
-que no se manda se borra**. Reapuntar una orden ya cobrada a otra ficha le
+que no se manda se borra**. Reapuntar una orden ya cobrada a otro sitio le
 vaciaba la fecha, el precio y el vendedor; y como el panel solo parcheaba
 `negocio`, `destino` y `tipo`, la plata seguía en pantalla y solo desaparecía al
 refrescar.
@@ -300,12 +300,12 @@ entonces se acepta o se cancela:
 
 | Estado | Qué significa | Las tarjetas |
 |---|---|---|
-| **Pendiente** | creada, sin respuesta del local | ocupadas y apuntando a su ficha |
+| **Pendiente** | creada, sin respuesta del local | ocupadas y apuntando a su sitio |
 | **Aceptada** | pagó: lleva fecha e importe | ocupadas |
 | *(cancelada)* | no pagó | **libres otra vez**, listas para la siguiente orden |
 
 **Nueva orden** se abre con la cámara puesta. En la puerta de un local lo primero
-es escanear la pieza que vas a dejar y pegar el link de su ficha; el nombre sale
+es escanear la pieza que vas a dejar y pegar el link de su sitio; el nombre sale
 solo de la URL. Ese es el formulario, en ese orden:
 
 1. **Qué piezas lleva** — la cámara ya está abierta, escaneas una tras otra
@@ -324,7 +324,7 @@ las dos únicas salidas, y un «Cancelar» al pie era una tercera que decía lo 
 que la ✕.
 
 **El campo del link va en azul.** De todo el formulario es el que decide a qué
-ficha apuntan las tarjetas, y tenía el mismo gris que los demás. Ahora se ve de
+sitio apuntan las tarjetas, y tenía el mismo gris que los demás. Ahora se ve de
 lejos y no se confunde con el buscador de locales que lleva encima.
 
 Lo que se quitó por el camino, todo por la misma razón —decía dos veces lo
@@ -335,7 +335,7 @@ mismo—:
 | el chip «Orden» sobre el título | en el propio título: «Orden de Panadería El Trigal» |
 | el párrafo de explicación | en los rótulos de cada paso |
 | el desplegable de locales | en el buscador de arriba, que enseña las coincidencias al escribir |
-| el resumen de piezas escaneadas | en las fichas de arriba, que ya listan los códigos |
+| el resumen de piezas escaneadas | en los chips de arriba, que ya listan los códigos |
 | el enlace al buscador de Place ID | en ningún sitio: era una herramienta de desarrollo |
 | «Cancelar» al pie | en la ✕ de la cabecera |
 
@@ -394,39 +394,42 @@ sobre la fecha, y sale gratis.
 El estado de la orden tampoco se guarda, se deduce: **con destino y sin `vendida`
 es pendiente; con `vendida` es aceptada; sin destino la tarjeta está libre.**
 
-### La ficha de Google, la venta que no es una tarjeta
+### El sitio en Google Maps, la venta que no es una tarjeta
 
 Hay locales que además piden que les **montemos su sitio en Google**: fotos,
 horarios, datos. Eso se cobra aparte y no cuelga de ningún plástico, así que es
 la única excepción a lo de arriba: vive en su propia clave, `s:<id>`, con el
-nombre del local, el precio, la fecha del cobro y si ya está publicada.
+nombre del local, el precio, la fecha del cobro y si ya está publicado.
+
+En el panel se llama **Crear sitio en Google Maps**. Por dentro sigue siendo un
+`servicio` y su clave `s:<id>`: renombrar el código no le arregla nada a nadie.
 
 Se une a la orden por el **nombre del negocio**, el mismo con el que se agrupan
 las tarjetas. Consecuencia a tener presente: si le cambias el nombre al local en
-las tarjetas, la ficha se queda con el viejo y aparece como una fila aparte.
+las tarjetas, el sitio se queda con el viejo y aparece como una fila aparte.
 
 Sigue la misma regla que una tarjeta para contar como ingreso: **sin fecha es un
 trato hablado, no plata**.
 
-**No tiene ventana propia.** La ficha es una cosa más de las que lleva la orden,
+**No tiene ventana propia.** El sitio es una cosa más de las que lleva la orden,
 así que se marca en **Orden** —junto a cuántos acrílicos y cuántos stickers—, con
 su casilla de «ya está publicada» y sus notas. Y se cobra en **Aceptar**, en la
 misma fila que el resto y con la misma fecha, saliendo en el mismo comprobante.
 Dejar el precio vacío al cobrar no la borra: la deja como estaba. Para quitarla,
 se desmarca la casilla en Orden.
 
-Un local puede tener ficha sin comprar una sola tarjeta: su fila sale con «sin
+Un local puede pedir el sitio sin comprar una sola tarjeta: su fila sale con «sin
 tarjetas» y los tres botones sirven igual, porque la orden existe aunque no haya
 plástico.
 
-**Cancelar se la lleva.** La ficha es parte de la orden, así que si el local no
-paga, se va con el resto. Antes solo liberaba tarjetas y dejaba la ficha cobrada:
+**Cancelar se lo lleva.** El sitio es parte de la orden, así que si el local no
+paga, se va con el resto. Antes solo liberaba tarjetas y dejaba el sitio cobrado:
 la fila seguía viva, en verde, y con Cancelar apagado no había cómo limpiarla.
 
 ## Comprobante de venta
 
 Al cerrar el cobro, el modal de la venta saca un **comprobante de venta** en PDF
-con los ítems de esa orden —acrílicos, stickers y la ficha de Google— y lo manda
+con los ítems de esa orden —acrílicos, stickers y el sitio en Google Maps— y lo manda
 al correo del cliente.
 
 **A propósito no es una factura.** No lleva numeración consecutiva, ni CUFE, ni
@@ -468,8 +471,8 @@ siguiente vez salen puestos.
 
 ### El cobro solo pregunta por lo que la orden lleva
 
-Los campos de acrílico, vinilo y ficha aparecen según lo que tenga la orden. Un
-campo de ficha en una orden sin ficha es una invitación a cobrarla por error, y
+Los campos de acrílico, vinilo y sitio aparecen según lo que tenga la orden. Un
+campo de sitio en una orden que no lo lleva es una invitación a cobrarlo por error, y
 el rotulito de *«vacío si no lleva»* era la señal de que sobraba.
 
 Con un solo tipo de pieza el campo ocupa el ancho entero en vez de dejar media
@@ -496,7 +499,7 @@ hizo un descuento.
 |---|---|---|
 | Acrílico NFC + QR | $70.000 | **$49.900** |
 | Vinilo de mesa NFC + QR | $35.000 | **$18.900** y baja por cantidad |
-| Creación de la ficha de Google | $60.000 | **$39.900** |
+| Crear sitio en Google Maps | $60.000 | **$39.900** |
 
 Escala del vinilo: 1 → $18.900 · 2-4 → $17.900 · 5-9 → $16.900 · 10-19 → $15.900
 · 20+ → $14.900. Los tramos van de mayor a menor en `PRECIOS.sticker` porque
@@ -737,7 +740,7 @@ tarjetas se eligen de dos maneras:
 
 - **Por número** — del nº inicial al final. Para lotes recién impresos.
 - **De una orden** — todas las tarjetas de un local ya vinculado. Para cuando
-  cambia su ficha de Google y hay que repuntar lo que ya está en la calle.
+  cambia su sitio en Google Maps y hay que repuntar lo que ya está en la calle.
 
 Al editar una orden el tipo no se elige: una orden mezcla acrílicos y stickers, y
 cada tanda del endpoint escribe un solo tipo. Se manda un grupo por tipo, porque

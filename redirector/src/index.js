@@ -42,7 +42,7 @@
  *   "n:A7K2"        existe = el chip NFC de esa tarjeta ya está grabado
  *   "g:<id>"        un gasto: qué se compró, cuánto costó, quién puso y si llegó
  *   "s:<id>"        un servicio vendido que no va en plástico: crearle al local su
- *                   ficha de Google con fotos y horarios. fecha vacía = acordado
+ *                   sitio en Google Maps con fotos y horarios. fecha vacía = acordado
  *                   pero todavía sin cobrar, igual que una tarjeta sin vender
  *   "b:<negocio>"   a quién se le manda el comprobante: correo, NIT y teléfono
  *   "r:<negocio>"   comprobante ya enviado: cierra esa orden y no deja tocarle
@@ -225,7 +225,7 @@ function gastoDe(cuerpo) {
   };
 }
 
-// La ficha de Google se cobra aparte y no cuelga de ninguna tarjeta: un local
+// El sitio en Google Maps se cobra aparte y no cuelga de ninguna tarjeta: un local
 // puede pedirla sin comprar un solo acrílico. Por eso vive en su propia clave y
 // se une a la orden por el nombre del negocio.
 function servicioDe(cuerpo) {
