@@ -92,8 +92,12 @@ crea el namespace KV en **Storage & Databases → KV**, enlázalo en
 
 ## Las cuatro pestañas del panel
 
-**Tarjetas** lista el plástico; **Órdenes**, lo vendido; **Cuentas**, el dinero
-entre los dos; **Inventario**, lo que hay para imprimir.
+**Órdenes** lista lo vendido; **Cuentas**, el dinero entre los dos; **Tarjetas**,
+el plástico; **Inventario**, lo que hay para imprimir.
+
+En ese orden y no en otro: el panel abre en Órdenes, que es donde está el trabajo
+del día. Tarjetas se mira cuando hace falta buscar una pieza, no todas las
+mañanas.
 
 Cada una trae su botón en la barra de mandos y solo el suyo: *Editar un rango* en
 las dos primeras, *Mis datos* en Cuentas y *Activar tarjetas* en Inventario,

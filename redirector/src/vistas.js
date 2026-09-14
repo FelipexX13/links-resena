@@ -864,7 +864,7 @@ let FILTRO_TIPO = "";
 let MODO = "una";
 let ORIGEN_RANGO = "numero";
 let VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "" };
-let VISTA = "tarjetas";
+let VISTA = "locales";
 let PRUEBAS = false;
 let GASTOS = [];
 let SERVICIOS = [];
@@ -4748,9 +4748,9 @@ export function vistaAdmin(origen) {
     <section class="lamina panel">
       <div class="panel-barra">
         <div class="segmento" id="vistaPanel" role="group" aria-label="Qué se lista">
-          <button type="button" class="activa" data-valor="tarjetas">Tarjetas</button>
-          <button type="button" data-valor="locales">Órdenes</button>
+          <button type="button" class="activa" data-valor="locales">Órdenes</button>
           <button type="button" data-valor="cuentas">Cuentas</button>
+          <button type="button" data-valor="tarjetas">Tarjetas</button>
           <button type="button" data-valor="inventario">Inventario</button>
         </div>
         <div class="cabecera-acciones">
