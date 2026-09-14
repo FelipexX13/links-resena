@@ -4045,7 +4045,7 @@ function pintarBloqueoVenta(negocio) {
         (acta.fecha ? " · " + escHtml(acta.fecha) : "")) +
       ". La orden queda cerrada; bórralo para poder cambiarla.";
   }
-  ["ventaFecha", "precioAcrilico", "precioSticker", "precioFicha", "guardarVenta"]
+  ["precioAcrilico", "precioSticker", "precioFicha", "guardarVenta"]
     .forEach((id) => { $(id).disabled = Boolean(acta); });
   $("modalVenta").querySelectorAll(".chips button")
     .forEach((b) => { b.disabled = Boolean(acta); });
@@ -4128,11 +4128,8 @@ $("modalVenta").addEventListener("click", (e) => {
 $("formVenta").onsubmit = async (e) => {
   e.preventDefault();
   if (!LOCAL_VENTA) return;
-  const fecha = $("ventaFecha").value;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-    avisar("avisoVenta", "Falta la fecha de la venta.", false);
-    return;
-  }
+  // la pone abrirVenta: hoy si es nueva, la suya si se está reabriendo un cobro
+  const fecha = $("ventaFecha").value || hoyISO();
   const l = LOCAL_VENTA;
   const precios = preciosDeLaVenta();
   const boton = $("guardarVenta");
@@ -5196,8 +5193,14 @@ export function vistaAdmin(origen) {
     </div>
 
     <form id="formVenta">
-      <label class="mini" for="ventaFecha">Fecha de la venta</label>
-      <input id="ventaFecha" type="date">
+      <p class="mini2 sin-aire">Quién hizo la venta</p>
+      <div class="segmento" id="quienVende" role="group" aria-label="Quién hizo la venta">
+        <button type="button" class="activa" data-valor="felipe">Felipe</button>
+        <button type="button" data-valor="nicolas">Nicolás</button>
+        <button type="button" data-valor="alexander">Alexander</button>
+      </div>
+
+      <input id="ventaFecha" type="hidden">
 
       <div class="rango-fila" id="bloquePiezas">
         <div id="bloqueAcrilico"><label class="mini" for="precioAcrilico">Precio por acrílico</label>
@@ -5237,13 +5240,7 @@ export function vistaAdmin(origen) {
 
     <div class="comprobante">
       <div class="cejilla">Comprobante de venta</div>
-      <p class="mini2 sin-aire">Quién hizo la venta</p>
-      <div class="segmento" id="quienVende" role="group" aria-label="Quién hizo la venta">
-        <button type="button" class="activa" data-valor="felipe">Felipe</button>
-        <button type="button" data-valor="nicolas">Nicolás</button>
-        <button type="button" data-valor="alexander">Alexander</button>
-      </div>
-      <div class="modal-acciones acciones-izq">
+      <div class="modal-acciones acciones-izq sin-aire">
         <button type="button" class="leer" id="mandarComprobante">Enviar al correo</button>
         <button type="button" class="fantasma" id="cerrarSinEnviar">Cerrar sin enviar</button>
       </div>

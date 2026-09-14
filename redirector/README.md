@@ -458,6 +458,13 @@ fila vacía al lado, el foco entra en el primero que exista, y el resumen y el
 subtítulo tampoco cuentan lo que hay cero: *«0 acrílicos y 2 stickers»* gastaba
 tres palabras en decir nada.
 
+### La fecha no se pregunta
+
+Una venta es del día en que se hizo, así que el cobro ya no trae selector de
+fecha: la pone solo. Si se reabre un cobro viejo se respeta la que ya tenía, que
+es su día. El campo sigue existiendo como `hidden` —el comprobante y el registro
+la necesitan—, pero nadie la escribe ni la puede dejar vacía.
+
 ### La lista de precios
 
 La ventana del cobro trae los precios de la publicidad en pastillas, bajo cada
@@ -617,9 +624,11 @@ datos de cada uno —nombre, cédula, teléfono y la nota que va bajo el nombre�
 cambia de uno a otro con el segmentado de arriba, y lo escrito no se pierde al
 saltar entre ellos: sube todo de una al guardar.
 
-En la ventana del cobro hay otro segmentado, **quién hizo la venta**, que decide
-con cuál de los tres se firma ese comprobante. El panel recuerda el último
-elegido en ese teléfono, que es de quien suele ser.
+En la ventana del cobro, **quién hizo la venta** es lo primero que se pregunta,
+antes de los precios. Estuvo abajo, dentro del bloque del comprobante, y ahí
+parecía cosa del PDF: lo que se elija queda escrito en cada tarjeta al guardar, y
+de ahí salen la columna *Vendió* de las órdenes y el tope de renta de cada uno.
+El panel recuerda el último elegido en ese teléfono, que es de quien suele ser.
 
 **Alexander vende pero no es socio.** Sale donde importa quién hizo la venta —el
 comprobante, el tope de renta, la columna *Vendió* de las órdenes— y no sale en
