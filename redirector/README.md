@@ -536,8 +536,31 @@ cada una entra en la lista, se quita con un toque y los campos de «desde el nº
 se apagan mientras haya lista. El resumen las enumera en vez de fingir un tramo.
 
 Con lista, `planDelLocal` no calcula bloques: toma las escaneadas que no tenía y
-suelta las que tenía y ya no están. Si alguna es de otro local, lo dice y no deja
-guardar.
+suelta las que tenía y ya no están.
+
+#### Una pieza se le puede quitar a una orden pendiente
+
+El montón se revuelve y una pieza acaba puesta en el local equivocado. Escanearla
+dentro de otra orden **la mueve**: cambia de dueño, de link y de nombre, y la
+orden vieja la pierde —si se queda sin ninguna, desaparece sola, porque las
+órdenes se derivan de las tarjetas y no se guardan aparte—.
+
+Una orden pendiente no es dueña de nada todavía: nadie ha pagado. Lo que no se
+toca es lo que ya tiene plata encima, y el escaneo lo dice con el cartel todavía
+en la mano en vez de dejarlo entrar y rechazarlo tres piezas después:
+
+| Estado de la pieza | Al escanearla |
+|---|---|
+| Libre | entra |
+| En una orden **pendiente** | entra · *«se lo quitas a Chingones»* |
+| Ella misma ya cobrada | **no** · *«ya está cobrada en Capoluz»* |
+| Su orden ya se cobró | **no** · *«la orden de Capoluz ya se cobró»* |
+| Su orden tiene comprobante | **no** · *«la orden de Licorera tiene comprobante»* |
+
+El guardia vive en el panel y no en el Worker a propósito: `rango` escribe hasta
+veinticinco tarjetas de un golpe, y leer cada una antes para comprobar de dónde
+sale se saldría de las cincuenta subpeticiones que da el plan gratis. El panel ya
+tiene todas las tarjetas en memoria, así que le sale gratis.
 
 **Pegar el link ya es la orden de leerlo.** Nadie pega media URL, así que el
 campo de Maps se analiza solo al pegar; «Leer la URL» sigue ahí para cuando se

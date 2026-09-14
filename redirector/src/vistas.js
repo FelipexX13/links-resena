@@ -1317,10 +1317,35 @@ function bloqueDesde(tipo, desde, cuantas) {
 // Si el negocio ya tiene una orden, esto no es un alta sino un cambio de tamaño:
 // se toman las libres que falten, o se sueltan las que sobren. Las que ya tiene y
 // siguen dentro no se tocan, así no se pisa su venta.
+// Una orden pendiente no es dueña de nada todavía: nadie ha pagado. Si el
+// montón se revolvió y una pieza termina en otro local, se mueve y ya. Lo que no
+// se toca es lo que ya se cobró o lo que tiene comprobante.
+//
+// El Worker no puede comprobarlo por su cuenta: "rango" escribe hasta
+// veinticinco tarjetas de un golpe y leer cada una antes se saldría de las
+// cincuenta subpeticiones del plan gratis. Así que el guardia es este.
+function ordenesTrabadas() {
+  const trabadas = {};
+  locales().forEach((l) => {
+    if (l.cobrado || cerrada(l.negocio)) trabadas[l.negocio] = 1;
+  });
+  return trabadas;
+}
+
+// "" si se puede mover; si no, por qué no
+function porQueNoSeMueve(t, trabadas) {
+  if (!t || !t.negocio) return "";
+  if (t.vendida) return "ya está cobrada en " + t.negocio;
+  if (cerrada(t.negocio)) return "la orden de " + t.negocio + " tiene comprobante";
+  if (trabadas[t.negocio]) return "la orden de " + t.negocio + " ya se cobró";
+  return "";
+}
+
 function planDelLocal() {
   const p = pedidasDelLocal();
   const nombre = $("negocio").value.trim();
-  const base = locales().filter((x) => x.negocio === nombre)[0] || null;
+  const todas = locales();
+  const base = todas.filter((x) => x.negocio === nombre)[0] || null;
   const plan = { base: base, tomar: {}, soltar: {}, falta: [], pedidas: p,
     sueltas: PIEZAS_SUELTAS.length > 0 };
 
@@ -1335,13 +1360,14 @@ function planDelLocal() {
       const tiene = base ? base.codigos[tipo] : [];
       plan.tomar[tipo] = porTipo[tipo].filter((c) => tiene.indexOf(c) < 0);
       plan.soltar[tipo] = tiene.filter((c) => porTipo[tipo].indexOf(c) < 0);
-      const ajenas = plan.tomar[tipo].filter((c) => {
+      const trabadas = {};
+      todas.forEach((l) => { if (l.cobrado || cerrada(l.negocio)) trabadas[l.negocio] = 1; });
+      plan.tomar[tipo].forEach((c) => {
         const t = TARJETAS.filter((x) => x.codigo === c)[0];
-        return t && t.negocio && t.negocio !== nombre;
+        if (!t || t.negocio === nombre) return;
+        const pega = porQueNoSeMueve(t, trabadas);
+        if (pega) plan.falta.push(c + " " + pega);
       });
-      if (ajenas.length) {
-        plan.falta.push(ajenas.join(", ") + (ajenas.length === 1 ? " ya tiene dueño" : " ya tienen dueño"));
-      }
     });
     plan.pedidas = { acrilicos: porTipo.acrilico.length, stickers: porTipo.sticker.length };
     return plan;
@@ -1821,13 +1847,19 @@ function usarQR(texto) {
       decirEscaneo(comoSeLlama + " ya estaba en la lista.", true);
       return;
     }
-    const ajeno = t.negocio && t.negocio !== $("negocio").value.trim();
+    // mejor decirlo con el cartel todavía en la mano que dejarlo entrar y que el
+    // resumen lo rechace tres piezas después
+    const pega = porQueNoSeMueve(t, ordenesTrabadas());
+    if (pega) { decirEscaneo(comoSeLlama + " · " + codigo + " · " + pega, true); return; }
+
+    const mudanza = t.negocio && t.negocio !== $("negocio").value.trim()
+      ? " · se lo quitas a " + t.negocio : "";
     PIEZAS_SUELTAS.push(codigo);
     pintarPiezasSueltas();
     pintarRangosSegunPiezas();
     pintarResumenLocal();
-    decirEscaneo(comoSeLlama + " · " + codigo + (ajeno ? " · ojo, es de " + t.negocio : "") +
-      "   ·   " + plural(PIEZAS_SUELTAS.length, "pieza", "piezas") + " en la lista", ajeno);
+    decirEscaneo(comoSeLlama + " · " + codigo + mudanza +
+      "   ·   " + plural(PIEZAS_SUELTAS.length, "pieza", "piezas") + " en la lista", false);
     return;
   }
 
