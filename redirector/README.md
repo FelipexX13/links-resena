@@ -459,11 +459,13 @@ hizo un descuento.
 | | Antes | Ahora |
 |---|---|---|
 | Acrílico NFC + QR | $70.000 | **$49.900** |
-| Vinilo de mesa NFC + QR | $35.000 | **$24.900** y baja por cantidad |
+| Vinilo de mesa NFC + QR | $35.000 | **$18.900** y baja por cantidad |
 | Creación de la ficha de Google | $60.000 | **$39.900** |
 
-Escala del vinilo: 1 → $24.900 · 2-4 → $22.900 · 5-9 → $19.900 · 10-19 → $16.900
-· 20-49 → $14.900 · 50-99 → $12.900 · 100+ → $11.900.
+Escala del vinilo: 1 → $18.900 · 2-4 → $17.900 · 5-9 → $16.900 · 10-19 → $15.900
+· 20+ → $14.900. Los tramos van de mayor a menor en `PRECIOS.sticker` porque
+`precioSticker` se queda con el primero que alcanza; el último tramo no tiene
+techo, así que una orden de doscientos también paga $14.900.
 
 Al abrir una orden sin cobrar, los tres campos vienen puestos con esos precios.
 Si ya se cobró, manda lo que se cobró.

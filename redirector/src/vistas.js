@@ -3992,14 +3992,13 @@ const LISTA = { acrilico: 70000, sticker: 35000, ficha: 60000 };
 const PRECIOS = {
   acrilico: 49900,
   ficha: 39900,
+  // de mayor a menor: precioSticker se queda con el primer tramo que alcanza
   sticker: [
-    { desde: 100, rotulo: "100+", precio: 11900 },
-    { desde: 50, rotulo: "50-99", precio: 12900 },
-    { desde: 20, rotulo: "20-49", precio: 14900 },
-    { desde: 10, rotulo: "10-19", precio: 16900 },
-    { desde: 5, rotulo: "5-9", precio: 19900 },
-    { desde: 2, rotulo: "2-4", precio: 22900 },
-    { desde: 1, rotulo: "1", precio: 24900 },
+    { desde: 20, rotulo: "20+", precio: 14900 },
+    { desde: 10, rotulo: "10-19", precio: 15900 },
+    { desde: 5, rotulo: "5-9", precio: 16900 },
+    { desde: 2, rotulo: "2-4", precio: 17900 },
+    { desde: 1, rotulo: "1", precio: 18900 },
   ],
 };
 
