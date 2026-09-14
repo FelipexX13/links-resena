@@ -311,11 +311,9 @@ solo de la URL. Ese es el formulario, en ese orden:
 1. **Qué piezas lleva** — la cámara ya está abierta, escaneas una tras otra
 2. **A qué local apunta** — pegas el link y se lee solo, sin darle a ningún botón
 3. **Nombre del negocio** — puesto por el link
-4. **O tómalas por número** — solo aparece si no escaneaste nada
+4. **O añádela por código** — se escribe `AAFZ` cuando el QR no se deja leer
 
-Abrirse con el teclado sobre «cuántos acrílicos» pedía el dato que menos importa:
-con las piezas escaneadas la orden es exactamente esa lista, y el bloque de
-números se retira de la vista.
+Abrirse con el teclado sobre «cuántos acrílicos» pedía el dato que menos importa.
 
 **El título y «Crear la orden» van fijos arriba.** La ventana se rellena de
 arriba abajo y el botón de crear tiene que seguir a mano al llegar al final, así
@@ -342,26 +340,36 @@ mismo—:
 Con eso una orden entera —dos piezas escaneadas, el link leído y el nombre
 puesto— cabe en una pantalla de teléfono sin desplazarse.
 
-El bloque de números pide, por cada tipo, **desde qué número** y **cuántas**. El
-número inicial viene puesto con la primera tarjeta libre, así que dejarlo como
-está se comporta como antes; se cambia cuando vas a entregar unas piezas
-concretas.
+### Una orden es su lista de códigos
 
-El bloque tiene que estar **libre entero**. Si dentro hay una ocupada, o el bloque
-se sale de su tipo, el resumen lo dice con el número exacto y no deja guardar:
+Hubo un segundo camino —*desde el nº tal, tantas*— que armaba bloques seguidos y
+exigía que el tramo estuviera libre entero. Con el escaneo y el código escrito
+dejó de usarse, y mantener dos formas de decir lo mismo solo daba maneras de que
+no coincidieran. **Se fue**, con `bloqueDesde()`, `pedidasDelLocal()` y
+`primeraLibre()` detrás.
 
-```
-No alcanza — acrílicos: la nº 5 (AAAE) ya está ocupada
-No alcanza — acrílicos: la nº 101 no es acrílico
-```
+Ahora la orden es exactamente los códigos que tenga, y hay tres puertas para
+ponerlos: la cámara, el campo de código y la ✕ de cada ficha.
 
-No salta las ocupadas a propósito: saltarlas daría un lote distinto del que tienes
-en la mano.
+**Al abrir una orden que ya existe, sus códigos llegan puestos** como fichas. Eso
+contesta la primera pregunta que uno se hace —*¿qué tiene esta orden?*— y deja
+quitar de a una con un toque, venga la pieza de un escaneo o de donde sea.
 
-**Piezas** cambia el tamaño de una orden ya creada. Si sube, toma más libres; si
-baja, suelta las últimas y quedan libres para otra orden. Las que ya tenía y
-siguen dentro no se tocan, así no se pisa su venta. El resumen enseña el
-movimiento antes de guardar:
+El campo de código sugiere las libres mientras se escribe (`<datalist>`), acepta
+minúsculas y entra con Intro.
+
+Dos cosas no se dejan tocar, y lo dicen:
+
+| | |
+|---|---|
+| Añadir una pieza ya cobrada a otra orden | *«ya está cobrada en Capoluz»* |
+| Sacar una pieza cobrada de la suya | *«ya está cobrada: no se puede sacar de la orden»* |
+
+La segunda es la importante: quitarla de la lista la liberaría al guardar, y eso
+le borraría la venta. *Vaciar la lista* respeta la misma regla —deja dentro las
+cobradas—.
+
+El resumen enseña el movimiento antes de guardar:
 
 ```
 Haunch Burguer: de 2+10 a 3+15   ·   +1 acrílico · AAAC   +5 stickers · AAEG → AAEK

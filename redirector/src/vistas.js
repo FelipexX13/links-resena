@@ -453,6 +453,8 @@ const ESTILOS = `
     border:2px solid rgba(255,255,255,.85);border-radius:16px;pointer-events:none;
     box-shadow:0 0 0 2000px rgba(9,15,28,.35)}
   .escaneo{align-self:center;margin:0}
+  .pieza-codigo{width:auto;flex:0 1 150px;text-transform:uppercase;
+    font-family:"Geist Mono",ui-monospace,monospace;letter-spacing:.06em}
   /* los cuatro pasos de grabar un chip, cada uno con su botón y su respuesta */
   .pasos-nfc{list-style:none;margin:18px 0 0;padding:0}
   .paso-nfc{padding:13px 0;border-top:1px solid var(--linea-suave)}
@@ -1281,41 +1283,9 @@ function libresPorTipo(tipo) {
     .sort();
 }
 
-function pedidasDelLocal() {
-  const na = Math.max(0, parseInt($("nAcrilicos").value, 10) || 0);
-  const ns = Math.max(0, parseInt($("nStickers").value, 10) || 0);
-  return { acrilicos: na, stickers: ns };
-}
 
-function primeraLibre(tipo) {
-  const libres = libresPorTipo(tipo);
-  return libres.length ? indiceDeCodigo(libres[0]) + 1 : "";
-}
 
-// Un bloque seguido desde el número que se pida. No salta las ocupadas: si hay
-// una dentro, lo dice y no deja guardar. Saltarlas daría un lote distinto del
-// que la persona tiene en la mano.
-function bloqueDesde(tipo, desde, cuantas) {
-  const res = { codigos: [], problema: "" };
-  if (!cuantas) return res;
-  if (!(desde >= 1)) { res.problema = "falta el número inicial"; return res; }
-  for (let n = desde; res.codigos.length < cuantas; n++) {
-    if (n > TOPE) { res.problema = "el bloque se sale de la numeración"; return res; }
-    const codigo = codigoDeIndice(n - 1);
-    const t = TARJETAS.filter((x) => x.codigo === codigo)[0];
-    if (!t) { res.problema = "la nº " + n + " no está impresa"; return res; }
-    if (tipoDe(t) !== tipo) {
-      res.problema = "la nº " + n + " no es " + (tipo === "acrilico" ? "acrílico" : "sticker");
-      return res;
-    }
-    if (t.destino) {
-      res.problema = "la nº " + n + " (" + codigo + ") ya está ocupada";
-      return res;
-    }
-    res.codigos.push(codigo);
-  }
-  return res;
-}
+
 
 // Si el negocio ya tiene una orden, esto no es un alta sino un cambio de tamaño:
 // se toman las libres que falten, o se sueltan las que sobren. Las que ya tiene y
@@ -1344,16 +1314,18 @@ function porQueNoSeMueve(t, trabadas) {
   return "";
 }
 
+// Una orden es exactamente la lista de códigos que tenga. Antes había un segundo
+// camino —desde el nº tal, tantas— que armaba bloques seguidos; con el escaneo y
+// el código escrito dejó de usarse, y mantener dos formas de decir lo mismo solo
+// daba maneras de que no coincidieran.
 function planDelLocal() {
-  const p = pedidasDelLocal();
   const nombre = $("negocio").value.trim();
   const todas = locales();
   const base = todas.filter((x) => x.negocio === nombre)[0] || null;
-  const plan = { base: base, tomar: {}, soltar: {}, falta: [], pedidas: p,
-    sueltas: PIEZAS_SUELTAS.length > 0 };
+  const plan = { base: base, tomar: {}, soltar: {}, falta: [],
+    pedidas: { acrilicos: 0, stickers: 0 }, sueltas: PIEZAS_SUELTAS.length > 0 };
 
-  // Con piezas escaneadas la orden es exactamente esas, sin rangos de por medio.
-  if (plan.sueltas) {
+  {
     const porTipo = { acrilico: [], sticker: [] };
     PIEZAS_SUELTAS.forEach((c) => {
       const t = TARJETAS.filter((x) => x.codigo === c)[0];
@@ -1373,24 +1345,7 @@ function planDelLocal() {
       });
     });
     plan.pedidas = { acrilicos: porTipo.acrilico.length, stickers: porTipo.sticker.length };
-    return plan;
   }
-
-  [["acrilico", p.acrilicos, "acrílico", "acrílicos"],
-   ["sticker", p.stickers, "sticker", "stickers"]].forEach((fila) => {
-    const tipo = fila[0], quiere = fila[1];
-    const tiene = base ? base[tipo] : 0;
-    plan.tomar[tipo] = [];
-    plan.soltar[tipo] = [];
-    if (quiere > tiene) {
-      const desde = parseInt($(tipo === "acrilico" ? "desdeAcrilico" : "desdeSticker").value, 10);
-      const bloque = bloqueDesde(tipo, desde, quiere - tiene);
-      plan.tomar[tipo] = bloque.codigos;
-      if (bloque.problema) plan.falta.push(fila[3] + ": " + bloque.problema);
-    } else if (quiere < tiene) {
-      plan.soltar[tipo] = base.codigos[tipo].slice().sort().slice(quiere);
-    }
-  });
   return plan;
 }
 
@@ -1818,16 +1773,25 @@ function pintarPiezasSueltas() {
 $("piezasSueltas").addEventListener("click", (e) => {
   const b = e.target.closest("[data-quitar-pieza]");
   if (!b) return;
-  PIEZAS_SUELTAS = PIEZAS_SUELTAS.filter((c) => c !== b.dataset.quitarPieza);
+  const codigo = b.dataset.quitarPieza;
+  // quitarla de la lista la libera al guardar, y eso le borraría la venta
+  const t = TARJETAS.filter((x) => x.codigo === codigo)[0];
+  if (t && t.vendida) {
+    decirEscaneo(codigo + " ya está cobrada: no se puede sacar de la orden.", true);
+    return;
+  }
+  PIEZAS_SUELTAS = PIEZAS_SUELTAS.filter((c) => c !== codigo);
   pintarPiezasSueltas();
-  pintarRangosSegunPiezas();
   pintarResumenLocal();
 });
 
 $("vaciarPiezas").onclick = () => {
-  PIEZAS_SUELTAS = [];
+  // las cobradas no se sueltan: se quedan aunque se vacíe el resto
+  PIEZAS_SUELTAS = PIEZAS_SUELTAS.filter((c) => {
+    const t = TARJETAS.filter((x) => x.codigo === c)[0];
+    return t && t.vendida;
+  });
   pintarPiezasSueltas();
-  pintarRangosSegunPiezas();
   decirEscaneo("");
   pintarResumenLocal();
 };
@@ -1845,31 +1809,57 @@ function usarQR(texto) {
   const comoSeLlama = (tipo === "acrilico" ? "Acrílico" : "Vinilo") + " nº " + numero;
 
   // en una orden se van juntando; fuera de ella solo dice cuál es
-  if (MODO === "local") {
-    if (PIEZAS_SUELTAS.indexOf(codigo) >= 0) {
-      decirEscaneo(comoSeLlama + " ya estaba en la lista.", true);
-      return;
-    }
-    // mejor decirlo con el cartel todavía en la mano que dejarlo entrar y que el
-    // resumen lo rechace tres piezas después
-    const pega = porQueNoSeMueve(t, ordenesTrabadas());
-    if (pega) { decirEscaneo(comoSeLlama + " · " + codigo + " · " + pega, true); return; }
+  if (MODO === "local") { meterPieza(codigo, decirEscaneo); return; }
 
-    const mudanza = t.negocio && t.negocio !== $("negocio").value.trim()
-      ? " · se lo quitas a " + t.negocio : "";
-    PIEZAS_SUELTAS.push(codigo);
-    pintarPiezasSueltas();
-    pintarRangosSegunPiezas();
-    pintarResumenLocal();
-    decirEscaneo(comoSeLlama + " · " + codigo + mudanza +
-      "   ·   " + plural(PIEZAS_SUELTAS.length, "pieza", "piezas") + " en la lista", false);
-    return;
-  }
-
-  $(tipo === "acrilico" ? "desdeAcrilico" : "desdeSticker").value = numero;
   decirEscaneo(comoSeLlama + " · " + codigo +
     (t.negocio ? " · ocupado por " + t.negocio : " · libre"), Boolean(t.negocio));
 }
+
+// El QR y el código escrito acaban en el mismo sitio, así que las dos puertas
+// comprueban lo mismo y dicen lo mismo. El "decir" cambia porque cada una tiene su
+// renglón de respuesta.
+function meterPieza(codigo, decir) {
+  const t = TARJETAS.filter((x) => x.codigo === codigo)[0];
+  if (!t) { decir(codigo + " no está en la lista de tarjetas.", true); return false; }
+
+  const numero = indiceDeCodigo(codigo) + 1;
+  const comoSeLlama = (tipoDe(t) === "acrilico" ? "Acrílico" : "Vinilo") + " nº " + numero;
+
+  if (PIEZAS_SUELTAS.indexOf(codigo) >= 0) {
+    decir(comoSeLlama + " ya estaba en la lista.", true);
+    return false;
+  }
+  // mejor decirlo con el cartel todavía en la mano que dejarlo entrar y que el
+  // resumen lo rechace tres piezas después
+  const pega = porQueNoSeMueve(t, ordenesTrabadas());
+  if (pega) { decir(comoSeLlama + " · " + codigo + " · " + pega, true); return false; }
+
+  const mudanza = t.negocio && t.negocio !== $("negocio").value.trim()
+    ? " · se lo quitas a " + t.negocio : "";
+  PIEZAS_SUELTAS.push(codigo);
+  pintarPiezasSueltas();
+  pintarResumenLocal();
+  decir(comoSeLlama + " · " + codigo + mudanza +
+    "   ·   " + plural(PIEZAS_SUELTAS.length, "pieza", "piezas") + " en la lista", false);
+  return true;
+}
+
+function decirCodigo(texto, malo) {
+  $("codigoDicho").textContent = texto;
+  $("codigoDicho").classList.toggle("malo", Boolean(malo));
+}
+
+function agregarPorCodigo() {
+  const codigo = normalizarCodigo($("codigoPieza").value);
+  if (!codigo) { decirCodigo("Escribe el código de la pieza.", true); return; }
+  if (meterPieza(codigo, decirCodigo)) $("codigoPieza").value = "";
+}
+
+$("agregarPieza").onclick = agregarPorCodigo;
+// en el teléfono el Intro del teclado es lo natural, y sin esto enviaría la orden
+$("codigoPieza").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); agregarPorCodigo(); }
+});
 
 // Chrome de Android trae BarcodeDetector, que lee el QR sin descargar nada.
 // Safari del iPhone no lo tiene ni lo va a tener pronto, así que allí se baja un
@@ -2014,13 +2004,13 @@ $("maps").addEventListener("paste", () => {
 $("negocio").addEventListener("input", pintarEnlaceMaps);
 $("buscarLocal").addEventListener("input", pintarEnlaceMaps);
 
-function pintarRangosSegunPiezas() {
-  const hay = PIEZAS_SUELTAS.length > 0;
-  ["desdeAcrilico", "nAcrilicos", "desdeSticker", "nStickers"]
-    .forEach((id) => { $(id).disabled = hay; });
-  // con piezas escaneadas la orden ya está dicha; cuatro campos apagados solo
-  // estorban, así que el camino viejo se retira del todo
-  $("campoCuantas").hidden = MODO !== "local" || hay;
+// Las libres, para que el campo del código sugiera mientras se escribe.
+function pintarPiezasLibres() {
+  $("piezasLibres").innerHTML = TARJETAS
+    .filter((t) => !t.negocio)
+    .map((t) => "<option value='" + t.codigo + "'>nº " + (indiceDeCodigo(t.codigo) + 1) +
+      " · " + (tipoDe(t) === "acrilico" ? "acrílico" : "vinilo") + "</option>")
+    .join("");
 }
 
 function pintarModo(valor) {
@@ -2028,19 +2018,15 @@ function pintarModo(valor) {
   marcarSegmento("modoTarjeta", MODO);
   $("campoUna").hidden = MODO !== "una";
   $("campoRango").hidden = MODO !== "rango";
-  $("campoPiezas").hidden = MODO !== "local";   // de campoCuantas se encarga
-                                                // pintarRangosSegunPiezas
+  $("campoPiezas").hidden = MODO !== "local";
+  $("campoCuantas").hidden = MODO !== "local";
   $("guardar").textContent = MODO === "rango" ? "Aplicar al rango"
     : MODO === "local" ? "Crear la orden"
     : (EDITANDO_CODIGO ? "Guardar cambios" : "Activar tarjeta");
-  if (MODO === "local") {
-    if (!$("desdeAcrilico").value) $("desdeAcrilico").value = primeraLibre("acrilico");
-    if (!$("desdeSticker").value) $("desdeSticker").value = primeraLibre("sticker");
-  }
+  if (MODO === "local") pintarPiezasLibres();
   if (MODO === "rango") pintarOrigenRango(ORIGEN_RANGO);
   else $("bloqueTipo").hidden = MODO === "local";   // en un local van los dos tipos
   if (MODO === "local") pintarResumenLocal();
-  pintarRangosSegunPiezas();
   pintarEnlaceMaps();
 }
 
@@ -2067,10 +2053,6 @@ $("tipoTarjeta").addEventListener("click", (e) => {
 
 $("desde").addEventListener("input", pintarResumenRango);
 $("hasta").addEventListener("input", pintarResumenRango);
-$("nAcrilicos").addEventListener("input", pintarResumenLocal);
-$("nStickers").addEventListener("input", pintarResumenLocal);
-$("desdeAcrilico").addEventListener("input", pintarResumenLocal);
-$("desdeSticker").addEventListener("input", pintarResumenLocal);
 $("negocio").addEventListener("input", () => {
   if (MODO === "local") pintarResumenLocal();
 });
@@ -2084,9 +2066,9 @@ function salirDeEdicion() {
   URL_LEIDA = "";
   $("numeroTarjeta").textContent = "";
   $("desde").value = $("hasta").value = "";
-  $("nAcrilicos").value = $("nStickers").value = "";
   $("buscarLocal").value = "";
-  $("desdeAcrilico").value = $("desdeSticker").value = "";
+  $("codigoPieza").value = "";
+  decirCodigo("");
   if ($("localExistente").options.length) $("localExistente").value = "";
   if ($("ordenRango").options.length) $("ordenRango").value = "";
   VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "" };
@@ -2136,8 +2118,9 @@ function abrirOrden(negocio) {
   if (l) {
     $("localExistente").value = l.negocio;
     $("localExistente").dispatchEvent(new Event("change"));
-    $("nAcrilicos").value = l.acrilico;
-    $("nStickers").value = l.sticker;
+    // lo que ya tiene entra como fichas, para verlo y poder quitarlo de a una
+    PIEZAS_SUELTAS = l.codigos.acrilico.concat(l.codigos.sticker).slice().sort();
+    pintarPiezasSueltas();
   }
   ponerFichaEnOrden(l ? l.ficha : null);
   pintarModo("local");
@@ -4941,31 +4924,14 @@ export function vistaAdmin(origen) {
       <input class="c3" id="negocio" placeholder="Mercacentro Av. Guabinal" autocomplete="off" required>
 
       <div id="campoCuantas" hidden>
-        <label class="paso"><span class="n n4">4</span>O tómalas por número</label>
-        <div class="rango-fila">
-          <div>
-            <div class="mini">Acrílicos de mesa</div>
-            <div class="par">
-              <div><div class="mini2">desde el nº</div>
-                <input class="c1" id="desdeAcrilico" type="number" min="1" placeholder="1"
-                       aria-label="Acrílicos, desde qué número" autocomplete="off"></div>
-              <div><div class="mini2">cuántos</div>
-                <input class="c1" id="nAcrilicos" type="number" min="0" placeholder="2"
-                       aria-label="Cuántos acrílicos" autocomplete="off"></div>
-            </div>
-          </div>
-          <div>
-            <div class="mini">Stickers de mesa</div>
-            <div class="par">
-              <div><div class="mini2">desde el nº</div>
-                <input class="c1" id="desdeSticker" type="number" min="1" placeholder="101"
-                       aria-label="Stickers, desde qué número" autocomplete="off"></div>
-              <div><div class="mini2">cuántos</div>
-                <input class="c1" id="nStickers" type="number" min="0" placeholder="10"
-                       aria-label="Cuántos stickers" autocomplete="off"></div>
-            </div>
-          </div>
+        <label class="paso" for="codigoPieza"><span class="n n4">4</span>O añádela por código</label>
+        <div class="modal-acciones acciones-izq sin-aire">
+          <input class="c1 pieza-codigo" id="codigoPieza" list="piezasLibres" maxlength="12"
+                 placeholder="AAFZ" autocomplete="off" aria-label="Código de la pieza">
+          <button type="button" class="leer" id="agregarPieza">Añadir</button>
+          <span class="mini2 escaneo" id="codigoDicho"></span>
         </div>
+        <datalist id="piezasLibres"></datalist>
       </div>
 
       <div id="bloqueTipo">
