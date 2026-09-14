@@ -433,16 +433,25 @@ archivo, no forma serie. Como somos no responsables de IVA (RUT responsabilidad
 *documento soporte en adquisiciones a no obligados a facturar*; eso no sale de
 aquí.
 
-Tres botones, y ninguno se dispara solo. Pero **al aceptar la orden la ventana no
-se cierra**: si hay correo del cliente, pregunta ahí mismo si mandarlo, con
-*Enviar* y *Ahora no*. Es lo que se hace a continuación nueve de cada diez veces,
-y sin la pregunta tocaba volver a entrar al cobro. Sin correo guardado, se cierra
-como siempre.
+**El correo decide, y no hay que pulsar nada más.** Cobrar y mandar el
+comprobante son el mismo gesto:
 
-El comprobante sale por una sola puerta: **Enviar al correo**, que lo manda como
-adjunto desde `greview641@gmail.com`. Hubo también *Descargar PDF* y *Compartir*
-—el menú nativo del teléfono, para meterlo en WhatsApp— y se quitaron por no
-usarse: tres botones para una cosa que siempre se hace igual.
+| El campo de correo | Al aceptar la orden |
+|---|---|
+| Tiene correo | se guarda la venta **y** sale el comprobante —y la orden queda cerrada— |
+| Está vacío | se guarda la venta y ya; la orden sigue abierta |
+
+El botón lo dice antes de hacerlo —*Aceptar y enviar* en vez de *Aceptar la
+orden*—, porque mandar el comprobante cierra la orden y eso no se deshace sin
+borrarlo.
+
+Si el envío falla —sin señal, Brevo caído— **la venta ya quedó guardada** y la
+ventana se queda abierta con el error: el mismo botón vuelve a intentarlo.
+
+Por el camino se fueron cuatro botones: *Descargar PDF* y *Compartir* —el menú
+nativo del teléfono, para meterlo en WhatsApp—, *Enviar al correo* y *Cerrar sin
+enviar*, más la pregunta de después con su *Enviar* / *Ahora no*. Todos
+contestaban lo que el campo de correo ya contesta.
 
 El correo y el NIT del local quedan guardados en `b:<negocio>`, así que la
 siguiente vez salen puestos.
@@ -601,8 +610,12 @@ El papel ya está en manos del cliente, así que a partir de ahí **no se toca
 nada**: ni el link, ni el chip NFC, ni los precios, ni las piezas. Se guarda un
 `r:<negocio>` con a quién se mandó y cuándo, y eso hace de cerrojo.
 
-Hay clientes que pagan pero no quieren papel. **Cerrar sin enviar** guarda el
-mismo registro, sin correo, y la fila lo dice: «cerrada sin comprobante».
+Hay clientes que pagan pero no quieren papel. Para esos existía *Cerrar sin
+enviar*, que guardaba el mismo registro sin correo y dejaba la fila diciendo
+«cerrada sin comprobante». **Ese botón ya no está**: al unificar el cobro en un
+solo gesto se quedó sin puerta. El endpoint `comprobante-cerrar` y la función
+`cerrarSinComprobante()` siguen ahí, sin nadie que los llame, por si hay que
+devolverlo.
 
 En la tabla de tarjetas, las de ese local se quedan con **NFC**, **Editar** y
 **Desactivar** apagados; el **QR** sigue, que mirarlo no cambia nada. En órdenes

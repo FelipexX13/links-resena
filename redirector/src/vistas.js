@@ -3477,24 +3477,12 @@ async function recordarComprador(negocio, correo, nit, telefono) {
   }
 }
 
-$("mandarComprobante").onclick = () => enviarComprobante($("mandarComprobante"));
-
-$("siEnviar").onclick = async () => {
-  const fue = await enviarComprobante($("siEnviar"));
-  if (fue) cerrarVenta();
-};
-
-$("ahoraNo").onclick = cerrarVenta;
-
-// El cliente pagó pero no quiso papel: se cierra igual, sin correo
-$("cerrarSinEnviar").onclick = async () => {
+// PENDIENTE: sin botón que lo llame. Cerrar una orden pagada sin comprobante
+// —el cliente no quiso papel— dejó de tener puerta al unificar el cobro en un
+// solo gesto. El endpoint del Worker sigue ahí por si hay que devolverlo.
+async function cerrarSinComprobante() {
   if (!LOCAL_VENTA) return;
   const negocio = LOCAL_VENTA.negocio;
-  const boton = $("cerrarSinEnviar");
-  if (CONFIRMANDO !== "sinEnviar") { pedirConfirmacion(boton, "sinEnviar"); return; }
-
-  olvidarConfirmacion();
-  boton.disabled = true;
   try {
     const p = preciosDeLaVenta();
     const l = LOCAL_VENTA;
@@ -3510,16 +3498,13 @@ $("cerrarSinEnviar").onclick = async () => {
       }),
     });
     COMPROBANTES[negocio] = Object.assign({ negocio: negocio }, r.comprobante);
-    $("preguntaComprobante").hidden = true;
     pintarBloqueoVenta(negocio);
     repintarTodo();
     avisar("avisoPanel", "Orden de " + negocio + " cerrada sin comprobante", true);
   } catch (err) {
     avisar("avisoVenta", err.message, false);
-  } finally {
-    boton.disabled = false;
   }
-};
+}
 
 async function enviarComprobante(boton) {
   const correo = $("ventaCorreo").value.trim();
@@ -3945,12 +3930,11 @@ function abrirVenta(negocio) {
   $("precioFicha").value = l.ficha && l.ficha.precio ? l.ficha.precio
     : (l.ficha ? PRECIOS.ficha : "");
   $("bloqueFicha").hidden = !l.ficha;
-  $("guardarVenta").textContent = l.vendidas ? "Guardar el cobro" : "Aceptar la orden";
   const comp = COMPRADORES[l.negocio] || {};
   $("ventaCorreo").value = comp.correo || "";
   $("ventaNit").value = comp.nit || "";
   $("ventaTelefono").value = comp.telefono || "";
-  $("preguntaComprobante").hidden = true;
+  pintarBotonVenta();
   pintarBloqueoVenta(l.negocio);
   limpiarAviso("avisoVenta");
   pintarResumenVenta();
@@ -4076,6 +4060,20 @@ $("borrarComprobante").onclick = async () => {
   }
 };
 
+// Un solo botón para todo, así que tiene que decir qué va a hacer antes de
+// hacerlo: mandar el comprobante deja la orden cerrada y eso no se deshace sin
+// borrarlo.
+function pintarBotonVenta() {
+  const l = LOCAL_VENTA;
+  if (!l) return;
+  const manda = Boolean($("ventaCorreo").value.trim()) && !cerrada(l.negocio);
+  $("guardarVenta").textContent = l.vendidas
+    ? (manda ? "Guardar y enviar" : "Guardar el cobro")
+    : (manda ? "Aceptar y enviar" : "Aceptar la orden");
+}
+
+$("ventaCorreo").addEventListener("input", pintarBotonVenta);
+
 function pintarResumenVenta() {
   if (!LOCAL_VENTA) return;
   const l = LOCAL_VENTA;
@@ -4197,15 +4195,16 @@ $("formVenta").onsubmit = async (e) => {
     }
     if (fichaNueva) parchearServicio(fichaNueva.id, fichaNueva);
     avisar("avisoPanel", "Orden de " + l.negocio + " aceptada · " + dinero(importe), true);
-    // si hay correo, el paso siguiente casi siempre es mandarlo: se pregunta aquí
-    // en vez de obligar a volver a entrar al cobro
+    // El correo decide. Puesto, el comprobante sale en el mismo gesto; vacío, la
+    // orden se acepta y ya. Preguntarlo después era un botón y una pregunta para
+    // algo que el propio campo ya contesta.
     if (correoCliente && !cerrada(l.negocio)) {
-      $("preguntaCorreo").textContent = correoCliente;
-      $("preguntaComprobante").hidden = false;
-      $("preguntaComprobante").scrollIntoView({ block: "nearest" });
-    } else {
-      cerrarVenta();
+      // si el envío falla, la venta ya está guardada y el error queda a la
+      // vista: el mismo botón vuelve a intentarlo
+      const fue = await enviarComprobante(boton);
+      if (!fue) return;
     }
+    cerrarVenta();
   } catch (err) {
     avisar("avisoVenta", err.message, false);
   } finally {
@@ -5180,13 +5179,6 @@ export function vistaAdmin(origen) {
     <h1 id="ventaTitulo">Aceptar la orden</h1>
     <p class="modal-subtitulo" id="ventaSubtitulo"></p>
 
-    <div class="banner hecho" id="preguntaComprobante" hidden role="status">
-      <span>Orden aceptada. <b>¿Le mando el comprobante a
-        <span id="preguntaCorreo"></span>?</b></span>
-      <button type="button" class="fantasma" id="ahoraNo">Ahora no</button>
-      <button type="button" class="leer" id="siEnviar">Enviar</button>
-    </div>
-
     <div class="banner" id="bloqueoVenta" hidden role="status">
       <span id="bloqueoTexto"></span>
       <button type="button" class="fantasma" id="borrarComprobante">Borrar comprobante</button>
@@ -5222,7 +5214,8 @@ export function vistaAdmin(origen) {
       </div>
       <div class="rango-resumen" id="ventaResumen"></div>
 
-      <label class="mini" for="ventaCorreo">Correo del cliente</label>
+      <label class="mini" for="ventaCorreo">Correo del cliente
+        <span class="suave">(si lo pones, le llega el comprobante)</span></label>
       <input id="ventaCorreo" type="email" placeholder="local@correo.com" autocomplete="off">
 
       <div class="rango-fila">
@@ -5238,13 +5231,6 @@ export function vistaAdmin(origen) {
       </div>
     </form>
 
-    <div class="comprobante">
-      <div class="cejilla">Comprobante de venta</div>
-      <div class="modal-acciones acciones-izq sin-aire">
-        <button type="button" class="leer" id="mandarComprobante">Enviar al correo</button>
-        <button type="button" class="fantasma" id="cerrarSinEnviar">Cerrar sin enviar</button>
-      </div>
-    </div>
   </div>
 </div>
 
