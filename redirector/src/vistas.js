@@ -534,6 +534,14 @@ const ESTILOS = `
   .saldo.debe{background:var(--ambar-piel);border-color:var(--ambar-borde);color:var(--ambar-tinta)}
   .bloque-titulo{display:flex;align-items:center;justify-content:space-between;gap:12px;
     flex-wrap:wrap;margin:26px 0 0;padding-top:20px;border-top:1px solid var(--linea-suave)}
+  .filtro-dia{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:18px 0 4px}
+  .filtro-dia input[type=date]{width:auto;padding:7px 11px;font-size:12.5px}
+  .quien{font-size:12.5px;color:var(--tinta-2);white-space:nowrap}
+  /* lo que el filtro deja fuera se dice, no se esconde: ahí puede haber plata
+     sin cobrar de la semana pasada */
+  .fuera-filtro{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:12px 2px 0;font-size:12.5px;color:var(--tinta-2)}
+  .fuera-filtro button{padding:6px 12px;font-size:12px}
   .inv{font-family:"Geist Mono",ui-monospace,monospace;font-size:13px}
   .inv-malos{color:var(--rojo-fuerte)}
   .rot{display:none}
@@ -662,12 +670,17 @@ const ESTILOS = `
     #tablaGastos td:nth-child(4){order:5}
     #tablaGastos td:nth-child(6){order:6;margin-left:auto}
 
-    #tablaLocales td:nth-child(1){order:1}
-    #tablaLocales td:nth-child(4){order:2;margin-left:auto;font-size:15px}
-    #tablaLocales td:nth-child(2){order:3;flex:1 0 100%}
-    #tablaLocales td:nth-child(3){order:4}
+    /* 1 local · 2 piezas · 3 vendió · 4 estado · 5 importe · 6 botones.
+       Quién vendió va en el primer renglón, junto al nombre: ahí sobraba sitio
+       y así la fila sigue siendo de tres líneas. */
+    #tablaLocales td:nth-child(1){order:1;min-width:0;overflow:hidden;
+      text-overflow:ellipsis;white-space:nowrap}
+    #tablaLocales td:nth-child(3){order:2}
+    #tablaLocales td:nth-child(5){order:3;margin-left:auto;font-size:15px}
+    #tablaLocales td:nth-child(2){order:4;flex:1 0 100%}
+    #tablaLocales td:nth-child(4){order:5}
     /* los botones a la derecha del estado, no en su propio renglón */
-    #tablaLocales td:nth-child(5){order:5;margin-left:auto}
+    #tablaLocales td:nth-child(6){order:6;margin-left:auto}
 
     /* dos o tres botones sueltos no necesitan la rejilla de la tabla ancha */
     #tablaGastos .acciones,#tablaLocales .acciones{display:flex;gap:5px;min-width:0}
@@ -847,25 +860,32 @@ let TIPO = "acrilico";
 let FILTRO_TIPO = "";
 let MODO = "una";
 let ORIGEN_RANGO = "numero";
-let VENTA_EDITADA = { vendida: "", precio: 0 };
+let VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "" };
 let VISTA = "tarjetas";
 let PRUEBAS = false;
 let GASTOS = [];
 let SERVICIOS = [];
-let VENDEDORES = { felipe: null, nicolas: null };
+let VENDEDORES = { felipe: null, nicolas: null, alexander: null };
 let QUIEN_VENDE = "felipe";
 let COMPRADORES = {};
 let COMPROBANTES = {};
 let NFC = {};
 let GASTO_EDITADO = "";
 const DIAS_DINERO = 30;
-const SOCIO_NOMBRE = { felipe: "Felipe", nicolas: "Nicolás", ambos: "Compartido" };
+// Alexander vende, pero no es socio: no pone plata ni se reparte utilidad. Sale
+// en el comprobante y en el tope de renta —que son cosas de quien vende— y no en
+// el reparto de cuentas ni en quién paga un gasto.
+const SOCIO_NOMBRE = { felipe: "Felipe", nicolas: "Nicolás", alexander: "Alexander",
+  ambos: "Compartido" };
+const QUIENES_VENDEN = ["felipe", "nicolas", "alexander"];
 let METRICA = "unidades";
 let PAGINA_ORDENES = 1;
 let PAGINA_GASTOS = 1;
 let LOCAL_VENTA = null;
 const DIAS_GRAFICA = 14;
 const POR_PAGINA = 10;
+// "hoy", "7", "todas" o un día suelto en AAAA-MM-DD
+let DIA_ORDENES = "hoy";
 // tandas de 25: el plan gratuito corta a 50 subpeticiones y cada escritura cuenta
 const TANDA = 25;
 const TIPO_NOMBRE = { acrilico: "Acrílico", sticker: "Sticker" };
@@ -1428,6 +1448,24 @@ function gruposDelRango() {
   return lista.length ? [[TIPO, lista]] : [];
 }
 
+// El Worker reescribe el registro completo, así que lo que no se manda se borra.
+// Reapuntar una orden ya cobrada le vaciaba la fecha, el precio y el vendedor —y
+// como el panel no lo repintaba, la plata solo desaparecía al refrescar—. Se
+// agrupan por esos tres y cada grupo va en su propia llamada, que en la práctica
+// es una sola: las tarjetas de una orden se cobraron todas igual.
+function porVenta(codigos) {
+  const grupos = {};
+  codigos.forEach((c) => {
+    const t = TARJETAS.filter((x) => x.codigo === c)[0] || {};
+    const venta = { vendida: t.vendida || "", precio: Number(t.precio) || 0,
+      vendedor: t.vendedor || "" };
+    const llave = venta.vendida + "|" + venta.precio + "|" + venta.vendedor;
+    if (!grupos[llave]) grupos[llave] = { venta: venta, codigos: [] };
+    grupos[llave].codigos.push(c);
+  });
+  return Object.keys(grupos).map((k) => grupos[k]);
+}
+
 function totalDeGrupos(grupos) {
   return grupos.reduce((a, g) => a + g[1].length, 0);
 }
@@ -1518,6 +1556,9 @@ $("formTarjeta").onsubmit = async (e) => {
               negocio: $("negocio").value,
               destino: destino,
               tipo: tipo,
+              // quién la levantó, para que la fila lo diga desde que nace y no
+              // solo cuando se cobre
+              vendedor: QUIEN_VENDE,
             }),
           });
         }
@@ -1571,7 +1612,7 @@ $("formTarjeta").onsubmit = async (e) => {
         if (plan.tomar[tipo].length) {
           parchearTarjetas(plan.tomar[tipo], {
             negocio: $("negocio").value.trim(), destino: destino, tipo: tipo,
-            vendida: "", precio: 0,
+            vendida: "", precio: 0, vendedor: QUIEN_VENDE,
           });
         }
         if (plan.soltar[tipo].length) {
@@ -1601,20 +1642,22 @@ $("formTarjeta").onsubmit = async (e) => {
       }
       let hechas = 0;
       for (const [tipo, codigos] of grupos) {
-        for (let i = 0; i < codigos.length; i += TANDA) {
-          const tanda = codigos.slice(i, i + TANDA);
-          hechas += tanda.length;
-          boton.textContent = "Guardando " + hechas + " de " + total + "…";
-          await llamar("rango", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              codigos: tanda,
-              negocio: $("negocio").value,
-              destino: destino,
-              tipo: tipo,
-            }),
-          });
+        for (const parte of porVenta(codigos)) {
+          for (let i = 0; i < parte.codigos.length; i += TANDA) {
+            const tanda = parte.codigos.slice(i, i + TANDA);
+            hechas += tanda.length;
+            boton.textContent = "Guardando " + hechas + " de " + total + "…";
+            await llamar("rango", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(Object.assign({
+                codigos: tanda,
+                negocio: $("negocio").value,
+                destino: destino,
+                tipo: tipo,
+              }, parte.venta)),
+            });
+          }
         }
       }
       cerrarTarjeta();
@@ -1637,6 +1680,7 @@ $("formTarjeta").onsubmit = async (e) => {
         tipo: TIPO,
         vendida: VENTA_EDITADA.vendida,
         precio: VENTA_EDITADA.precio,
+        vendedor: VENTA_EDITADA.vendedor,
       }),
     });
     const editaba = Boolean(EDITANDO_CODIGO);
@@ -1644,6 +1688,7 @@ $("formTarjeta").onsubmit = async (e) => {
     parchearTarjetas([datos.codigo], {
       negocio: datos.negocio, destino: datos.destino, tipo: datos.tipo,
       vendida: datos.vendida, precio: datos.precio,
+      vendedor: datos.vendedor !== undefined ? datos.vendedor : VENTA_EDITADA.vendedor,
     });
     avisar("avisoPanel", "Tarjeta " + datos.codigo + (editaba ? " actualizada" : " activada"), true);
     abrirQR(datos.codigo);
@@ -1670,7 +1715,8 @@ function editar(codigo) {
   URL_LEIDA = t.destino;
   pintarNumero(t.codigo);
   pintarTipo(tipoDe(t));
-  VENTA_EDITADA = { vendida: t.vendida || "", precio: t.precio || 0 };
+  VENTA_EDITADA = { vendida: t.vendida || "", precio: t.precio || 0,
+    vendedor: t.vendedor || "" };
   llenarLocales();
   $("localExistente").value = t.negocio || "";
   pintarModo("una");
@@ -2008,7 +2054,7 @@ function salirDeEdicion() {
   $("desdeAcrilico").value = $("desdeSticker").value = "";
   if ($("localExistente").options.length) $("localExistente").value = "";
   if ($("ordenRango").options.length) $("ordenRango").value = "";
-  VENTA_EDITADA = { vendida: "", precio: 0 };
+  VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "" };
 }
 
 function prepararNuevaTarjeta() {
@@ -2347,6 +2393,16 @@ $("tabla").addEventListener("click", async (e) => {
 
 // No hay entidad "venta": la tarjeta es la unidad vendida, así que el listado de
 // locales sale de agrupar las tarjetas por negocio. Nada que sincronizar.
+// "actualizado" viene en UTC y aquí se vende de noche: a las 8 p.m. de Ibagué
+// ya es el día siguiente en Londres. Sin pasarlo a la fecha local, media jornada
+// se iría al día equivocado.
+function diaLocal(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
 function locales() {
   const mapa = {};
   TARJETAS.forEach((t) => {
@@ -2354,12 +2410,16 @@ function locales() {
     if (!nombre || !t.destino) return;
     if (!mapa[nombre]) {
       mapa[nombre] = { negocio: nombre, destino: t.destino, acrilico: 0, sticker: 0,
-        vendidas: 0, importe: 0, fecha: "", codigos: { acrilico: [], sticker: [] } };
+        vendidas: 0, importe: 0, fecha: "", tocada: "", quienes: {},
+        codigos: { acrilico: [], sticker: [] } };
     }
     const g = mapa[nombre];
     const tipo = tipoDe(t);
     g[tipo]++;
     g.codigos[tipo].push(t.codigo);
+    if (t.vendedor) g.quienes[t.vendedor] = 1;
+    const tocada = diaLocal(t.actualizado);
+    if (tocada > g.tocada) g.tocada = tocada;
     if (t.vendida) {
       g.vendidas++;
       g.importe += Number(t.precio) || 0;
@@ -2373,10 +2433,12 @@ function locales() {
     if (!nombre) return;
     if (!mapa[nombre]) {
       mapa[nombre] = { negocio: nombre, destino: "", acrilico: 0, sticker: 0,
-        vendidas: 0, importe: 0, fecha: "", codigos: { acrilico: [], sticker: [] } };
+        vendidas: 0, importe: 0, fecha: "", tocada: "", quienes: {},
+        codigos: { acrilico: [], sticker: [] } };
     }
     const g = mapa[nombre];
     g.ficha = s;
+    if (s.vendedor) g.quienes[s.vendedor] = 1;
     if (s.fecha) {
       g.importe += Number(s.precio) || 0;
       if (s.fecha > g.fecha) g.fecha = s.fecha;
@@ -2388,6 +2450,12 @@ function locales() {
     const l = mapa[k];
     l.piezas = l.acrilico + l.sticker;
     l.cobrado = l.vendidas > 0 || Boolean(l.ficha && l.ficha.fecha);
+    // Una orden cobrada se queda anclada al día en que se cobró. Una pendiente
+    // vale por el día en que se trabajó, que es lo que uno busca al final de la
+    // jornada. Si no tiene ninguna de las dos, no se puede fechar y no se
+    // esconde nunca.
+    l.dia = l.fecha || l.tocada;
+    l.vendedores = Object.keys(l.quienes);
     return l;
   }).sort((a, b) =>
     (a.cobrado ? 1 : 0) - (b.cobrado ? 1 : 0) ||
@@ -2574,6 +2642,39 @@ function svgBarras(serie, campo) {
     "aria-label='Ventas por día'>" + piezas + "</svg>";
 }
 
+function haceDias(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - (n - 1));
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+// las que no se pueden fechar pasan siempre: esconder trabajo pendiente porque
+// no supimos ponerle día sería la peor forma de perder una cobranza
+function ordenesDelFiltro(lista) {
+  if (DIA_ORDENES === "todas") return lista;
+  if (DIA_ORDENES === "7") {
+    const desde = haceDias(7);
+    return lista.filter((l) => !l.dia || l.dia >= desde);
+  }
+  const dia = DIA_ORDENES === "hoy" ? hoyISO() : DIA_ORDENES;
+  return lista.filter((l) => !l.dia || l.dia === dia);
+}
+
+$("diaOrdenes").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-valor]");
+  if (!b) return;
+  DIA_ORDENES = b.dataset.valor;
+  $("fechaOrdenes").value = "";
+  PAGINA_ORDENES = 1;
+  pintarVentas();
+});
+
+$("fechaOrdenes").addEventListener("change", () => {
+  DIA_ORDENES = $("fechaOrdenes").value || "hoy";
+  PAGINA_ORDENES = 1;
+  pintarVentas();
+});
+
 function pintarVentas() {
   const serie = ventasPorDia(DIAS_GRAFICA);
   const campo = METRICA;
@@ -2585,19 +2686,25 @@ function pintarVentas() {
     ? svgAcumulado(serie, campo)
     : svgBarras(serie, campo);
 
-  const lista = locales();
-  const vendidos = lista.filter((l) => l.cobrado).length;
+  const todas = locales();
+  const lista = ordenesDelFiltro(todas);
+  marcarSegmento("diaOrdenes", DIA_ORDENES);
+  const vendidos = todas.filter((l) => l.cobrado).length;
   const total = TARJETAS.reduce((a, t) => a + (t.vendida ? Number(t.precio) || 0 : 0), 0) +
     ingresoFichas();
-  const pendientes = lista.length - vendidos;
+  const pendientes = todas.length - vendidos;
   $("graficaPie").innerHTML = "<span>" + vendidos + " aceptadas · " + pendientes +
     " pendientes</span><span>Acumulado <b>" + dinero(total) + "</b></span>";
 
   if (!lista.length) {
-    $("tablaLocales").innerHTML = "<div class='vacio'><h2>Todavía no hay órdenes</h2>" +
-      "<p>Crea una orden para un local: sus tarjetas quedan ocupadas y apuntando a su " +
-      "ficha de Google, listas para la visita.</p>" +
-      "<button type='button' data-local>Crear una orden</button></div>";
+    $("tablaLocales").innerHTML = todas.length
+      ? "<div class='vacio'><h2>Nada de ese día</h2>" +
+        "<p>Hay " + plural(todas.length, "orden", "órdenes") + " en otras fechas.</p>" +
+        "<button type='button' data-ver-todas>Ver todas</button></div>"
+      : "<div class='vacio'><h2>Todavía no hay órdenes</h2>" +
+        "<p>Crea una orden para un local: sus tarjetas quedan ocupadas y apuntando a su " +
+        "ficha de Google, listas para la visita.</p>" +
+        "<button type='button' data-local>Crear una orden</button></div>";
     return;
   }
 
@@ -2623,6 +2730,9 @@ function pintarVentas() {
       (f ? "<div class='fila-num'>ficha de Google" +
         (f.precio ? " · " + dinero(f.precio) : "") + "</div>" : "") +
       "</td>" +
+      "<td class='quien'>" + (l.vendedores.length
+        ? escHtml(l.vendedores.map((k) => SOCIO_NOMBRE[k] || k).join(" · "))
+        : "<span class='sin-dato'>—</span>") + "</td>" +
       "<td><span class='estado " + (l.cobrado
         ? "estado-vendido'>Aceptada " + l.fecha
         : "estado-pendiente'>Pendiente") +
@@ -2641,10 +2751,14 @@ function pintarVentas() {
       "<button type='button' class='accion-apagar' data-cancelar='" + escHtml(l.negocio) +
       "'" + bloqueo + ">Cancelar</button></div></td></tr>";
   });
+  const fuera = todas.length - lista.length;
   $("tablaLocales").innerHTML =
-    "<table><thead><tr><th>Local</th><th>Piezas</th><th>Estado</th><th>Importe</th><th></th>" +
-    "</tr></thead><tbody>" + filas + "</tbody></table>" +
-    paginacion(PAGINA_ORDENES, paginas, "órdenes");
+    "<table><thead><tr><th>Local</th><th>Piezas</th><th>Vendió</th><th>Estado</th>" +
+    "<th>Importe</th><th></th></tr></thead><tbody>" + filas + "</tbody></table>" +
+    paginacion(PAGINA_ORDENES, paginas, "órdenes") +
+    (fuera ? "<div class='fuera-filtro'>" + plural(fuera, "orden", "órdenes") +
+      " en otras fechas <button type='button' class='fantasma' data-ver-todas>" +
+      "Ver todas</button></div>" : "");
 }
 
 function pintarPruebas(activo) {
@@ -2711,7 +2825,7 @@ function parchearGasto(id, gasto) {
 async function cargarAjustes() {
   try {
     const a = await llamar("ajustes");
-    VENDEDORES = a.vendedores || { felipe: null, nicolas: null };
+    VENDEDORES = a.vendedores || { felipe: null, nicolas: null, alexander: null };
     const c = await llamar("compradores");
     COMPRADORES = {};
     (c.compradores || []).forEach((x) => { COMPRADORES[x.negocio] = x; });
@@ -2871,9 +2985,9 @@ function topeRenta() {
 // de repartirlo a ojo.
 function vendidoPorSocio(anio) {
   const desde = String(anio) + "-";
-  const suma = { felipe: 0, nicolas: 0, sin: 0 };
+  const suma = { felipe: 0, nicolas: 0, alexander: 0, sin: 0 };
   const meter = (quien, cuanto) => {
-    if (quien === "felipe" || quien === "nicolas") suma[quien] += cuanto;
+    if (QUIENES_VENDEN.indexOf(quien) >= 0) suma[quien] += cuanto;
     else suma.sin += cuanto;
   };
   TARJETAS.forEach((t) => {
@@ -2889,7 +3003,7 @@ function pintarTope() {
   const suma = vendidoPorSocio(UVT.anio);
   const tope = topeRenta();
   const caja = $("tope");
-  const mayor = Math.max(suma.felipe, suma.nicolas) / tope;
+  const mayor = Math.max.apply(null, QUIENES_VENDEN.map((k) => suma[k])) / tope;
   caja.className = "tope" + (mayor >= 1 ? " pasado" : (mayor >= 0.8 ? " cerca" : ""));
 
   const barra = (socio) => {
@@ -2902,8 +3016,11 @@ function pintarTope() {
       "%'></i></div></div>";
   };
 
+  // una barra en cero es ruido: el tercero aparece cuando ya vendió o ya tiene
+  // sus datos puestos
+  const conBarra = QUIENES_VENDEN.filter((k) => suma[k] || VENDEDORES[k]);
   caja.innerHTML = "<div class='cejilla'>Declaración de renta · " + UVT.anio + "</div>" +
-    barra("felipe") + barra("nicolas") +
+    (conBarra.length ? conBarra : ["felipe", "nicolas"]).map(barra).join("") +
     (suma.sin ? "<div class='tope-nota'>Sin vendedor apuntado: <b>" + dinero(suma.sin) +
       "</b> — son ventas de antes de separar por quién la hizo.</div>" : "") +
     "<div class='tope-nota'>Declara quien pase " + RENTA_UVT.toLocaleString("es-CO") +
@@ -3052,6 +3169,13 @@ $("metricaVentas").addEventListener("click", (e) => {
 /* ---------- registrar la venta de un local ---------- */
 
 $("tablaLocales").addEventListener("click", async (e) => {
+  if (e.target.closest("[data-ver-todas]")) {
+    DIA_ORDENES = "todas";
+    $("fechaOrdenes").value = "";
+    PAGINA_ORDENES = 1;
+    pintarVentas();
+    return;
+  }
   if (e.target.closest("[data-local]")) { $("abrirLocal").click(); return; }
 
   const pg = e.target.closest("[data-pagina]");
@@ -3719,11 +3843,11 @@ $("socioAjustes").addEventListener("click", (e) => {
 });
 
 function abrirAjustes(socio) {
-  BORRADOR_VENDEDORES = {
-    felipe: Object.assign({}, VENDEDORES.felipe),
-    nicolas: Object.assign({}, VENDEDORES.nicolas),
-  };
-  SOCIO_AJUSTES = socio === "nicolas" ? "nicolas" : "felipe";
+  BORRADOR_VENDEDORES = {};
+  QUIENES_VENDEN.forEach((k) => {
+    BORRADOR_VENDEDORES[k] = Object.assign({}, VENDEDORES[k]);
+  });
+  SOCIO_AJUSTES = QUIENES_VENDEN.indexOf(socio) >= 0 ? socio : "felipe";
   marcarSegmento("socioAjustes", SOCIO_AJUSTES);
   pintarFormAjustes(SOCIO_AJUSTES);
   pintarTope();
@@ -3752,7 +3876,7 @@ $("modalAjustes").addEventListener("click", (e) => {
 $("formAjustes").onsubmit = async (e) => {
   e.preventDefault();
   BORRADOR_VENDEDORES[SOCIO_AJUSTES] = leerFormAjustes();
-  const pendientes = ["felipe", "nicolas"].filter((k) => {
+  const pendientes = QUIENES_VENDEN.filter((k) => {
     const v = BORRADOR_VENDEDORES[k] || {};
     return v.nombre || v.cedula;
   });
@@ -3774,8 +3898,8 @@ $("formAjustes").onsubmit = async (e) => {
     }
     VENDEDORES = ultimo.vendedores;
     cerrarAjustes();
-    avisar("avisoPanel", pendientes.length === 2
-      ? "Datos de los dos guardados"
+    avisar("avisoPanel", pendientes.length > 1
+      ? "Datos de " + pendientes.map((k) => SOCIO_NOMBRE[k]).join(" y ") + " guardados"
       : "Datos de " + SOCIO_NOMBRE[pendientes[0]] + " guardados", true);
   } catch (err) {
     avisar("avisoAjustes", err.message, false);
@@ -3971,7 +4095,7 @@ $("quienVende").addEventListener("click", (e) => {
 
 try {
   const guardado = localStorage.getItem("quienVende");
-  if (guardado === "felipe" || guardado === "nicolas") QUIEN_VENDE = guardado;
+  if (QUIENES_VENDEN.indexOf(guardado) >= 0) QUIEN_VENDE = guardado;
 } catch (e) {}
 marcarSegmento("quienVende", QUIEN_VENDE);
 
@@ -4698,6 +4822,14 @@ export function vistaAdmin(origen) {
         <div class="pozo" id="pozoGrafica"></div>
         <div class="grafica-pie" id="graficaPie"></div>
       </div>
+        <div class="filtro-dia">
+          <div class="segmento" id="diaOrdenes" role="group" aria-label="De qué día">
+            <button type="button" class="activa" data-valor="hoy">Hoy</button>
+            <button type="button" data-valor="7">7 días</button>
+            <button type="button" data-valor="todas">Todas</button>
+          </div>
+          <input type="date" id="fechaOrdenes" aria-label="Ver otro día">
+        </div>
         <div id="tablaLocales"></div>
       </div>
     </section>
@@ -4935,6 +5067,7 @@ export function vistaAdmin(origen) {
       <div class="segmento" id="socioAjustes" role="group" aria-label="De quién son los datos">
         <button type="button" class="activa" data-valor="felipe">Felipe</button>
         <button type="button" data-valor="nicolas">Nicolás</button>
+        <button type="button" data-valor="alexander">Alexander</button>
       </div>
 
       <label class="mini sobre-buscador" for="ajustesNombre">Nombre completo</label>
@@ -5101,6 +5234,7 @@ export function vistaAdmin(origen) {
       <div class="segmento" id="quienVende" role="group" aria-label="Quién hizo la venta">
         <button type="button" class="activa" data-valor="felipe">Felipe</button>
         <button type="button" data-valor="nicolas">Nicolás</button>
+        <button type="button" data-valor="alexander">Alexander</button>
       </div>
       <div class="modal-acciones acciones-izq">
         <button type="button" class="fantasma" id="bajarComprobante">Descargar PDF</button>

@@ -47,7 +47,7 @@
  *   "b:<negocio>"   a quién se le manda el comprobante: correo, NIT y teléfono
  *   "r:<negocio>"   comprobante ya enviado: cierra esa orden y no deja tocarle
  *                   nada hasta que se borre
- *   "cfg:vendedor"  {felipe:{...},nicolas:{...}} — los dos que venden, para
+ *   "cfg:vendedor"  {felipe:{...},nicolas:{...},alexander:{...}} — quienes venden, para
  *                   firmar el comprobante con el que hizo esa venta
  *   "intentos:<ip>" contador de logins fallidos, expira solo a las 24 horas
  *
@@ -67,9 +67,12 @@ const TIPOS = new Set(["acrilico", "sticker"]);
 const LLAVE_MODO = "modo:prueba";
 const SOCIOS = new Set(["felipe", "nicolas", "ambos"]);
 // Quién hizo la venta. Va en el registro porque la declaración de renta la
-// presenta cada uno por su lado, con sus propios ingresos.
+// presenta cada uno por su lado, con sus propios ingresos. Alexander vende pero
+// no es socio: no pone plata ni entra en el reparto, por eso está aquí y no en
+// SOCIOS, que es quién paga los gastos.
+const VENDEDORES = new Set(["felipe", "nicolas", "alexander"]);
 function vendedorValido(valor) {
-  return valor === "felipe" || valor === "nicolas" ? valor : "";
+  return VENDEDORES.has(valor) ? valor : "";
 }
 // El comprobante sale de este buzón. Brevo pide verificar el remitente una vez.
 const CORREO_REMITENTE = "greview641@gmail.com";
@@ -252,7 +255,7 @@ function servicioDe(cuerpo) {
 // y sin QR. El PDF se arma en el panel y aquí solo se despacha.
 function vendedorDe(cuerpo) {
   const socio = String(cuerpo.socio || "");
-  if (socio !== "felipe" && socio !== "nicolas") return { error: "Ese socio no existe" };
+  if (!VENDEDORES.has(socio)) return { error: "Ese vendedor no existe" };
 
   const nombre = String(cuerpo.nombre || "").trim().slice(0, 80);
   if (!nombre) return { error: "Falta el nombre completo" };
@@ -272,9 +275,10 @@ function vendedorDe(cuerpo) {
 // Antes era un solo vendedor suelto. Lo que se guardó así era de Felipe, que es
 // quien montó el panel; se sube al mapa la primera vez que se lee.
 function mapaDeVendedores(guardado) {
-  if (!guardado) return { felipe: null, nicolas: null };
-  if (guardado.nombre) return { felipe: guardado, nicolas: null };
-  return { felipe: guardado.felipe || null, nicolas: guardado.nicolas || null };
+  if (!guardado) return { felipe: null, nicolas: null, alexander: null };
+  if (guardado.nombre) return { felipe: guardado, nicolas: null, alexander: null };
+  return { felipe: guardado.felipe || null, nicolas: guardado.nicolas || null,
+    alexander: guardado.alexander || null };
 }
 
 function compradorDe(cuerpo) {

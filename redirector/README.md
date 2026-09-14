@@ -161,6 +161,20 @@ Dos detalles de maquetación que costaron un intento cada uno:
 - Cada dato lleva `white-space:nowrap`. Sin eso, `(26 malos)` se partía por la
   mitad y dejaba un hueco que desalineaba todo lo que venía detrás.
 
+### Editar no puede borrar la venta
+
+El endpoint `rango` reescribe el registro entero de cada tarjeta, así que **lo
+que no se manda se borra**. Reapuntar una orden ya cobrada a otra ficha le
+vaciaba la fecha, el precio y el vendedor; y como el panel solo parcheaba
+`negocio`, `destino` y `tipo`, la plata seguía en pantalla y solo desaparecía al
+refrescar.
+
+El arreglo va en el panel, no en el Worker: `porVenta()` agrupa los códigos por
+la venta que ya tienen y manda cada grupo con su fecha, su precio y su vendedor.
+En la práctica es una sola llamada, porque las tarjetas de una orden se cobraron
+todas igual. Hacerlo en el Worker habría costado una lectura de KV por tarjeta
+—veinticinco por tanda— y el plan gratis da cincuenta subpeticiones por petición.
+
 ## Por qué el panel no vuelve a preguntar tras guardar
 
 KV es de **consistencia eventual**: lo que se acaba de escribir puede tardar
@@ -563,17 +577,52 @@ equivocaciones entre dos personas, no una frontera de seguridad.
 
 ### Quién vende
 
-Las ventas las hace uno u otro, así que **Cuentas › Mis datos** guarda los datos
-de los dos: nombre, cédula, teléfono y la nota que va bajo el nombre. Se cambia
-de uno a otro con el segmentado de arriba, y lo escrito no se pierde al saltar
-entre ellos: sube todo de una al guardar.
+Venden tres: **Felipe, Nicolás y Alexander**. **Cuentas › Mis datos** guarda los
+datos de cada uno —nombre, cédula, teléfono y la nota que va bajo el nombre—. Se
+cambia de uno a otro con el segmentado de arriba, y lo escrito no se pierde al
+saltar entre ellos: sube todo de una al guardar.
 
 En la ventana del cobro hay otro segmentado, **quién hizo la venta**, que decide
-con cuál de los dos se firma ese comprobante. El panel recuerda el último elegido
-en ese teléfono, que es de quien suele ser.
+con cuál de los tres se firma ese comprobante. El panel recuerda el último
+elegido en ese teléfono, que es de quien suele ser.
 
-Los dos viven en `cfg:vendedor` como `{felipe:{...},nicolas:{...}}`. Lo que había
-guardado cuando era un solo vendedor se lee como de Felipe.
+**Alexander vende pero no es socio.** Sale donde importa quién hizo la venta —el
+comprobante, el tope de renta, la columna *Vendió* de las órdenes— y no sale en
+el reparto de utilidad ni en quién paga un gasto, que son cosas de los dos que
+pusieron la plata. Por eso hay dos listas: `QUIENES_VENDEN` y los socios del
+reparto, que siguen siendo dos.
+
+Su barra en el tope de renta solo aparece cuando ya vendió o ya tiene sus datos
+puestos: una barra en cero es ruido.
+
+Los tres viven en `cfg:vendedor` como `{felipe:{...},nicolas:{...},alexander:{...}}`.
+Lo que había guardado cuando era un solo vendedor se lee como de Felipe.
+
+### Las órdenes del día
+
+La tabla de órdenes abre en **Hoy**. Al lado están *7 días*, *Todas* y un campo
+de fecha para mirar un día suelto.
+
+Qué día es una orden:
+
+- **Cobrada** → el día en que se cobró, y ahí se queda para siempre.
+- **Pendiente** → el último día en que se tocó, que es lo que uno busca al
+  terminar la jornada.
+- **Sin ninguna de las dos** → no se puede fechar, así que **no se esconde
+  nunca**. Esconder trabajo pendiente porque no supimos ponerle día sería la
+  peor forma de perder una cobranza.
+
+Por lo mismo, debajo de la tabla siempre se dice cuántas quedaron fuera del
+filtro, con un botón para verlas. El filtro recorta la vista, no la información.
+
+**La hora importa.** `actualizado` se guarda en UTC y aquí se vende de noche: a
+las 8 p.m. de Ibagué ya es el día siguiente en Londres. `diaLocal()` lo pasa a la
+fecha del teléfono antes de comparar; sin eso, media jornada se iría al día
+siguiente.
+
+La columna **Vendió** sale de las tarjetas de la orden. Se apunta dos veces: al
+crear la orden queda quien la levantó, y al cobrarla queda quien la cobró —que es
+el que firma el comprobante y el que declara ese ingreso—.
 
 ### El envío del correo
 
