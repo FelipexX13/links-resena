@@ -1042,3 +1042,50 @@ firmadas sus ventas. La contraseña en blanco deja la que tenía.
 **No hay botón de borrar, hay uno de apagar.** Borrar a alguien dejaría sus
 ventas firmadas por un fantasma; apagarlo le corta la sesión en la siguiente
 petición y deja su historial en pie.
+
+## Comisiones
+
+Un vendedor se queda un porcentaje de lo que venda. Lo que sobra es de la casa y
+se reparte entre los dos socios como siempre.
+
+De un acrílico de $49.900 al 50%: **Alexander $24.950, la casa $24.950** —
+$12.475 para cada uno—.
+
+### El porcentaje se congela en la venta
+
+Va escrito en cada tarjeta, no se lee del usuario al hacer cuentas. Subirle
+mañana la comisión a alguien **no le reescribe lo de ayer**: una venta que se
+hizo al 40% sigue repartida al 40% para siempre.
+
+Quién lo pone:
+
+| Quién cobra | Qué porcentaje queda |
+|---|---|
+| Un vendedor | el suyo, el que le puso el superadmin. No lo elige ni lo manda |
+| Un socio | cero: lo suyo es la utilidad de lo que quede |
+| El superadmin reabriendo un cobro ajeno | el que ya tenía, que es el pacto de aquel día |
+
+Como `rango` reescribe el registro entero, el porcentaje viaja con la fecha, el
+precio y el vendedor en `porVenta()`. Si no, reeditar una orden lo pondría en
+cero y la comisión se evaporaría.
+
+### La comisión sale antes que el costo
+
+En Cuentas se resta de la utilidad, no solo del reparto de la venta:
+
+```
+Ingresos $208.500 · Gastos $100.000 · Comisiones $74.310    Utilidad $34.190
+```
+
+Vale la pena tenerlo presente al fijar un porcentaje: de ese acrílico la casa se
+queda $24.950 y de ahí **todavía tiene que pagar el plástico, el chip y el
+vinilo**. El 50% no es la mitad de la ganancia, es la mitad de la venta.
+
+### Lo que ve cada uno
+
+**El superadmin**, en Cuentas, una tabla por vendedor: piezas, facturado, lo que
+se lleva y lo que queda para la casa.
+
+**El vendedor**, en su pestaña **Lo mío**: lo que lleva ganado, de cuánto
+vendido, y el detalle por local y día. No ve gastos, ni utilidad, ni lo de nadie
+más.

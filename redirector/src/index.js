@@ -167,7 +167,7 @@ function precioValido(valor) {
   return Number.isFinite(n) && n >= 0 ? Math.round(n) : 0;
 }
 
-function registroDe(cuerpo, vendedor) {
+function registroDe(cuerpo, vendedor, pct) {
   const destino = urlDestino(cuerpo.destino);
   if (!destino) return { error: "El destino debe ser una URL http:// o https://" };
   const negocio = String(cuerpo.negocio || "").trim().slice(0, 120);
@@ -180,6 +180,7 @@ function registroDe(cuerpo, vendedor) {
       vendida: fechaValida(cuerpo.vendida),
       precio: precioValido(cuerpo.precio),
       vendedor: vendedor,
+      pct: pct,
       actualizado: new Date().toISOString(),
     },
   };
@@ -234,7 +235,7 @@ function gastoDe(cuerpo) {
 // El sitio en Google Maps se cobra aparte y no cuelga de ninguna tarjeta: un local
 // puede pedirla sin comprar un solo acrílico. Por eso vive en su propia clave y
 // se une a la orden por el nombre del negocio.
-function servicioDe(cuerpo, vendedor) {
+function servicioDe(cuerpo, vendedor, pct) {
   const negocio = String(cuerpo.negocio || "").trim().slice(0, 60);
   if (!negocio) return { error: "Falta el nombre del local" };
 
@@ -251,6 +252,7 @@ function servicioDe(cuerpo, vendedor) {
       precio: Math.round(precio),
       fecha: fecha,
       vendedor: vendedor,
+      pct: pct,
       hecha: Boolean(cuerpo.hecha),
       notas: String(cuerpo.notas || "").trim().slice(0, 200),
     },
@@ -495,6 +497,18 @@ async function api(request, env, accion, url, ctx) {
   // que si no podría apuntarle una venta a cualquiera.
   const deQuienEs = (pedido) => quien.dueno ? vendedorValido(String(pedido || "")) : quien.usuario;
 
+  // El porcentaje se congela en la venta: si mañana a Alexander le suben del 50
+  // al 60, lo de ayer sigue repartido al 50. Por eso viaja en cada tarjeta y no
+  // se lee del usuario al hacer cuentas.
+  //
+  // Un vendedor no lo elige: es el suyo, el que le puso el superadmin. El
+  // superadmin sí manda el guardado, que es como no se pierde al reeditar.
+  const suPct = (pedido) => {
+    if (!quien.dueno) return quien.pct;
+    const n = Number(pedido);
+    return Number.isFinite(n) && n >= 0 && n <= 100 ? Math.round(n) : 0;
+  };
+
   if (accion === "modo" && request.method === "POST") {
     const cuerpo = await request.json().catch(() => ({}));
     const prueba = Boolean(cuerpo.prueba);
@@ -546,7 +560,7 @@ async function api(request, env, accion, url, ctx) {
       return json({ error: "Ese código está reservado por el sistema" }, 400);
     }
 
-    const hecho = registroDe(cuerpo, deQuienEs(cuerpo.vendedor));
+    const hecho = registroDe(cuerpo, deQuienEs(cuerpo.vendedor), suPct(cuerpo.pct));
     if (hecho.error) return json({ error: hecho.error }, 400);
 
     // dos puertas: ni se saca una tarjeta de una orden cerrada, ni se mete en ella
@@ -573,7 +587,7 @@ async function api(request, env, accion, url, ctx) {
       return json({ error: "Máximo " + MAX_RANGO + " tarjetas por tanda" }, 400);
     }
 
-    const hecho = registroDe(cuerpo, deQuienEs(cuerpo.vendedor));
+    const hecho = registroDe(cuerpo, deQuienEs(cuerpo.vendedor), suPct(cuerpo.pct));
     if (hecho.error) return json({ error: hecho.error }, 400);
 
     if (await ordenCerrada(env, hecho.registro.negocio)) {
@@ -620,7 +634,7 @@ async function api(request, env, accion, url, ctx) {
 
   if (accion === "servicio" && request.method === "POST") {
     const cuerpo = await request.json().catch(() => ({}));
-    const hecho = servicioDe(cuerpo, deQuienEs(cuerpo.vendedor));
+    const hecho = servicioDe(cuerpo, deQuienEs(cuerpo.vendedor), suPct(cuerpo.pct));
     if (hecho.error) return json({ error: hecho.error }, 400);
     if (await ordenCerrada(env, hecho.servicio.negocio)) {
       return cerrada(hecho.servicio.negocio);
@@ -854,6 +868,7 @@ async function api(request, env, accion, url, ctx) {
       vendida: "",
       precio: 0,
       vendedor: "",   // vuelve a estar libre: no es de nadie
+      pct: 0,
       actualizado: new Date().toISOString(),
     };
     for (const codigo of codigos) await escribir(env, codigo, registro);

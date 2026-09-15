@@ -562,6 +562,7 @@ const ESTILOS = `
   .gente span{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;
     color:var(--tinta-3)}
   .gente .apagado{opacity:.55}
+  .sobre-tabla{margin:26px 0 2px}
   .inv{font-family:"Geist Mono",ui-monospace,monospace;font-size:13px}
   .inv-malos{color:var(--rojo-fuerte)}
   .rot{display:none}
@@ -706,6 +707,27 @@ const ESTILOS = `
     #tablaGastos .acciones,#tablaLocales .acciones{display:flex;gap:5px;min-width:0}
     #tablaGastos .acciones button,#tablaLocales .acciones button{width:auto;
       padding:7px 11px;font-size:12px}
+
+    /* Nombre a la izquierda, lo que se lleva grande a la derecha, y el desglose
+       debajo con su palabra pegada. Mismo patrón que el inventario. */
+    #tablaComisiones tr,#tablaMio tr{display:flex;flex-wrap:wrap;align-items:baseline;
+      gap:2px 13px;padding:11px 0}
+    #tablaComisiones td,#tablaMio td{padding:0;width:auto;white-space:nowrap}
+    #tablaComisiones td:nth-child(1){order:1;min-width:0;overflow:hidden;
+      text-overflow:ellipsis}
+    #tablaComisiones td:nth-child(4){order:2;margin-left:auto;font-size:17px;
+      color:var(--tinta)}
+    #tablaComisiones td:nth-child(2){order:3;flex:1 0 100%;font-size:12px;
+      color:var(--tinta-2)}
+    #tablaComisiones td:nth-child(3),#tablaComisiones td:nth-child(5){order:4;
+      font-size:12px;color:var(--tinta-2)}
+
+    #tablaMio td:nth-child(2){order:1;min-width:0;overflow:hidden;
+      text-overflow:ellipsis;font-size:15px}
+    #tablaMio td:nth-child(5){order:2;margin-left:auto;font-size:17px;color:var(--tinta)}
+    #tablaMio td:nth-child(1){order:3;flex:1 0 100%;font-size:12px;color:var(--tinta-3)}
+    #tablaMio td:nth-child(3),#tablaMio td:nth-child(4){order:4;font-size:12px;
+      color:var(--tinta-2)}
 
     /* El inventario contesta una sola pregunta: cuánto queda. Ese número va
        grande a la derecha del nombre y el desglose debajo, en pequeño. Antes
@@ -880,7 +902,7 @@ let TIPO = "acrilico";
 let FILTRO_TIPO = "";
 let MODO = "una";
 let ORIGEN_RANGO = "numero";
-let VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "" };
+let VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "", pct: 0 };
 let VISTA = "locales";
 let PRUEBAS = false;
 let GASTOS = [];
@@ -1478,8 +1500,8 @@ function porVenta(codigos) {
   codigos.forEach((c) => {
     const t = TARJETAS.filter((x) => x.codigo === c)[0] || {};
     const venta = { vendida: t.vendida || "", precio: Number(t.precio) || 0,
-      vendedor: t.vendedor || "" };
-    const llave = venta.vendida + "|" + venta.precio + "|" + venta.vendedor;
+      vendedor: t.vendedor || "", pct: Number(t.pct) || 0 };
+    const llave = venta.vendida + "|" + venta.precio + "|" + venta.vendedor + "|" + venta.pct;
     if (!grupos[llave]) grupos[llave] = { venta: venta, codigos: [] };
     grupos[llave].codigos.push(c);
   });
@@ -1701,6 +1723,7 @@ $("formTarjeta").onsubmit = async (e) => {
         vendida: VENTA_EDITADA.vendida,
         precio: VENTA_EDITADA.precio,
         vendedor: VENTA_EDITADA.vendedor,
+        pct: VENTA_EDITADA.pct,
       }),
     });
     const editaba = Boolean(EDITANDO_CODIGO);
@@ -1736,7 +1759,7 @@ function editar(codigo) {
   pintarNumero(t.codigo);
   pintarTipo(tipoDe(t));
   VENTA_EDITADA = { vendida: t.vendida || "", precio: t.precio || 0,
-    vendedor: t.vendedor || "" };
+    vendedor: t.vendedor || "", pct: Number(t.pct) || 0 };
   llenarLocales();
   $("localExistente").value = t.negocio || "";
   pintarModo("una");
@@ -2107,7 +2130,7 @@ function salirDeEdicion() {
   decirCodigo("");
   if ($("localExistente").options.length) $("localExistente").value = "";
   if ($("ordenRango").options.length) $("ordenRango").value = "";
-  VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "" };
+  VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "", pct: 0 };
 }
 
 function prepararNuevaTarjeta() {
@@ -2541,6 +2564,46 @@ function fichaDe(negocio) {
 }
 
 // Lo cobrado por fichas: sin fecha es un trato hablado, no un ingreso.
+// Lo que se lleva quien vendió. El porcentaje sale de la venta, no del usuario:
+// así subirle la comisión a alguien no le reescribe lo de ayer.
+function comisionDe(precio, pct) {
+  return Math.round((Number(precio) || 0) * (Number(pct) || 0) / 100);
+}
+
+// Todo lo vendido, agrupado por quién lo vendió, con sus líneas por local y día.
+function ventasPorVendedor() {
+  const mapa = {};
+  const meter = (quien, precio, pct, fecha, negocio, cuantas) => {
+    if (!quien || !fecha) return;
+    if (!mapa[quien]) {
+      mapa[quien] = { quien: quien, piezas: 0, facturado: 0, comision: 0, lineas: {} };
+    }
+    const m = mapa[quien];
+    const com = comisionDe(precio, pct);
+    m.piezas += cuantas;
+    m.facturado += precio;
+    m.comision += com;
+    const llave = fecha + "|" + negocio;
+    if (!m.lineas[llave]) {
+      m.lineas[llave] = { fecha: fecha, negocio: negocio, piezas: 0, cobrado: 0, comision: 0 };
+    }
+    const l = m.lineas[llave];
+    l.piezas += cuantas;
+    l.cobrado += precio;
+    l.comision += com;
+  };
+
+  TARJETAS.forEach((t) => {
+    if (!t.vendida) return;
+    meter(t.vendedor, Number(t.precio) || 0, t.pct, t.vendida, t.negocio || "", 1);
+  });
+  SERVICIOS.forEach((x) => {
+    if (!x.fecha) return;
+    meter(x.vendedor, Number(x.precio) || 0, x.pct, x.fecha, x.negocio || "", 0);
+  });
+  return mapa;
+}
+
 function ingresoFichas() {
   return SERVICIOS.reduce((a, s) => a + (s.fecha ? Number(s.precio) || 0 : 0), 0);
 }
@@ -2939,11 +3002,19 @@ function cuentas() {
   });
   const ingresos = TARJETAS.reduce((a, t) => a + (t.vendida ? Number(t.precio) || 0 : 0), 0) +
     ingresoFichas();
+
+  // La comisión sale de arriba, antes que el costo: de un acrílico de $49.900 al
+  // 50%, la casa se queda $24.950 y de ahí todavía tiene que pagar el plástico y
+  // el chip. Por eso resta en la utilidad y no solo en el reparto de la venta.
+  const porQuien = ventasPorVendedor();
+  const comisiones = Object.keys(porQuien).reduce((a, k) => a + porQuien[k].comision, 0);
+
   const justo = gastos / 2;
   return {
     gastos: gastos,
     ingresos: ingresos,
-    utilidad: ingresos - gastos,
+    comisiones: comisiones,
+    utilidad: ingresos - gastos - comisiones,
     puesto: puesto,
     justo: justo,
     // positivo = Felipe puso de más y Nicolás le debe
@@ -3086,6 +3157,30 @@ function pintarTope() {
     "año, que en " + UVT.anio + " son " + dinero(tope) + " (UVT " + dinero(UVT.pesos) + ").</div>";
 }
 
+// Lo que cada vendedor ha hecho y lo que se lleva. Solo sale si hay alguien:
+// mientras vendan los dos socios, esta tabla no tiene nada que contar.
+function pintarComisiones() {
+  const porQuien = ventasPorVendedor();
+  const gente = Object.keys(porQuien)
+    .filter((k) => porQuien[k].comision > 0)
+    .sort((a, b) => porQuien[b].comision - porQuien[a].comision);
+
+  $("bloqueComisiones").hidden = !gente.length;
+  if (!gente.length) return;
+
+  $("tablaComisiones").innerHTML =
+    "<table><thead><tr><th>Vendedor</th><th>Piezas</th><th>Facturado</th>" +
+    "<th>Se lleva</th><th>Para la casa</th></tr></thead><tbody>" +
+    gente.map((k) => {
+      const m = porQuien[k];
+      return "<tr><td class='negocio'>" + escHtml(nombreDeVendedor(k)) + "</td>" +
+        "<td class='inv'>" + m.piezas + "</td>" +
+        "<td class='importe'>" + dinero(m.facturado) + "</td>" +
+        "<td class='importe'><b>" + dinero(m.comision) + "</b></td>" +
+        "<td class='importe'>" + dinero(m.facturado - m.comision) + "</td></tr>";
+    }).join("") + "</tbody></table>";
+}
+
 function pintarCuentas() {
   const c = cuentas();
   const serie = dineroPorDia(DIAS_DINERO);
@@ -3101,7 +3196,9 @@ function pintarCuentas() {
     "<span class='marca-entra'>Entra " + dinero(entra) + "</span>" +
     "<span class='marca-sale'>Sale " + dinero(sale) + "</span>";
   $("dineroPie").innerHTML = "<span>Ingresos <b>" + dinero(c.ingresos) +
-    "</b> · Gastos <b>" + dinero(c.gastos) + "</b></span><span>" +
+    "</b> · Gastos <b>" + dinero(c.gastos) + "</b>" +
+    (c.comisiones ? " · Comisiones <b>" + dinero(c.comisiones) + "</b>" : "") +
+    "</span><span>" +
     (c.utilidad >= 0 ? "Utilidad " : "Va perdiendo ") + "<b>" +
     dinero(Math.abs(c.utilidad)) + "</b></span>";
 
@@ -3111,6 +3208,8 @@ function pintarCuentas() {
     "<div class='socio-linea'><span>Le toca poner</span><b>" + dinero(c.justo) + "</b></div>" +
     "<div class='socio-linea'><span>" + (c.utilidad >= 0 ? "Gana" : "Pierde") +
     "</span><b>" + dinero(Math.abs(c.utilidad) / 2) + "</b></div></div>").join("");
+
+  pintarComisiones();
 
   const saldo = Math.round(c.saldo);
   const caja = $("saldo");
@@ -3200,8 +3299,10 @@ function pintarCuentas() {
 function pintarRol() {
   const dueno = SESION.dueno;
   document.querySelectorAll("[data-dueno]").forEach((e) => { e.hidden = !dueno; });
-  // con una sola pestaña, la barra de pestañas no dice nada
-  $("vistaPanel").hidden = !dueno;
+  // "Lo mío" es de quien cobra comisión; el resto, de la casa
+  document.querySelectorAll("#vistaPanel [data-valor]").forEach((b) => {
+    b.hidden = b.dataset.valor === "mio" ? dueno : !dueno && b.dataset.valor !== "locales";
+  });
   $("marcaQuien").textContent = dueno ? "" : SESION.nombre;
   if (!dueno) {
     VISTA = "locales";
@@ -3213,14 +3314,44 @@ function pintarRol() {
   $("filaQuienVende").hidden = !dueno;
 }
 
+function pintarMio() {
+  const m = ventasPorVendedor()[SESION.usuario] ||
+    { piezas: 0, facturado: 0, comision: 0, lineas: {} };
+
+  $("mioMetrica").innerHTML = dinero(m.comision) +
+    "<span class='unidad'>tuyo, de " + dinero(m.facturado) + " vendidos</span>";
+  $("mioPie").innerHTML = "<span>" + plural(m.piezas, "pieza", "piezas") +
+    "</span><span>Tu parte <b>" + (Number(SESION.pct) || 0) + "%</b></span>";
+
+  const lineas = Object.keys(m.lineas).map((k) => m.lineas[k])
+    .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+
+  if (!lineas.length) {
+    $("tablaMio").innerHTML = "<div class='vacio'><h2>Todavía nada</h2>" +
+      "<p>Cuando aceptes tu primera orden, aquí sale lo que te toca de cada venta.</p></div>";
+    return;
+  }
+
+  $("tablaMio").innerHTML =
+    "<table><thead><tr><th>Día</th><th>Local</th><th>Piezas</th><th>Cobrado</th>" +
+    "<th>Tuyo</th></tr></thead><tbody>" +
+    lineas.map((l) => "<tr><td class='piezas'>" + escHtml(l.fecha) + "</td>" +
+      "<td class='negocio'>" + escHtml(l.negocio || "—") + "</td>" +
+      "<td class='inv'>" + (l.piezas || "—") + "</td>" +
+      "<td class='importe'>" + dinero(l.cobrado) + "</td>" +
+      "<td class='importe'><b>" + dinero(l.comision) + "</b></td></tr>").join("") +
+    "</tbody></table>";
+}
+
 function pintarVista(valor) {
-  const conocidas = { locales: 1, cuentas: 1, inventario: 1 };
+  const conocidas = { locales: 1, cuentas: 1, inventario: 1, mio: 1 };
   VISTA = conocidas[valor] ? valor : "tarjetas";
   marcarSegmento("vistaPanel", VISTA);
   $("vistaTarjetas").hidden = VISTA !== "tarjetas";
   $("vistaLocales").hidden = VISTA !== "locales";
   $("vistaCuentas").hidden = VISTA !== "cuentas";
   $("vistaInventario").hidden = VISTA !== "inventario";
+  $("vistaMio").hidden = VISTA !== "mio";
   // activar tarjetas es reponer plástico: va con el inventario, no con la lista
   $("abrirActivar").hidden = !SESION.dueno || VISTA !== "inventario";
   $("togglePruebas").hidden = !SESION.dueno || VISTA !== "inventario";
@@ -3229,6 +3360,7 @@ function pintarVista(valor) {
   $("abrirUsuarios").hidden = !SESION.dueno || VISTA !== "cuentas";
   if (VISTA === "locales") pintarVentas();
   if (VISTA === "cuentas" || VISTA === "inventario") pintarCuentas();
+  if (VISTA === "mio") pintarMio();
 }
 
 $("vistaPanel").addEventListener("click", (e) => {
@@ -4228,6 +4360,16 @@ $("borrarComprobante").onclick = async () => {
 // Un solo botón para todo, así que tiene que decir qué va a hacer antes de
 // hacerlo: mandar el comprobante deja la orden cerrada y eso no se deshace sin
 // borrarlo.
+// Un socio no cobra comisión: lo suyo es la utilidad de lo que quede. Al reabrir
+// un cobro ajeno se respeta el que ya tenía, que es el pacto de aquel día.
+function pctDeLaVenta() {
+  if (!SESION.dueno) return Number(SESION.pct) || 0;
+  const l = LOCAL_VENTA;
+  if (!l) return 0;
+  const previa = TARJETAS.filter((t) => t.negocio === l.negocio && t.pct)[0];
+  return previa && previa.vendedor === QUIEN_VENDE ? Number(previa.pct) || 0 : 0;
+}
+
 function pintarBotonVenta() {
   const l = LOCAL_VENTA;
   if (!l) return;
@@ -4323,6 +4465,7 @@ $("formVenta").onsubmit = async (e) => {
             vendida: fecha,
             precio: g.precio,
             vendedor: QUIEN_VENDE,
+            pct: pctDeLaVenta(),
           }),
         });
       }
@@ -4355,7 +4498,8 @@ $("formVenta").onsubmit = async (e) => {
       $("ventaNit").value.trim(), $("ventaTelefono").value.trim());
     for (const g of grupos) {
       if (g.codigos.length) {
-        parchearTarjetas(g.codigos, { vendida: fecha, precio: g.precio, vendedor: QUIEN_VENDE });
+        parchearTarjetas(g.codigos, { vendida: fecha, precio: g.precio,
+          vendedor: QUIEN_VENDE, pct: pctDeLaVenta() });
       }
     }
     if (fichaNueva) parchearServicio(fichaNueva.id, fichaNueva);
@@ -4920,6 +5064,7 @@ export function vistaAdmin(origen) {
           <button type="button" data-valor="cuentas">Cuentas</button>
           <button type="button" data-valor="tarjetas">Tarjetas</button>
           <button type="button" data-valor="inventario">Inventario</button>
+          <button type="button" data-valor="mio">Lo mío</button>
         </div>
         <div class="cabecera-acciones">
           <button type="button" id="abrirActivar">Activar tarjetas</button>
@@ -4975,6 +5120,10 @@ export function vistaAdmin(origen) {
         </div>
         <div id="tablaGastos"></div>
 
+        <div id="bloqueComisiones" hidden>
+          <p class="cejilla sobre-tabla">Lo que vendieron los demás</p>
+          <div id="tablaComisiones"></div>
+        </div>
       </div>
 
       <div id="vistaInventario" hidden>
@@ -5005,6 +5154,15 @@ export function vistaAdmin(origen) {
           <input type="date" id="fechaOrdenes" aria-label="Ver otro día">
         </div>
         <div id="tablaLocales"></div>
+      </div>
+
+      <div id="vistaMio" hidden>
+        <div class="grafica" aria-label="Lo que llevas ganado">
+          <p class="cejilla">Lo que llevas ganado</p>
+          <div class="metrica" id="mioMetrica">—</div>
+          <div class="grafica-pie" id="mioPie"></div>
+        </div>
+        <div id="tablaMio"></div>
       </div>
     </section>
   </main>
