@@ -87,7 +87,7 @@ const LLAVE_VENDEDOR = "cfg:vendedor";
 // un nombre que ningún usuario puede tener, porque FORMATO_USUARIO no deja "*".
 const DUENO = "*";
 const FORMATO_USUARIO = /^[a-z0-9_-]{3,20}$/;
-const VUELTAS_PBKDF2 = 120000;
+
 const PAGOS = new Set(["efectivo", "transferencia", "otro"]);
 // Un vendedor no firma sus comprobantes: los firma su jefe, que es uno de los
 // dos socios. Ese ingreso queda a nombre de quien firma.
@@ -496,7 +496,7 @@ async function api(request, env, accion, url, ctx) {
     }
 
     const sal = clave ? salNueva() : antes.sal;
-    const hash = clave ? await amasar(clave, sal) : antes.hash;
+    const hash = clave ? await amasar(clave, sal, env.ADMIN_PASSWORD) : antes.hash;
     const u = {
       usuario: nombreUsuario,
       nombre: nombre,
@@ -1063,7 +1063,8 @@ async function login(request, env, url) {
     if (igualdadConstante(clave, env.ADMIN_PASSWORD)) quien = DUENO;
   } else if (FORMATO_USUARIO.test(usuario)) {
     const u = await leerUsuario(env, usuario);
-    if (u && u.activo && u.hash && igualdadConstante(await amasar(clave, u.sal), u.hash)) {
+    if (u && u.activo && u.hash &&
+        igualdadConstante(await amasar(clave, u.sal, env.ADMIN_PASSWORD), u.hash)) {
       quien = usuario;
     }
   }
@@ -1118,8 +1119,20 @@ async function sesionValida(request, env) {
 
 /* ---------- usuarios ---------- */
 
-// Workers no trae bcrypt, pero sí PBKDF2 por WebCrypto, que para esto sirve: el
-// coste está en las vueltas y una clave robada no se descifra, se prueba.
+// Aquí hubo PBKDF2 a 120.000 vueltas y era un error: el plan gratis da 10ms de
+// CPU por petición y eso se los come, así que el Worker moría con 500 —tanto al
+// crear un usuario como al dejarlo entrar—. En local no se ve porque ahí no hay
+// límite de CPU.
+//
+// En su lugar, un HMAC con la contraseña maestra de pimienta. Cuesta lo mismo
+// que firmar la sesión, que ya se hace en cada petición sin problema. El cambio
+// es de dónde viene la seguridad: no del coste de probar claves, sino de que
+// ADMIN_PASSWORD no está en KV —es un secreto de Cloudflare—. Quien se lleve el
+// listado de usuarios no puede probar ni una sola clave sin ella.
+//
+// Contrapartida a tener presente: si algún día cambia ADMIN_PASSWORD, hay que
+// volver a ponerle contraseña a cada vendedor. Ese día también se caen todas las
+// sesiones, así que va junto.
 function aHex(buffer) {
   let s = "";
   for (const b of new Uint8Array(buffer)) s += b.toString(16).padStart(2, "0");
@@ -1130,14 +1143,13 @@ function salNueva() {
   return aHex(crypto.getRandomValues(new Uint8Array(16)));
 }
 
-async function amasar(clave, sal) {
+async function amasar(clave, sal, secreto) {
   const cod = new TextEncoder();
-  const base = await crypto.subtle.importKey("raw", cod.encode(clave), "PBKDF2",
-    false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", salt: cod.encode(sal), iterations: VUELTAS_PBKDF2, hash: "SHA-256" },
-    base, 256);
-  return aHex(bits);
+  const llave = await crypto.subtle.importKey(
+    "raw", cod.encode(secreto), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  const firma = await crypto.subtle.sign("HMAC", llave, cod.encode(sal + ":" + clave));
+  return aHex(firma);
 }
 
 // Los locales de un vendedor: los de sus tarjetas y los de sus servicios. Sirve

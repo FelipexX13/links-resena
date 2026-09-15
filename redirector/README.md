@@ -968,9 +968,23 @@ superadmin. Entran con usuario y contraseña.
 
 ### Cómo se guarda una contraseña
 
-Workers no trae bcrypt, pero sí PBKDF2 por WebCrypto: 120.000 vueltas de
-SHA-256 con sal de 16 bytes por usuario. Lo que se guarda es el hash, nunca la
-clave.
+**Aquí hubo PBKDF2 a 120.000 vueltas y fue un error.** El plan gratis da **10ms de
+CPU por petición** y eso se los come, así que el Worker moría con 500 —al crear un
+usuario y también al dejarlo entrar, que usa la misma función—. En local no se ve,
+porque ahí no hay límite de CPU: el mismo cuerpo que daba 500 en producción daba
+200 en `wrangler dev`.
+
+En su lugar, un **HMAC-SHA256 con `ADMIN_PASSWORD` de pimienta** y una sal de 16
+bytes por usuario. Cuesta lo mismo que firmar la sesión, que ya se hace en cada
+petición sin despeinarse.
+
+El cambio es de dónde viene la seguridad: ya no del coste de probar claves, sino
+de que **la pimienta no está en KV** —es un secreto de Cloudflare—. Quien se lleve
+el listado de usuarios no puede probar ni una sola clave sin ella.
+
+Contrapartida: si algún día cambia `ADMIN_PASSWORD`, hay que volver a ponerle
+contraseña a cada vendedor. Ese día también se caen todas las sesiones, así que va
+junto.
 
 **La sal y el hash viven solo en el valor, no en la metadata.** `list()` devuelve
 la metadata entera a quien pida el listado de usuarios, así que meterlos ahí
