@@ -544,6 +544,11 @@ const ESTILOS = `
   .filtro-dia{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:18px 0 4px}
   .filtro-dia input[type=date]{width:auto;padding:7px 11px;font-size:12.5px}
   .quien{font-size:12.5px;color:var(--tinta-2);white-space:nowrap}
+  /* Un local puede llamarse de veinte palabras. Que se corte con puntos suspensivos
+     antes que empujar la tabla y sacarle barra horizontal a toda la página. */
+  #tablaLocales .negocio,#tabla .negocio,#tablaMio .negocio{max-width:34ch;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #tablaLocales .negocio .fila-num{white-space:normal}
   /* lo que el filtro deja fuera se dice, no se esconde: ahí puede haber plata
      sin cobrar de la semana pasada */
   .fuera-filtro{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
@@ -1163,6 +1168,24 @@ function esLinkCorto(url) {
   return /^https?:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps|g\.co\/kgs)/i.test(String(url).trim());
 }
 
+// Google mete "Nombre, Dirección" en la URL del sitio, y la dirección empieza
+// por un tipo de vía. Ahí se corta: "Alitas Master 2, Manzana 2 Casa 16, Av.
+// Jordan #1A etapa, Ibagué, Tolima" es un local que se llama "Alitas Master 2".
+//
+// El nombre puede llevar comas suyas —"Mas Bonita Studio | Micropigmentación,
+// Uñas y Pestañas en Ibagué"— y por eso no vale cortar en la primera: lo que
+// marca el final es la vía, no la coma.
+// Literal y no cadena: dentro de un string de JS, "\s" es una "s" y "\b" es un
+// retroceso. La primera versión de esto buscaba una tecla de borrar.
+const VIA = /,\s*(?=(?:calle|cl|cll|carrera|cra|cr|kr|avenida|av|autopista|diagonal|diag|transversal|trans|tv|manzana|mz|circunvalar|anillo|vereda|km)\b|#)/i;
+
+function soloElNombre(texto) {
+  const t = String(texto || "").trim();
+  const corte = t.search(VIA);
+  const nombre = (corte > 0 ? t.slice(0, corte) : t).trim().replace(/[,;\s-]+$/, "");
+  return nombre || t;
+}
+
 function analizarMaps(crudo) {
   const url = String(crudo || "").trim();
   if (!url) return { error: "Pega la URL de Google Maps del negocio, o su Place ID." };
@@ -1170,7 +1193,7 @@ function analizarMaps(crudo) {
   let negocio = "";
   const nm = url.match(/\/maps\/place\/([^/@?]+)/);
   if (nm && nm[1]) {
-    try { negocio = decodeURIComponent(nm[1].replace(/\+/g, " ")).trim(); } catch (e) {}
+    try { negocio = soloElNombre(decodeURIComponent(nm[1].replace(/\+/g, " "))); } catch (e) {}
   }
 
   // 1 · el Place ID ya viene dado: un link de reseña hecho antes, una URL que lo
@@ -2875,7 +2898,8 @@ function pintarVentas() {
     const sinCobro = piezas === 0 && !f ? " disabled" : "";
     // con comprobante enviado solo queda entrar al cobro, que es donde se borra
     const bloqueo = cerrada(l.negocio) ? " disabled" : sinCobro;
-    filas += "<tr><td class='negocio'>" + escHtml(l.negocio) + "</td>" +
+    filas += "<tr><td class='negocio' title='" + escHtml(l.negocio) + "'>" +
+      escHtml(l.negocio) + "</td>" +
       "<td class='piezas'>" + (piezas
         ? [l.acrilico ? plural(l.acrilico, "acrílico", "acrílicos") : "",
            l.sticker ? plural(l.sticker, "sticker", "stickers") : ""]
