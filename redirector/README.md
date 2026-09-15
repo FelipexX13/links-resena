@@ -1009,3 +1009,36 @@ ajeno adivinando el nombre. `rango` escribe hasta veinticinco tarjetas de un
 golpe y comprobar el dueño de cada una serían veinticinco lecturas más, contra
 las cincuenta subpeticiones del plan gratis. No gana nada con ello —estaría
 regalándole un comprobante a otro— y el panel no le ofrece la puerta.
+
+### El panel según quién entra
+
+El login pide **usuario y contraseña**; el usuario vacío es el superadmin, que es
+como han entrado siempre.
+
+| | Superadmin | Vendedor |
+|---|---|---|
+| Pestañas | Órdenes · Cuentas · Tarjetas · Inventario | solo Órdenes, y la barra de pestañas ni aparece |
+| Barra de mandos | todo | Nueva orden y Refrescar |
+| Quién firma la venta | elige entre Felipe y Nicolás | él, sin elegir |
+| Sus datos del comprobante | *Mis datos* | los pone el superadmin al crearlo |
+
+El nombre del vendedor sale junto al dominio, arriba a la izquierda, para que se
+sepa de quién es la sesión sin ir a buscarlo.
+
+**Esto es el reparto de la pantalla, no la seguridad.** El que manda es el
+Worker: aunque un botón se pinte, la petición vuelve con `403`. Esconderlos es
+para que nadie tenga que descubrir a golpes qué le toca.
+
+### Vendedores
+
+En **Cuentas › Vendedores**. Se crea con nombre, cédula, usuario, contraseña y el
+porcentaje que se queda de lo que venda. El porcentaje se ve en plata mientras se
+escribe —«de un acrílico de $49.900: él $24.950, la casa $24.950»—, que es como
+se entiende un 50%.
+
+Al editar, el **usuario no se puede cambiar**: es la llave con la que están
+firmadas sus ventas. La contraseña en blanco deja la que tenía.
+
+**No hay botón de borrar, hay uno de apagar.** Borrar a alguien dejaría sus
+ventas firmadas por un fantasma; apagarlo le corta la sesión en la siguiente
+petición y deja su historial en pie.

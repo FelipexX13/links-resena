@@ -140,6 +140,8 @@ const ESTILOS = `
   .marca-texto{display:flex;flex-direction:column;line-height:1.25;min-width:0}
   .marca-texto strong{font-size:15px;font-weight:600;letter-spacing:-.015em}
   .marca-host{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;color:var(--tinta-3)}
+  .marca-quien{font-family:inherit;font-weight:600;color:var(--azul-fuerte)}
+  .marca-quien:not(:empty)::before{content:" · "}
   .cabecera-acciones{display:flex;gap:9px;flex-wrap:wrap}
   /* estos tres iconos solo salen cuando el botón se queda sin texto, en el
      teléfono; en pantalla grande el rótulo se explica solo */
@@ -547,6 +549,19 @@ const ESTILOS = `
   .fuera-filtro{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
     padding:12px 2px 0;font-size:12.5px;color:var(--tinta-2)}
   .fuera-filtro button{padding:6px 12px;font-size:12px}
+  .pct-fila{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .pct-fila input{width:92px}
+  .pct-signo{font-size:17px;font-weight:600;color:var(--tinta-2)}
+  .gente{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 20px}
+  .gente button{background:var(--papel-2);color:var(--tinta);border:1px solid var(--linea);
+    padding:9px 13px;font-size:12.5px;font-weight:500;text-align:left;line-height:1.3}
+  .gente button:hover{background:var(--papel);border-color:var(--tinta-3);color:var(--tinta)}
+  .gente button.elegido{background:var(--azul-piel);border-color:var(--azul);
+    color:var(--azul-fuerte)}
+  .gente b{display:block;font-weight:600}
+  .gente span{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;
+    color:var(--tinta-3)}
+  .gente .apagado{opacity:.55}
   .inv{font-family:"Geist Mono",ui-monospace,monospace;font-size:13px}
   .inv-malos{color:var(--rojo-fuerte)}
   .rot{display:none}
@@ -870,6 +885,11 @@ let VISTA = "locales";
 let PRUEBAS = false;
 let GASTOS = [];
 let SERVICIOS = [];
+// Quién entró. Hasta que el Worker conteste, lo más prudente es suponer que no
+// es el dueño: así nada de la casa se pinta por error mientras carga.
+let SESION = { usuario: "", dueno: false, nombre: "", pct: 100 };
+let USUARIOS = [];
+
 let VENDEDORES = { felipe: null, nicolas: null, alexander: null };
 let QUIEN_VENDE = "felipe";
 let COMPRADORES = {};
@@ -882,7 +902,18 @@ const DIAS_DINERO = 30;
 // el reparto de cuentas ni en quién paga un gasto.
 const SOCIO_NOMBRE = { felipe: "Felipe", nicolas: "Nicolás", alexander: "Alexander",
   ambos: "Compartido" };
-const QUIENES_VENDEN = ["felipe", "nicolas", "alexander"];
+// Los dos que firman desde la cuenta del superadmin. Los demás son usuarios y
+// firman con su propio nombre, sin elegir.
+const QUIENES_VENDEN = ["felipe", "nicolas"];
+
+// El nombre de pila de quien vendió, sea socio o usuario.
+function nombreDeVendedor(quien) {
+  if (SOCIO_NOMBRE[quien]) return SOCIO_NOMBRE[quien];
+  const u = USUARIOS.filter((x) => x.usuario === quien)[0];
+  if (u) return u.nombre;
+  if (quien === SESION.usuario) return SESION.nombre;
+  return quien;
+}
 let METRICA = "unidades";
 let PAGINA_ORDENES = 1;
 let PAGINA_GASTOS = 1;
@@ -948,10 +979,12 @@ async function llamar(ruta, opciones) {
   return datos;
 }
 
-function mostrar(dentro) {
+function mostrar(dentro, quien) {
+  if (quien) SESION = quien;
   $("pantallaPanel").hidden = !dentro;
   $("pantallaLogin").hidden = dentro;
   if (dentro) {
+    pintarRol();
     // los botones de la barra los reparte pintarVista, y hasta ahora solo corría
     // al cambiar de pestaña: al entrar salían todos, en todas
     pintarVista(VISTA);
@@ -959,9 +992,11 @@ function mostrar(dentro) {
     pintarTabla();
     listar();
     llamar("modo").then((r) => pintarPruebas(r.prueba)).catch(() => {});
-    cargarGastos();
     cargarServicios();
     cargarAjustes();
+    // un vendedor no tiene gastos ni gente que administrar: pedirlos sería
+    // llenarle la consola de 403 para nada
+    if (SESION.dueno) { cargarGastos(); cargarUsuarios(); }
   }
   else { cerrarQR(); cerrarTarjeta(); $("clave").focus(); }
 }
@@ -972,11 +1007,12 @@ $("formLogin").onsubmit = async (e) => {
     await llamar("login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clave: $("clave").value }),
+      body: JSON.stringify({ usuario: $("usuario").value, clave: $("clave").value }),
     });
     $("clave").value = "";
     limpiarAviso("avisoLogin");
-    mostrar(true);
+    const s = await llamar("sesion");
+    mostrar(s.activa, s.quien);
   } catch (err) {
     avisar("avisoLogin", err.message, false);
   }
@@ -2749,7 +2785,7 @@ function pintarVentas() {
         (f.precio ? " · " + dinero(f.precio) : "") + "</div>" : "") +
       "</td>" +
       "<td class='quien'>" + (l.vendedores.length
-        ? escHtml(l.vendedores.map((k) => SOCIO_NOMBRE[k] || k).join(" · "))
+        ? escHtml(l.vendedores.map(nombreDeVendedor).join(" · "))
         : "<span class='sin-dato'>—</span>") + "</td>" +
       "<td><span class='estado " + (l.cobrado
         ? "estado-vendido'>Aceptada " + l.fecha
@@ -3003,9 +3039,11 @@ function topeRenta() {
 // de repartirlo a ojo.
 function vendidoPorSocio(anio) {
   const desde = String(anio) + "-";
-  const suma = { felipe: 0, nicolas: 0, alexander: 0, sin: 0 };
+  const suma = { sin: 0 };
+  QUIENES_VENDEN.forEach((k) => { suma[k] = 0; });
+  USUARIOS.forEach((u) => { suma[u.usuario] = 0; });
   const meter = (quien, cuanto) => {
-    if (QUIENES_VENDEN.indexOf(quien) >= 0) suma[quien] += cuanto;
+    if (suma[quien] !== undefined && quien !== "sin") suma[quien] += cuanto;
     else suma.sin += cuanto;
   };
   TARJETAS.forEach((t) => {
@@ -3021,13 +3059,14 @@ function pintarTope() {
   const suma = vendidoPorSocio(UVT.anio);
   const tope = topeRenta();
   const caja = $("tope");
-  const mayor = Math.max.apply(null, QUIENES_VENDEN.map((k) => suma[k])) / tope;
+  const todos = QUIENES_VENDEN.concat(USUARIOS.map((u) => u.usuario));
+  const mayor = Math.max.apply(null, todos.map((k) => suma[k] || 0)) / tope;
   caja.className = "tope" + (mayor >= 1 ? " pasado" : (mayor >= 0.8 ? " cerca" : ""));
 
   const barra = (socio) => {
     const cuanto = suma[socio];
     const parte = cuanto / tope;
-    return "<div class='tope-socio'><div class='tope-alto'><span>" + SOCIO_NOMBRE[socio] +
+    return "<div class='tope-socio'><div class='tope-alto'><span>" + nombreDeVendedor(socio) +
       " <b>" + dinero(cuanto) + "</b></span><span>" +
       (parte >= 1 ? "pasa el tope" : "quedan " + dinero(tope - cuanto)) + "</span></div>" +
       "<div class='tope-barra'><i style='width:" + Math.min(100, parte * 100).toFixed(1) +
@@ -3036,7 +3075,8 @@ function pintarTope() {
 
   // una barra en cero es ruido: el tercero aparece cuando ya vendió o ya tiene
   // sus datos puestos
-  const conBarra = QUIENES_VENDEN.filter((k) => suma[k] || VENDEDORES[k]);
+  const conBarra = todos.filter((k) => suma[k] || VENDEDORES[k] ||
+    USUARIOS.filter((u) => u.usuario === k && u.activo).length);
   caja.innerHTML = "<div class='cejilla'>Declaración de renta · " + UVT.anio + "</div>" +
     (conBarra.length ? conBarra : ["felipe", "nicolas"]).map(barra).join("") +
     (suma.sin ? "<div class='tope-nota'>Sin vendedor apuntado: <b>" + dinero(suma.sin) +
@@ -3154,6 +3194,25 @@ function pintarCuentas() {
     "<th>En camino</th></tr></thead><tbody>" + invFilas + "</tbody></table>";
 }
 
+// Un vendedor entra a vender: ve sus órdenes y nada más. La plata de la casa, el
+// plástico y la gente son del superadmin. Esto es el reparto de la pantalla; el
+// que de verdad manda es el Worker, que contesta 403 aunque el botón aparezca.
+function pintarRol() {
+  const dueno = SESION.dueno;
+  document.querySelectorAll("[data-dueno]").forEach((e) => { e.hidden = !dueno; });
+  // con una sola pestaña, la barra de pestañas no dice nada
+  $("vistaPanel").hidden = !dueno;
+  $("marcaQuien").textContent = dueno ? "" : SESION.nombre;
+  if (!dueno) {
+    VISTA = "locales";
+    // firma con su nombre, sin elegir: el Worker le ignora cualquier otro
+    QUIEN_VENDE = SESION.usuario;
+    VENDEDORES[SESION.usuario] = { nombre: SESION.nombre, cedula: SESION.cedula,
+      telefono: SESION.telefono, nota: SESION.nota };
+  }
+  $("filaQuienVende").hidden = !dueno;
+}
+
 function pintarVista(valor) {
   const conocidas = { locales: 1, cuentas: 1, inventario: 1 };
   VISTA = conocidas[valor] ? valor : "tarjetas";
@@ -3163,10 +3222,11 @@ function pintarVista(valor) {
   $("vistaCuentas").hidden = VISTA !== "cuentas";
   $("vistaInventario").hidden = VISTA !== "inventario";
   // activar tarjetas es reponer plástico: va con el inventario, no con la lista
-  $("abrirActivar").hidden = VISTA !== "inventario";
-  $("togglePruebas").hidden = VISTA !== "inventario";
-  $("abrirNFC").hidden = VISTA !== "inventario";
-  $("abrirAjustes").hidden = VISTA !== "cuentas";
+  $("abrirActivar").hidden = !SESION.dueno || VISTA !== "inventario";
+  $("togglePruebas").hidden = !SESION.dueno || VISTA !== "inventario";
+  $("abrirNFC").hidden = !SESION.dueno || VISTA !== "inventario";
+  $("abrirAjustes").hidden = !SESION.dueno || VISTA !== "cuentas";
+  $("abrirUsuarios").hidden = !SESION.dueno || VISTA !== "cuentas";
   if (VISTA === "locales") pintarVentas();
   if (VISTA === "cuentas" || VISTA === "inventario") pintarCuentas();
 }
@@ -3776,6 +3836,128 @@ $("cerrarNFCModal").onclick = cerrarNFC;
 $("modalNFC").addEventListener("click", (e) => {
   if (e.target.hasAttribute("data-cerrar-nfc")) cerrarNFC();
 });
+
+/* ---------- los vendedores ---------- */
+
+let EDITANDO_USUARIO = "";
+let focoUsuarios = null;
+
+async function cargarUsuarios() {
+  try {
+    const r = await llamar("usuarios");
+    USUARIOS = r.usuarios || [];
+    pintarListaUsuarios();
+    repintarTodo();
+  } catch (e) {
+    // sin gente todavía no es un error que valga la pena gritar
+  }
+}
+
+function pintarListaUsuarios() {
+  const caja = $("listaUsuarios");
+  if (!USUARIOS.length) {
+    caja.innerHTML = "<p class='ayuda'>Todavía no hay nadie. El primero, abajo.</p>";
+    return;
+  }
+  caja.innerHTML = "<div class='gente'>" + USUARIOS.map((u) =>
+    "<button type='button' data-usuario='" + escHtml(u.usuario) + "' class='" +
+    (u.usuario === EDITANDO_USUARIO ? "elegido" : "") + (u.activo ? "" : " apagado") + "'>" +
+    "<b>" + escHtml(u.nombre) + "</b><span>@" + escHtml(u.usuario) + " · " + u.pct + "%" +
+    (u.activo ? "" : " · apagado") + "</span></button>").join("") + "</div>";
+}
+
+$("listaUsuarios").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-usuario]");
+  if (!b) return;
+  const u = USUARIOS.filter((x) => x.usuario === b.dataset.usuario)[0];
+  if (u) ponerUsuarioEnForm(u);
+});
+
+function ponerUsuarioEnForm(u) {
+  EDITANDO_USUARIO = u ? u.usuario : "";
+  $("usuarioNombre").value = u ? u.nombre : "";
+  $("usuarioCedula").value = u ? u.cedula || "" : "";
+  $("usuarioTelefono").value = u ? u.telefono || "" : "";
+  $("usuarioNombreCuenta").value = u ? u.usuario : "";
+  $("usuarioNombreCuenta").disabled = Boolean(u);
+  $("usuarioClave").value = "";
+  $("usuarioPct").value = u ? u.pct : 50;
+  $("usuarioActivo").checked = u ? Boolean(u.activo) : true;
+  $("ayudaClave").textContent = u
+    ? "Déjala vacía para no cambiarla. Si la escribes, la de antes deja de servir."
+    : "Se la dictas a él. Mínimo 8 caracteres.";
+  $("guardarUsuario").textContent = u ? "Guardar cambios" : "Crear vendedor";
+  pintarEjemploPct();
+  pintarListaUsuarios();
+}
+
+// El porcentaje en plata, que es como se entiende: un acrílico de la lista.
+function pintarEjemploPct() {
+  const pct = Math.max(0, Math.min(100, Number($("usuarioPct").value) || 0));
+  const suyo = Math.round(PRECIOS.acrilico * pct / 100);
+  const casa = PRECIOS.acrilico - suyo;
+  $("pctEjemplo").textContent = "de un acrílico de " + dinero(PRECIOS.acrilico) +
+    ": él " + dinero(suyo) + ", la casa " + dinero(casa);
+}
+
+$("usuarioPct").addEventListener("input", pintarEjemploPct);
+$("usuarioNuevo").onclick = () => { ponerUsuarioEnForm(null); $("usuarioNombre").focus(); };
+
+function abrirUsuarios() {
+  ponerUsuarioEnForm(null);
+  pintarListaUsuarios();
+  limpiarAviso();
+  focoUsuarios = document.activeElement;
+  $("modalUsuarios").hidden = false;
+  document.body.style.overflow = "hidden";
+  $("usuarioNombre").focus();
+}
+
+function cerrarUsuarios() {
+  if ($("modalUsuarios").hidden) return;
+  $("modalUsuarios").hidden = true;
+  document.body.style.overflow = "";
+  if (focoUsuarios && focoUsuarios.focus) focoUsuarios.focus();
+  focoUsuarios = null;
+}
+
+$("abrirUsuarios").onclick = abrirUsuarios;
+$("cerrarUsuarios").onclick = cerrarUsuarios;
+$("modalUsuarios").addEventListener("click", (e) => {
+  if (e.target.hasAttribute("data-cerrar-usuarios")) cerrarUsuarios();
+});
+
+$("formUsuario").onsubmit = async (e) => {
+  e.preventDefault();
+  const boton = $("guardarUsuario");
+  const etiqueta = boton.textContent;
+  boton.disabled = true;
+  try {
+    const r = await llamar("usuario", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        usuario: EDITANDO_USUARIO || $("usuarioNombreCuenta").value,
+        nombre: $("usuarioNombre").value,
+        cedula: $("usuarioCedula").value,
+        telefono: $("usuarioTelefono").value,
+        pct: Number($("usuarioPct").value),
+        activo: $("usuarioActivo").checked,
+        clave: $("usuarioClave").value,
+      }),
+    });
+    const nuevo = !EDITANDO_USUARIO;
+    await cargarUsuarios();
+    ponerUsuarioEnForm(r.usuario);
+    avisar("avisoPanel", (nuevo ? "Vendedor " : "Datos de ") + r.usuario.nombre +
+      (nuevo ? " creado" : " guardados"), true);
+  } catch (err) {
+    avisar("avisoUsuarios", err.message, false);
+  } finally {
+    boton.disabled = false;
+    boton.textContent = etiqueta;
+  }
+};
 
 /* ---------- mis datos, los del que vende ---------- */
 
@@ -4663,7 +4845,7 @@ document.addEventListener("keydown", (e) => {
   else cerrarQR();
 });
 
-llamar("sesion").then((s) => mostrar(s.activa)).catch(() => mostrar(false));
+llamar("sesion").then((s) => mostrar(s.activa, s.quien)).catch(() => mostrar(false));
 `;
 
 export function vistaAdmin(origen) {
@@ -4685,7 +4867,10 @@ export function vistaAdmin(origen) {
       <h1>Panel de tarjetas</h1>
       <p>Aquí se activan y se reasignan las tarjetas de reseña.</p>
       <form id="formLogin">
-        <label for="clave">Contraseña</label>
+        <label for="usuario">Usuario <span class="suave">(vacío si eres Felipe o Nicolás)</span></label>
+        <input id="usuario" type="text" autocomplete="username" autocapitalize="off"
+               spellcheck="false" placeholder="alexander">
+        <label for="clave" class="sobre-buscador">Contraseña</label>
         <input id="clave" type="password" autocomplete="current-password" autofocus>
         <div class="modal-acciones"><button type="submit">Entrar</button></div>
       </form>
@@ -4702,7 +4887,7 @@ export function vistaAdmin(origen) {
         ${LOGO_G}
         <span class="marca-texto">
           <strong>Tarjetas de reseña</strong>
-          <span class="marca-host">${esc(host)}</span>
+          <span class="marca-host">${esc(host)}<b id="marcaQuien" class="marca-quien"></b></span>
         </span>
       </div>
       <nav class="cabecera-acciones" aria-label="Acciones de la sesión">
@@ -4741,6 +4926,7 @@ export function vistaAdmin(origen) {
           <button type="button" class="fantasma" id="abrirNFC">Grabar chips</button>
           <button type="button" class="fantasma" id="togglePruebas">Modo pruebas</button>
           <button type="button" class="fantasma" id="abrirAjustes" hidden>Mis datos</button>
+          <button type="button" class="fantasma" id="abrirUsuarios" hidden>Vendedores</button>
           <button type="button" class="fantasma" id="recargar">Refrescar</button>
         </div>
       </div>
@@ -5026,6 +5212,62 @@ export function vistaAdmin(origen) {
   </div>
 </div>
 
+<div class="modal" id="modalUsuarios" hidden>
+  <div class="modal-fondo" data-cerrar-usuarios></div>
+  <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="usuariosTitulo">
+    <button type="button" class="modal-cerrar" id="cerrarUsuarios" aria-label="Cerrar">✕</button>
+    <div class="modal-kicker">Equipo</div>
+    <h1 id="usuariosTitulo">Vendedores</h1>
+    <p class="modal-subtitulo">Cada uno entra con su usuario y solo ve sus propias
+      órdenes. El porcentaje es lo que se queda de lo que venda.</p>
+
+    <div id="listaUsuarios"></div>
+
+    <form id="formUsuario">
+      <label class="paso" for="usuarioNombre"><span class="n n1">1</span>Quién es</label>
+      <input id="usuarioNombre" type="text" maxlength="80" placeholder="Alexander Ruiz"
+             autocomplete="off" required>
+
+      <div class="rango-fila">
+        <div><label class="mini" for="usuarioCedula">Cédula</label>
+          <input id="usuarioCedula" type="text" maxlength="30" placeholder="1110445566"
+                 autocomplete="off"></div>
+        <div><label class="mini" for="usuarioTelefono">Teléfono</label>
+          <input id="usuarioTelefono" type="text" maxlength="30" placeholder="300 123 4567"
+                 autocomplete="off"></div>
+      </div>
+
+      <label class="paso" for="usuarioNombreCuenta"><span class="n n2">2</span>Con qué entra</label>
+      <div class="rango-fila">
+        <div><label class="mini" for="usuarioNombreCuenta">Usuario</label>
+          <input id="usuarioNombreCuenta" type="text" maxlength="20" placeholder="alexander"
+                 autocapitalize="off" spellcheck="false" autocomplete="off" required></div>
+        <div><label class="mini" for="usuarioClave">Contraseña</label>
+          <input id="usuarioClave" type="text" maxlength="60" placeholder="mínimo 8"
+                 autocomplete="new-password"></div>
+      </div>
+      <p class="ayuda" id="ayudaClave">Se la dictas a él. Al editar, déjala vacía para
+        no cambiarla.</p>
+
+      <label class="paso" for="usuarioPct"><span class="n n3">3</span>Cuánto se queda</label>
+      <div class="pct-fila">
+        <input class="c3" id="usuarioPct" type="number" min="0" max="100" step="1" value="50"
+               required>
+        <span class="pct-signo">%</span>
+        <span class="mini2" id="pctEjemplo"></span>
+      </div>
+
+      <label class="casilla"><input type="checkbox" id="usuarioActivo" checked>
+        Puede entrar</label>
+
+      <div class="modal-acciones">
+        <button type="button" class="fantasma" id="usuarioNuevo">Uno nuevo</button>
+        <button type="submit" id="guardarUsuario">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="modal" id="modalAjustes" hidden>
   <div class="modal-fondo" data-cerrar-ajustes></div>
   <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="ajustesTitulo">
@@ -5154,11 +5396,12 @@ export function vistaAdmin(origen) {
     </div>
 
     <form id="formVenta">
-      <p class="mini2 sin-aire">Quién hizo la venta</p>
-      <div class="segmento" id="quienVende" role="group" aria-label="Quién hizo la venta">
-        <button type="button" class="activa" data-valor="felipe">Felipe</button>
-        <button type="button" data-valor="nicolas">Nicolás</button>
-        <button type="button" data-valor="alexander">Alexander</button>
+      <div id="filaQuienVende">
+        <p class="mini2 sin-aire">Quién hizo la venta</p>
+        <div class="segmento" id="quienVende" role="group" aria-label="Quién hizo la venta">
+          <button type="button" class="activa" data-valor="felipe">Felipe</button>
+          <button type="button" data-valor="nicolas">Nicolás</button>
+        </div>
       </div>
 
       <input id="ventaFecha" type="hidden">

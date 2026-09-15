@@ -720,11 +720,19 @@ async function api(request, env, accion, url, ctx) {
 
   if (accion === "ajustes" && request.method === "GET") {
     const guardado = await env.TARJETAS.get(LLAVE_VENDEDOR, "json");
+    if (!quien.dueno) {
+      // sus propios datos, con la misma forma: así el panel no sabe la diferencia
+      const solo = {};
+      solo[quien.usuario] = { nombre: quien.nombre, cedula: quien.cedula,
+        telefono: quien.telefono, nota: quien.nota };
+      return json({ vendedores: solo });
+    }
     return json({ vendedores: mapaDeVendedores(guardado) });
   }
 
   if (accion === "ajustes" && request.method === "POST") {
     const cuerpo = await request.json().catch(() => ({}));
+    if (!quien.dueno) return json({ error: "Tus datos los pone el superadmin" }, 403);
     const hecho = vendedorDe(cuerpo);
     if (hecho.error) return json({ error: hecho.error }, 400);
 
@@ -1008,7 +1016,8 @@ async function sesionValida(request, env) {
   // apagar o borrar un usuario le corta la sesión en la siguiente petición
   const u = await leerUsuario(env, usuario);
   if (!u || !u.activo) return null;
-  return { usuario: usuario, dueno: false, nombre: u.nombre, pct: u.pct };
+  return { usuario: usuario, dueno: false, nombre: u.nombre, pct: u.pct,
+    cedula: u.cedula, telefono: u.telefono, nota: u.nota };
 }
 
 /* ---------- usuarios ---------- */
