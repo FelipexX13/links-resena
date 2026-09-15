@@ -5179,10 +5179,9 @@ export function vistaAdmin(origen) {
   <main class="entrada">
     <div class="lamina franja entrada-caja">
       ${LOGO_G}
-      <h1>Panel de tarjetas</h1>
-      <p>Aquí se activan y se reasignan las tarjetas de reseña.</p>
+      <h1>Google Reviews</h1>
       <form id="formLogin">
-        <label for="usuario">Usuario <span class="suave">(vacío si eres Felipe o Nicolás)</span></label>
+        <label for="usuario">Usuario</label>
         <input id="usuario" type="text" autocomplete="username" autocapitalize="off"
                spellcheck="false">
         <label for="clave" class="sobre-buscador">Contraseña</label>
