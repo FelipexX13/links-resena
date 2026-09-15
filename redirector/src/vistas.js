@@ -563,7 +563,12 @@ const ESTILOS = `
   .gente button:hover{background:var(--papel);border-color:var(--tinta-3);color:var(--tinta)}
   .gente button.elegido{background:var(--azul-piel);border-color:var(--azul);
     color:var(--azul-fuerte)}
-  .gente b{display:block;font-weight:600}
+  .gente button{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+  .gente b{flex:1 0 100%;font-weight:600}
+  .gente .pct-ficha{font-style:normal;font-weight:600;font-size:12.5px;
+    color:var(--azul-fuerte);background:var(--azul-piel);border-radius:999px;
+    padding:1px 8px;margin-left:auto}
+  .gente button.elegido .pct-ficha{background:var(--papel)}
   .gente span{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;
     color:var(--tinta-3)}
   .gente .apagado{opacity:.55}
@@ -4175,11 +4180,14 @@ function pintarListaUsuarios() {
     caja.innerHTML = "<p class='ayuda'>Todavía no hay nadie. El primero, abajo.</p>";
     return;
   }
-  caja.innerHTML = "<div class='gente'>" + USUARIOS.map((u) =>
+  caja.innerHTML = "<p class='ayuda ayuda-alta'>Toca a uno para cambiarle el " +
+    "porcentaje, la contraseña o apagarlo.</p>" +
+    "<div class='gente'>" + USUARIOS.map((u) =>
     "<button type='button' data-usuario='" + escHtml(u.usuario) + "' class='" +
     (u.usuario === EDITANDO_USUARIO ? "elegido" : "") + (u.activo ? "" : " apagado") + "'>" +
-    "<b>" + escHtml(u.nombre) + "</b><span>@" + escHtml(u.usuario) + " · " + u.pct + "%" +
-    (u.activo ? "" : " · apagado") + "</span></button>").join("") + "</div>";
+    "<b>" + escHtml(u.nombre) + "</b><span>@" + escHtml(u.usuario) +
+    (u.activo ? "" : " · apagado") + "</span><i class='pct-ficha'>" + u.pct + "%</i>" +
+    "</button>").join("") + "</div>";
 }
 
 $("listaUsuarios").addEventListener("click", (e) => {
