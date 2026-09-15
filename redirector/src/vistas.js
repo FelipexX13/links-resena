@@ -3602,7 +3602,8 @@ function comprobantePDF(datos) {
 
   // cada columna crece por su lado y la tabla arranca debajo de la más larga
   doc.setFont("helvetica", "normal").setFontSize(9.5).setTextColor(90, 100, 120);
-  let mias = ["C.C. " + datos.vendedor.cedula];
+  let mias = [];
+  if (datos.vendedor.cedula) mias.push("C.C. " + datos.vendedor.cedula);
   if (datos.vendedor.telefono) mias.push("Tel. " + datos.vendedor.telefono);
   if (datos.vendedor.nota) mias = mias.concat(doc.splitTextToSize(datos.vendedor.nota, 78));
 
@@ -3691,10 +3692,17 @@ function datosDelComprobante() {
   // buscar el botón a otra pestaña, se le abre el formulario aquí mismo
   const quien = VENDEDORES[QUIEN_VENDE];
   if (!quien || !quien.nombre) {
-    cerrarVenta();
-    abrirAjustes(QUIEN_VENDE);
-    avisar("avisoPanel", "Faltan el nombre y la cédula de " + SOCIO_NOMBRE[QUIEN_VENDE] +
-      ". Se ponen una vez y ya salen en sus comprobantes.", false);
+    if (SESION.dueno) {
+      cerrarVenta();
+      abrirAjustes(QUIEN_VENDE);
+      avisar("avisoPanel", "Falta el nombre de " + nombreDeVendedor(QUIEN_VENDE) +
+        ". Se pone una vez y ya sale en sus comprobantes.", false);
+    } else {
+      // sus datos los pone el superadmin: mandarlo a Mis datos sería mandarlo a
+      // una ventana que no le deja guardar
+      avisar("avisoVenta", "Te falta el nombre para firmar el comprobante. " +
+        "Pedíselo a Felipe o Nicolás.", false);
+    }
     return null;
   }
   const l = LOCAL_VENTA;
@@ -5625,10 +5633,12 @@ export function vistaAdmin(origen) {
              autocomplete="off" required>
 
       <div class="rango-fila">
-        <div><label class="mini" for="usuarioCedula">Cédula</label>
+        <div><label class="mini" for="usuarioCedula">Cédula
+          <span class="suave">(opcional)</span></label>
           <input id="usuarioCedula" type="text" maxlength="30" placeholder="1110445566"
                  autocomplete="off"></div>
-        <div><label class="mini" for="usuarioTelefono">Teléfono</label>
+        <div><label class="mini" for="usuarioTelefono">Teléfono
+          <span class="suave">(opcional)</span></label>
           <input id="usuarioTelefono" type="text" maxlength="30" placeholder="300 123 4567"
                  autocomplete="off"></div>
       </div>
