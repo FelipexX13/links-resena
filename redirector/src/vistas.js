@@ -554,6 +554,11 @@ const ESTILOS = `
   .fuera-filtro{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
     padding:12px 2px 0;font-size:12.5px;color:var(--tinta-2)}
   .fuera-filtro button{padding:6px 12px;font-size:12px}
+  /* Se puede mirar para dictársela, pero el campo nace tapado: en texto plano el
+     navegador se la guarda en el historial de formularios. */
+  .ver-clave{background:none;border:0;padding:0 0 0 7px;font-size:11.5px;font-weight:500;
+    color:var(--azul-fuerte);text-decoration:underline}
+  .ver-clave:hover{background:none;color:var(--azul)}
   .pct-fila{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
   .pct-fila input{width:92px}
   .pct-signo{font-size:17px;font-weight:600;color:var(--tinta-2)}
@@ -1020,7 +1025,9 @@ async function llamar(ruta, opciones) {
   const cfg = opciones || {};
   cfg.credentials = "same-origin";
   const r = await fetch("/api/" + ruta, cfg);
-  const datos = await r.json().catch(() => ({ error: "Respuesta ilegible" }));
+  const datos = await r.json().catch(() => ({
+    error: "El servidor contestó algo que no entiendo (" + r.status + " en " + ruta + ")",
+  }));
   if (r.status === 401 && ruta !== "login") { mostrar(false); throw new Error("Tu sesión expiró"); }
   if (!r.ok) throw new Error(datos.error || "Error " + r.status);
   return datos;
@@ -4240,6 +4247,8 @@ function ponerUsuarioEnForm(u) {
   $("usuarioNombreCuenta").value = u ? u.usuario : "";
   $("usuarioNombreCuenta").disabled = Boolean(u);
   $("usuarioClave").value = "";
+  $("usuarioClave").type = "password";
+  $("verClave").textContent = "ver";
   JEFE_USUARIO = u && u.jefe === "nicolas" ? "nicolas" : "felipe";
   marcarSegmento("usuarioJefe", JEFE_USUARIO);
   $("usuarioPct").value = u ? u.pct : 50;
@@ -4260,6 +4269,13 @@ function pintarEjemploPct() {
   $("pctEjemplo").textContent = "de un acrílico de " + dinero(PRECIOS.acrilico) +
     ": él " + dinero(suyo) + ", la casa " + dinero(casa);
 }
+
+$("verClave").onclick = () => {
+  const c = $("usuarioClave");
+  const tapada = c.type === "password";
+  c.type = tapada ? "text" : "password";
+  $("verClave").textContent = tapada ? "tapar" : "ver";
+};
 
 $("usuarioPct").addEventListener("input", pintarEjemploPct);
 $("usuarioNuevo").onclick = () => { ponerUsuarioEnForm(null); $("usuarioNombre").focus(); };
@@ -5680,9 +5696,10 @@ export function vistaAdmin(origen) {
         <div><label class="mini" for="usuarioNombreCuenta">Usuario</label>
           <input id="usuarioNombreCuenta" type="text" maxlength="20"
                  autocapitalize="off" spellcheck="false" autocomplete="off" required></div>
-        <div><label class="mini" for="usuarioClave">Contraseña</label>
-          <input id="usuarioClave" type="text" maxlength="60" placeholder="mínimo 8"
-                 autocomplete="new-password"></div>
+        <div><label class="mini" for="usuarioClave">Contraseña
+            <button type="button" class="ver-clave" id="verClave">ver</button></label>
+          <input id="usuarioClave" type="password" maxlength="60" placeholder="mínimo 8"
+                 autocomplete="new-password" spellcheck="false"></div>
       </div>
       <p class="ayuda" id="ayudaClave">Se la dictas a él. Al editar, déjala vacía para
         no cambiarla.</p>
