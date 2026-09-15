@@ -5184,7 +5184,7 @@ export function vistaAdmin(origen) {
       <form id="formLogin">
         <label for="usuario">Usuario <span class="suave">(vacío si eres Felipe o Nicolás)</span></label>
         <input id="usuario" type="text" autocomplete="username" autocapitalize="off"
-               spellcheck="false" placeholder="alexander">
+               spellcheck="false">
         <label for="clave" class="sobre-buscador">Contraseña</label>
         <input id="clave" type="password" autocomplete="current-password" autofocus>
         <div class="modal-acciones"><button type="submit">Entrar</button></div>
@@ -5590,7 +5590,7 @@ export function vistaAdmin(origen) {
 
     <form id="formUsuario">
       <label class="paso" for="usuarioNombre"><span class="n n1">1</span>Quién es</label>
-      <input id="usuarioNombre" type="text" maxlength="80" placeholder="Alexander Ruiz"
+      <input id="usuarioNombre" type="text" maxlength="80"
              autocomplete="off" required>
 
       <div class="rango-fila">
@@ -5605,7 +5605,7 @@ export function vistaAdmin(origen) {
       <label class="paso" for="usuarioNombreCuenta"><span class="n n2">2</span>Con qué entra</label>
       <div class="rango-fila">
         <div><label class="mini" for="usuarioNombreCuenta">Usuario</label>
-          <input id="usuarioNombreCuenta" type="text" maxlength="20" placeholder="alexander"
+          <input id="usuarioNombreCuenta" type="text" maxlength="20"
                  autocapitalize="off" spellcheck="false" autocomplete="off" required></div>
         <div><label class="mini" for="usuarioClave">Contraseña</label>
           <input id="usuarioClave" type="text" maxlength="60" placeholder="mínimo 8"
