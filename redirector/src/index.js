@@ -89,6 +89,13 @@ const DUENO = "*";
 const FORMATO_USUARIO = /^[a-z0-9_-]{3,20}$/;
 const VUELTAS_PBKDF2 = 120000;
 const PAGOS = new Set(["efectivo", "transferencia", "otro"]);
+// Un vendedor no firma sus comprobantes: los firma su jefe, que es uno de los
+// dos socios. Ese ingreso queda a nombre de quien firma.
+const JEFES = new Set(["felipe", "nicolas"]);
+function jefeValido(valor) {
+  const v = String(valor || "").trim().toLowerCase();
+  return JEFES.has(v) ? v : "felipe";
+}
 // La fecha del servidor en UTC sirve de red: el panel manda la del teléfono.
 function hoyDelServidor() {
   return new Date().toISOString().slice(0, 10);
@@ -179,7 +186,7 @@ function precioValido(valor) {
   return Number.isFinite(n) && n >= 0 ? Math.round(n) : 0;
 }
 
-function registroDe(cuerpo, vendedor, pct, pago) {
+function registroDe(cuerpo, vendedor, pct, pago, jefe) {
   const destino = urlDestino(cuerpo.destino);
   if (!destino) return { error: "El destino debe ser una URL http:// o https://" };
   const negocio = String(cuerpo.negocio || "").trim().slice(0, 120);
@@ -194,6 +201,7 @@ function registroDe(cuerpo, vendedor, pct, pago) {
       vendedor: vendedor,
       pct: pct,
       pago: pago,
+      jefe: jefe,
       actualizado: new Date().toISOString(),
     },
   };
@@ -248,7 +256,7 @@ function gastoDe(cuerpo) {
 // El sitio en Google Maps se cobra aparte y no cuelga de ninguna tarjeta: un local
 // puede pedirla sin comprar un solo acrílico. Por eso vive en su propia clave y
 // se une a la orden por el nombre del negocio.
-function servicioDe(cuerpo, vendedor, pct, pago) {
+function servicioDe(cuerpo, vendedor, pct, pago, jefe) {
   const negocio = String(cuerpo.negocio || "").trim().slice(0, 60);
   if (!negocio) return { error: "Falta el nombre del local" };
 
@@ -267,6 +275,7 @@ function servicioDe(cuerpo, vendedor, pct, pago) {
       vendedor: vendedor,
       pct: pct,
       pago: pago,
+      jefe: jefe,
       hecha: Boolean(cuerpo.hecha),
       notas: String(cuerpo.notas || "").trim().slice(0, 200),
     },
@@ -495,6 +504,7 @@ async function api(request, env, accion, url, ctx) {
       telefono: String(cuerpo.telefono || "").trim().slice(0, 30),
       nota: String(cuerpo.nota || "").trim().slice(0, 120),
       pct: Math.round(pct),
+      jefe: jefeValido(cuerpo.jefe),
       activo: cuerpo.activo === undefined ? true : Boolean(cuerpo.activo),
       creado: antes ? antes.creado : new Date().toISOString(),
       sal: sal,
@@ -562,6 +572,11 @@ async function api(request, env, accion, url, ctx) {
   //
   // Un vendedor no lo elige: es el suyo, el que le puso el superadmin. El
   // superadmin sí manda el guardado, que es como no se pierde al reeditar.
+  // Quién firma el comprobante. Un vendedor no lo elige: es su jefe. Se congela
+  // como el porcentaje, porque si mañana pasa de Felipe a Nicolás, los
+  // comprobantes que ya firmó Felipe siguen siendo ingreso de Felipe.
+  const suJefe = (pedido) => quien.dueno ? jefeValido(pedido) : jefeValido(quien.jefe);
+
   const suPct = (pedido) => {
     if (!quien.dueno) return quien.pct;
     const n = Number(pedido);
@@ -620,7 +635,7 @@ async function api(request, env, accion, url, ctx) {
     }
 
     const hecho = registroDe(cuerpo, deQuienEs(cuerpo.vendedor), suPct(cuerpo.pct),
-      pagoValido(cuerpo.pago));
+      pagoValido(cuerpo.pago), suJefe(cuerpo.jefe));
     if (hecho.error) return json({ error: hecho.error }, 400);
 
     // dos puertas: ni se saca una tarjeta de una orden cerrada, ni se mete en ella
@@ -648,7 +663,7 @@ async function api(request, env, accion, url, ctx) {
     }
 
     const hecho = registroDe(cuerpo, deQuienEs(cuerpo.vendedor), suPct(cuerpo.pct),
-      pagoValido(cuerpo.pago));
+      pagoValido(cuerpo.pago), suJefe(cuerpo.jefe));
     if (hecho.error) return json({ error: hecho.error }, 400);
 
     if (await ordenCerrada(env, hecho.registro.negocio)) {
@@ -696,7 +711,7 @@ async function api(request, env, accion, url, ctx) {
   if (accion === "servicio" && request.method === "POST") {
     const cuerpo = await request.json().catch(() => ({}));
     const hecho = servicioDe(cuerpo, deQuienEs(cuerpo.vendedor), suPct(cuerpo.pct),
-      pagoValido(cuerpo.pago));
+      pagoValido(cuerpo.pago), suJefe(cuerpo.jefe));
     if (hecho.error) return json({ error: hecho.error }, 400);
     if (await ordenCerrada(env, hecho.servicio.negocio)) {
       return cerrada(hecho.servicio.negocio);
@@ -797,11 +812,15 @@ async function api(request, env, accion, url, ctx) {
   if (accion === "ajustes" && request.method === "GET") {
     const guardado = await env.TARJETAS.get(LLAVE_VENDEDOR, "json");
     if (!quien.dueno) {
-      // sus propios datos, con la misma forma: así el panel no sabe la diferencia
+      // los de su jefe, que son los que van firmados en el comprobante. No es
+      // una fuga: ese nombre y esa cédula salen impresos en cada papel que
+      // entrega. Y los suyos, para saber cómo se llama.
+      const mapa = mapaDeVendedores(guardado);
       const solo = {};
+      solo[quien.jefe] = mapa[quien.jefe] || null;
       solo[quien.usuario] = { nombre: quien.nombre, cedula: quien.cedula,
         telefono: quien.telefono, nota: quien.nota };
-      return json({ vendedores: solo });
+      return json({ vendedores: solo, jefe: quien.jefe });
     }
     return json({ vendedores: mapaDeVendedores(guardado) });
   }
@@ -1094,7 +1113,7 @@ async function sesionValida(request, env) {
   const u = await leerUsuario(env, usuario);
   if (!u || !u.activo) return null;
   return { usuario: usuario, dueno: false, nombre: u.nombre, pct: u.pct,
-    cedula: u.cedula, telefono: u.telefono, nota: u.nota };
+    jefe: jefeValido(u.jefe), cedula: u.cedula, telefono: u.telefono, nota: u.nota };
 }
 
 /* ---------- usuarios ---------- */
@@ -1145,7 +1164,7 @@ async function leerUsuario(env, usuario) {
 function usuarioPublico(u) {
   return {
     usuario: u.usuario, nombre: u.nombre, cedula: u.cedula, telefono: u.telefono,
-    nota: u.nota, pct: u.pct, activo: u.activo, creado: u.creado,
+    nota: u.nota, pct: u.pct, jefe: u.jefe, activo: u.activo, creado: u.creado,
   };
 }
 

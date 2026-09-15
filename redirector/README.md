@@ -1131,3 +1131,28 @@ Se apunta y se enseña, pero la deuda se calcula igual con efectivo que con
 transferencia: el trato es que **el vendedor cobra y entrega la parte de la
 casa**. Si algún día una transferencia entra directo a la cuenta de la casa, ese
 caso habría que modelarlo aparte —la deuda iría al revés—.
+
+### Un vendedor no firma sus comprobantes: los firma su jefe
+
+Cada usuario se crea con un **jefe**, Felipe o Nicolás. El comprobante que recibe
+el cliente sale con el nombre y la cédula del jefe, no con los del vendedor.
+
+Y de ahí sale lo importante: **ese ingreso es de quien firma**. El tope de renta
+cuenta las ventas de Alexander en la barra de su jefe, no en una suya. Es lo
+correcto: el papel salió con la cédula del jefe, así que ante la DIAN el ingreso
+es suyo. Lo de Alexander son sus comisiones, que declara por su lado.
+
+Dos atribuciones distintas para la misma venta, y las dos hacen falta:
+
+| | Quién |
+|---|---|
+| Columna *Vendió*, comisiones, *Lo mío* | quien vendió |
+| Comprobante y tope de renta | quien firma |
+
+**El jefe se congela en la venta**, igual que el porcentaje. Si mañana Alexander
+pasa de Felipe a Nicolás, los comprobantes que ya firmó Felipe siguen contando
+para Felipe: ese papel ya está en manos de un cliente.
+
+Para que el vendedor pueda armar el PDF, `ajustes` le devuelve los datos de su
+jefe. No es una fuga: ese nombre y esa cédula salen impresos en cada comprobante
+que entrega.

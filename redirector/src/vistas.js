@@ -917,7 +917,8 @@ let TIPO = "acrilico";
 let FILTRO_TIPO = "";
 let MODO = "una";
 let ORIGEN_RANGO = "numero";
-let VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "", pct: 0, pago: "efectivo" };
+let VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "", pct: 0, pago: "efectivo",
+  jefe: "" };
 let COMO_PAGO = "efectivo";
 let LIQUIDACIONES = [];
 let VISTA = "locales";
@@ -944,6 +945,13 @@ const SOCIO_NOMBRE = { felipe: "Felipe", nicolas: "Nicolás", alexander: "Alexan
 // Los dos que firman desde la cuenta del superadmin. Los demás son usuarios y
 // firman con su propio nombre, sin elegir.
 const QUIENES_VENDEN = ["felipe", "nicolas"];
+
+// Un vendedor no firma sus comprobantes: los firma su jefe, uno de los dos
+// socios. Él vende, pero el papel sale a nombre de quien responde por el negocio
+// —y ese ingreso es de quien firma, no de quien vendió—.
+function quienFirma() {
+  return SESION.dueno ? QUIEN_VENDE : (SESION.jefe || "felipe");
+}
 
 // El nombre de pila de quien vendió, sea socio o usuario.
 function nombreDeVendedor(quien) {
@@ -1536,9 +1544,10 @@ function porVenta(codigos) {
   codigos.forEach((c) => {
     const t = TARJETAS.filter((x) => x.codigo === c)[0] || {};
     const venta = { vendida: t.vendida || "", precio: Number(t.precio) || 0,
-      vendedor: t.vendedor || "", pct: Number(t.pct) || 0, pago: t.pago || "efectivo" };
+      vendedor: t.vendedor || "", pct: Number(t.pct) || 0, pago: t.pago || "efectivo",
+      jefe: t.jefe || "" };
     const llave = venta.vendida + "|" + venta.precio + "|" + venta.vendedor + "|" +
-      venta.pct + "|" + venta.pago;
+      venta.pct + "|" + venta.pago + "|" + venta.jefe;
     if (!grupos[llave]) grupos[llave] = { venta: venta, codigos: [] };
     grupos[llave].codigos.push(c);
   });
@@ -1762,6 +1771,7 @@ $("formTarjeta").onsubmit = async (e) => {
         vendedor: VENTA_EDITADA.vendedor,
         pct: VENTA_EDITADA.pct,
         pago: VENTA_EDITADA.pago,
+        jefe: VENTA_EDITADA.jefe,
       }),
     });
     const editaba = Boolean(EDITANDO_CODIGO);
@@ -1797,7 +1807,8 @@ function editar(codigo) {
   pintarNumero(t.codigo);
   pintarTipo(tipoDe(t));
   VENTA_EDITADA = { vendida: t.vendida || "", precio: t.precio || 0,
-    vendedor: t.vendedor || "", pct: Number(t.pct) || 0, pago: t.pago || "efectivo" };
+    vendedor: t.vendedor || "", pct: Number(t.pct) || 0, pago: t.pago || "efectivo",
+    jefe: t.jefe || "" };
   llenarLocales();
   $("localExistente").value = t.negocio || "";
   pintarModo("una");
@@ -2168,7 +2179,8 @@ function salirDeEdicion() {
   decirCodigo("");
   if ($("localExistente").options.length) $("localExistente").value = "";
   if ($("ordenRango").options.length) $("ordenRango").value = "";
-  VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "", pct: 0, pago: "efectivo" };
+  VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "", pct: 0, pago: "efectivo",
+    jefe: "" };
 }
 
 function prepararNuevaTarjeta() {
@@ -3178,16 +3190,21 @@ function vendidoPorSocio(anio) {
   const desde = String(anio) + "-";
   const suma = { sin: 0 };
   QUIENES_VENDEN.forEach((k) => { suma[k] = 0; });
-  USUARIOS.forEach((u) => { suma[u.usuario] = 0; });
   const meter = (quien, cuanto) => {
     if (suma[quien] !== undefined && quien !== "sin") suma[quien] += cuanto;
     else suma.sin += cuanto;
   };
+  // Por quien firma, no por quien vendió: el comprobante salió con su cédula, así
+  // que ese ingreso es suyo ante la DIAN aunque la venta la hiciera otro.
   TARJETAS.forEach((t) => {
-    if (String(t.vendida || "").indexOf(desde) === 0) meter(t.vendedor, Number(t.precio) || 0);
+    if (String(t.vendida || "").indexOf(desde) === 0) {
+      meter(t.jefe || t.vendedor, Number(t.precio) || 0);
+    }
   });
   SERVICIOS.forEach((x) => {
-    if (String(x.fecha || "").indexOf(desde) === 0) meter(x.vendedor, Number(x.precio) || 0);
+    if (String(x.fecha || "").indexOf(desde) === 0) {
+      meter(x.jefe || x.vendedor, Number(x.precio) || 0);
+    }
   });
   return suma;
 }
@@ -3196,7 +3213,7 @@ function pintarTope() {
   const suma = vendidoPorSocio(UVT.anio);
   const tope = topeRenta();
   const caja = $("tope");
-  const todos = QUIENES_VENDEN.concat(USUARIOS.map((u) => u.usuario));
+  const todos = QUIENES_VENDEN;
   const mayor = Math.max.apply(null, todos.map((k) => suma[k] || 0)) / tope;
   caja.className = "tope" + (mayor >= 1 ? " pasado" : (mayor >= 0.8 ? " cerca" : ""));
 
@@ -3212,12 +3229,13 @@ function pintarTope() {
 
   // una barra en cero es ruido: el tercero aparece cuando ya vendió o ya tiene
   // sus datos puestos
-  const conBarra = todos.filter((k) => suma[k] || VENDEDORES[k] ||
-    USUARIOS.filter((u) => u.usuario === k && u.activo).length);
+  const conBarra = todos;
   caja.innerHTML = "<div class='cejilla'>Declaración de renta · " + UVT.anio + "</div>" +
     (conBarra.length ? conBarra : ["felipe", "nicolas"]).map(barra).join("") +
-    (suma.sin ? "<div class='tope-nota'>Sin vendedor apuntado: <b>" + dinero(suma.sin) +
-      "</b> — son ventas de antes de separar por quién la hizo.</div>" : "") +
+    (suma.sin ? "<div class='tope-nota'>Sin jefe apuntado: <b>" + dinero(suma.sin) +
+      "</b> — ventas de antes de que el comprobante tuviera firma.</div>" : "") +
+    (USUARIOS.length ? "<div class='tope-nota'>Lo que venden los demás cuenta para el " +
+      "jefe que firma su comprobante, no para ellos.</div>" : "") +
     "<div class='tope-nota'>Declara quien pase " + RENTA_UVT.toLocaleString("es-CO") +
     " UVT de ingresos brutos en el " +
     "año, que en " + UVT.anio + " son " + dinero(tope) + " (UVT " + dinero(UVT.pesos) + ").</div>";
@@ -3690,18 +3708,18 @@ function datosDelComprobante() {
   if (!LOCAL_VENTA) return null;
   // sin los datos del vendedor no hay comprobante, así que en vez de mandarlo a
   // buscar el botón a otra pestaña, se le abre el formulario aquí mismo
-  const quien = VENDEDORES[QUIEN_VENDE];
+  const firma = quienFirma();
+  const quien = VENDEDORES[firma];
   if (!quien || !quien.nombre) {
     if (SESION.dueno) {
       cerrarVenta();
-      abrirAjustes(QUIEN_VENDE);
-      avisar("avisoPanel", "Falta el nombre de " + nombreDeVendedor(QUIEN_VENDE) +
+      abrirAjustes(firma);
+      avisar("avisoPanel", "Falta el nombre de " + nombreDeVendedor(firma) +
         ". Se pone una vez y ya sale en sus comprobantes.", false);
     } else {
-      // sus datos los pone el superadmin: mandarlo a Mis datos sería mandarlo a
-      // una ventana que no le deja guardar
-      avisar("avisoVenta", "Te falta el nombre para firmar el comprobante. " +
-        "Pedíselo a Felipe o Nicolás.", false);
+      // su jefe es quien firma, y esos datos los pone el superadmin
+      avisar("avisoVenta", "Faltan los datos de " + nombreDeVendedor(firma) +
+        ", que es quien firma tus comprobantes. Pídeselo.", false);
     }
     return null;
   }
@@ -4169,6 +4187,14 @@ $("formRecibi").onsubmit = async (e) => {
 /* ---------- los vendedores ---------- */
 
 let EDITANDO_USUARIO = "";
+let JEFE_USUARIO = "felipe";
+
+$("usuarioJefe").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-valor]");
+  if (!b) return;
+  JEFE_USUARIO = b.dataset.valor;
+  marcarSegmento("usuarioJefe", JEFE_USUARIO);
+});
 let focoUsuarios = null;
 
 async function cargarUsuarios() {
@@ -4193,7 +4219,8 @@ function pintarListaUsuarios() {
     "<div class='gente'>" + USUARIOS.map((u) =>
     "<button type='button' data-usuario='" + escHtml(u.usuario) + "' class='" +
     (u.usuario === EDITANDO_USUARIO ? "elegido" : "") + (u.activo ? "" : " apagado") + "'>" +
-    "<b>" + escHtml(u.nombre) + "</b><span>@" + escHtml(u.usuario) +
+    "<b>" + escHtml(u.nombre) + "</b><span>@" + escHtml(u.usuario) + " · firma " +
+    escHtml(SOCIO_NOMBRE[u.jefe] || "Felipe") +
     (u.activo ? "" : " · apagado") + "</span><i class='pct-ficha'>" + u.pct + "%</i>" +
     "</button>").join("") + "</div>";
 }
@@ -4213,6 +4240,8 @@ function ponerUsuarioEnForm(u) {
   $("usuarioNombreCuenta").value = u ? u.usuario : "";
   $("usuarioNombreCuenta").disabled = Boolean(u);
   $("usuarioClave").value = "";
+  JEFE_USUARIO = u && u.jefe === "nicolas" ? "nicolas" : "felipe";
+  marcarSegmento("usuarioJefe", JEFE_USUARIO);
   $("usuarioPct").value = u ? u.pct : 50;
   $("usuarioActivo").checked = u ? Boolean(u.activo) : true;
   $("ayudaClave").textContent = u
@@ -4274,6 +4303,7 @@ $("formUsuario").onsubmit = async (e) => {
         cedula: $("usuarioCedula").value,
         telefono: $("usuarioTelefono").value,
         pct: Number($("usuarioPct").value),
+        jefe: JEFE_USUARIO,
         activo: $("usuarioActivo").checked,
         clave: $("usuarioClave").value,
       }),
@@ -4677,6 +4707,7 @@ $("formVenta").onsubmit = async (e) => {
             vendedor: QUIEN_VENDE,
             pct: pctDeLaVenta(),
             pago: COMO_PAGO,
+            jefe: quienFirma(),
           }),
         });
       }
@@ -4710,7 +4741,8 @@ $("formVenta").onsubmit = async (e) => {
     for (const g of grupos) {
       if (g.codigos.length) {
         parchearTarjetas(g.codigos, { vendida: fecha, precio: g.precio,
-          vendedor: QUIEN_VENDE, pct: pctDeLaVenta(), pago: COMO_PAGO });
+          vendedor: QUIEN_VENDE, pct: pctDeLaVenta(), pago: COMO_PAGO,
+          jefe: quienFirma() });
       }
     }
     if (fichaNueva) parchearServicio(fichaNueva.id, fichaNueva);
@@ -5655,7 +5687,15 @@ export function vistaAdmin(origen) {
       <p class="ayuda" id="ayudaClave">Se la dictas a él. Al editar, déjala vacía para
         no cambiarla.</p>
 
-      <label class="paso" for="usuarioPct"><span class="n n3">3</span>Cuánto se queda</label>
+      <label class="paso"><span class="n n3">3</span>Quién firma sus comprobantes</label>
+      <div class="segmento" id="usuarioJefe" role="group" aria-label="Su jefe">
+        <button type="button" class="activa" data-valor="felipe">Felipe</button>
+        <button type="button" data-valor="nicolas">Nicolás</button>
+      </div>
+      <p class="ayuda">El papel sale con su nombre y su cédula, y ese ingreso cuenta
+        para él en el tope de renta.</p>
+
+      <label class="paso" for="usuarioPct"><span class="n n4">4</span>Cuánto se queda</label>
       <div class="pct-fila">
         <input class="c3" id="usuarioPct" type="number" min="0" max="100" step="1" value="50"
                required>
