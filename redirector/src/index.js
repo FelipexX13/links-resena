@@ -67,12 +67,13 @@ const TIPOS = new Set(["acrilico", "sticker"]);
 const LLAVE_MODO = "modo:prueba";
 const SOCIOS = new Set(["felipe", "nicolas", "ambos"]);
 // Quién hizo la venta. Va en el registro porque la declaración de renta la
-// presenta cada uno por su lado, con sus propios ingresos. Alexander vende pero
-// no es socio: no pone plata ni entra en el reparto, por eso está aquí y no en
-// SOCIOS, que es quién paga los gastos.
-const VENDEDORES = new Set(["felipe", "nicolas", "alexander"]);
+// presenta cada uno por su lado, con sus propios ingresos. Puede ser uno de los
+// dos dueños —que firman desde la cuenta del superadmin— o cualquier usuario.
+// No se comprueba contra KV a propósito: sería una lectura por tarjeta, y quien
+// manda el dato o es el superadmin o ya lo tiene forzado a su propio nombre.
 function vendedorValido(valor) {
-  return VENDEDORES.has(valor) ? valor : "";
+  const v = String(valor || "").trim().toLowerCase();
+  return FORMATO_USUARIO.test(v) ? v : "";
 }
 // El comprobante sale de este buzón. Brevo pide verificar el remitente una vez.
 const CORREO_REMITENTE = "greview641@gmail.com";
@@ -80,6 +81,11 @@ const NOMBRE_REMITENTE = "Google Reviews";
 const FORMATO_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const MAX_PDF = 4 * 1024 * 1024; // en base64; un comprobante real pesa unos 30 KB
 const LLAVE_VENDEDOR = "cfg:vendedor";
+// El superadmin no es un usuario en KV: es la contraseña de siempre. Se marca con
+// un nombre que ningún usuario puede tener, porque FORMATO_USUARIO no deja "*".
+const DUENO = "*";
+const FORMATO_USUARIO = /^[a-z0-9_-]{3,20}$/;
+const VUELTAS_PBKDF2 = 120000;
 // Los únicos sitios a los que el Worker sigue un enlace por su cuenta. La lista
 // va cerrada a propósito: si no, esto sería un proxy para pedir lo que sea.
 const ACORTADORES = new Set(["maps.app.goo.gl", "goo.gl", "g.co", "maps.google.com",
@@ -161,7 +167,7 @@ function precioValido(valor) {
   return Number.isFinite(n) && n >= 0 ? Math.round(n) : 0;
 }
 
-function registroDe(cuerpo) {
+function registroDe(cuerpo, vendedor) {
   const destino = urlDestino(cuerpo.destino);
   if (!destino) return { error: "El destino debe ser una URL http:// o https://" };
   const negocio = String(cuerpo.negocio || "").trim().slice(0, 120);
@@ -173,7 +179,7 @@ function registroDe(cuerpo) {
       tipo: tipoValido(cuerpo.tipo),
       vendida: fechaValida(cuerpo.vendida),
       precio: precioValido(cuerpo.precio),
-      vendedor: vendedorValido(String(cuerpo.vendedor || "")),
+      vendedor: vendedor,
       actualizado: new Date().toISOString(),
     },
   };
@@ -228,7 +234,7 @@ function gastoDe(cuerpo) {
 // El sitio en Google Maps se cobra aparte y no cuelga de ninguna tarjeta: un local
 // puede pedirla sin comprar un solo acrílico. Por eso vive en su propia clave y
 // se une a la orden por el nombre del negocio.
-function servicioDe(cuerpo) {
+function servicioDe(cuerpo, vendedor) {
   const negocio = String(cuerpo.negocio || "").trim().slice(0, 60);
   if (!negocio) return { error: "Falta el nombre del local" };
 
@@ -244,7 +250,7 @@ function servicioDe(cuerpo) {
       negocio: negocio,
       precio: Math.round(precio),
       fecha: fecha,
-      vendedor: vendedorValido(String(cuerpo.vendedor || "")),
+      vendedor: vendedor,
       hecha: Boolean(cuerpo.hecha),
       notas: String(cuerpo.notas || "").trim().slice(0, 200),
     },
@@ -409,15 +415,85 @@ async function api(request, env, accion, url, ctx) {
     });
   }
 
-  const sesionOk = await sesionValida(request, env);
+  const quien = await sesionValida(request, env);
 
-  if (accion === "sesion" && request.method === "GET") return json({ activa: sesionOk });
+  if (accion === "sesion" && request.method === "GET") {
+    return json({ activa: Boolean(quien), quien: quien || null });
+  }
 
   if (accion === "modo" && request.method === "GET") {
     return json({ prueba: (await env.TARJETAS.get(LLAVE_MODO)) === "1" });
   }
 
-  if (!sesionOk) return json({ error: "Sesión expirada o inexistente" }, 401);
+  if (!quien) return json({ error: "Sesión expirada o inexistente" }, 401);
+
+  // Lo que solo mira el superadmin: la plata de la casa, el inventario y la
+  // gente. Un vendedor entra a vender, no a ver las cuentas.
+  const SOLO_DUENO = new Set(["gastos", "gasto", "gasto-borrar", "usuarios", "usuario"]);
+  if (SOLO_DUENO.has(accion) && !quien.dueno) {
+    return json({ error: "Eso es del superadmin" }, 403);
+  }
+  if (accion === "modo" && request.method === "POST" && !quien.dueno) {
+    return json({ error: "Eso es del superadmin" }, 403);
+  }
+
+  /* ---------- usuarios (solo el superadmin llega aquí) ---------- */
+
+  if (accion === "usuarios" && request.method === "GET") {
+    const { keys } = await env.TARJETAS.list({ prefix: "u:" });
+    const usuarios = keys.map((k) => k.metadata || { usuario: k.name.slice(2) });
+    usuarios.sort((a, b) => String(a.usuario).localeCompare(String(b.usuario)));
+    return json({ usuarios });
+  }
+
+  if (accion === "usuario" && request.method === "POST") {
+    const cuerpo = await request.json().catch(() => ({}));
+    const nombreUsuario = String(cuerpo.usuario || "").trim().toLowerCase();
+    if (!FORMATO_USUARIO.test(nombreUsuario)) {
+      return json({ error: "El usuario va en minúsculas, de 3 a 20 letras, números, - o _" }, 400);
+    }
+    const nombre = String(cuerpo.nombre || "").trim().slice(0, 80);
+    if (!nombre) return json({ error: "Falta el nombre completo" }, 400);
+
+    const pct = Number(cuerpo.pct);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+      return json({ error: "El porcentaje va de 0 a 100" }, 400);
+    }
+
+    const antes = await leerUsuario(env, nombreUsuario);
+    const clave = String(cuerpo.clave || "");
+    // al crear hace falta clave; al editar solo si se quiere cambiar
+    if (!antes && clave.length < 8) {
+      return json({ error: "La contraseña nueva necesita 8 caracteres o más" }, 400);
+    }
+    if (antes && clave && clave.length < 8) {
+      return json({ error: "La contraseña nueva necesita 8 caracteres o más" }, 400);
+    }
+
+    const sal = clave ? salNueva() : antes.sal;
+    const hash = clave ? await amasar(clave, sal) : antes.hash;
+    const u = {
+      usuario: nombreUsuario,
+      nombre: nombre,
+      cedula: String(cuerpo.cedula || "").trim().slice(0, 30),
+      telefono: String(cuerpo.telefono || "").trim().slice(0, 30),
+      nota: String(cuerpo.nota || "").trim().slice(0, 120),
+      pct: Math.round(pct),
+      activo: cuerpo.activo === undefined ? true : Boolean(cuerpo.activo),
+      creado: antes ? antes.creado : new Date().toISOString(),
+      sal: sal,
+      hash: hash,
+    };
+    await guardarUsuario(env, u);
+    return json({ ok: true, usuario: usuarioPublico(u) });
+  }
+
+  /* ---------- quién firma: el vendedor solo puede ser él mismo ---------- */
+
+  // El panel manda "vendedor" en cada venta. Para el superadmin vale lo que diga
+  // —es Felipe o Nicolás eligiendo—; para un vendedor se ignora y se pone el suyo,
+  // que si no podría apuntarle una venta a cualquiera.
+  const deQuienEs = (pedido) => quien.dueno ? vendedorValido(String(pedido || "")) : quien.usuario;
 
   if (accion === "modo" && request.method === "POST") {
     const cuerpo = await request.json().catch(() => ({}));
@@ -429,7 +505,15 @@ async function api(request, env, accion, url, ctx) {
 
   if (accion === "lista" && request.method === "GET") {
     const { keys } = await env.TARJETAS.list({ prefix: "c:" });
-    const tarjetas = keys.map((k) => Object.assign({ codigo: k.name.slice(2) }, k.metadata || {}));
+    let tarjetas = keys.map((k) => Object.assign({ codigo: k.name.slice(2) }, k.metadata || {}));
+    // Un vendedor ve las libres —las necesita para armar sus órdenes— y las suyas.
+    // De las demás solo sabe que están ocupadas: a qué local fueron y por cuánto no
+    // es asunto suyo. Como se van sin negocio, tampoco le forman órdenes ajenas.
+    if (!quien.dueno) {
+      tarjetas = tarjetas.map((t) => (!t.negocio || t.vendedor === quien.usuario)
+        ? t
+        : { codigo: t.codigo, tipo: t.tipo, ajena: true });
+    }
     tarjetas.sort((a, b) => a.codigo.localeCompare(b.codigo));
 
     // El chip grabado es un hecho físico del plástico: sigue siendo verdad
@@ -462,7 +546,7 @@ async function api(request, env, accion, url, ctx) {
       return json({ error: "Ese código está reservado por el sistema" }, 400);
     }
 
-    const hecho = registroDe(cuerpo);
+    const hecho = registroDe(cuerpo, deQuienEs(cuerpo.vendedor));
     if (hecho.error) return json({ error: hecho.error }, 400);
 
     // dos puertas: ni se saca una tarjeta de una orden cerrada, ni se mete en ella
@@ -489,7 +573,7 @@ async function api(request, env, accion, url, ctx) {
       return json({ error: "Máximo " + MAX_RANGO + " tarjetas por tanda" }, 400);
     }
 
-    const hecho = registroDe(cuerpo);
+    const hecho = registroDe(cuerpo, deQuienEs(cuerpo.vendedor));
     if (hecho.error) return json({ error: hecho.error }, 400);
 
     if (await ordenCerrada(env, hecho.registro.negocio)) {
@@ -528,14 +612,15 @@ async function api(request, env, accion, url, ctx) {
 
   if (accion === "servicios" && request.method === "GET") {
     const { keys } = await env.TARJETAS.list({ prefix: "s:" });
-    const servicios = keys.map((k) => Object.assign({ id: k.name.slice(2) }, k.metadata || {}));
+    let servicios = keys.map((k) => Object.assign({ id: k.name.slice(2) }, k.metadata || {}));
+    if (!quien.dueno) servicios = servicios.filter((x) => x.vendedor === quien.usuario);
     servicios.sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
     return json({ servicios });
   }
 
   if (accion === "servicio" && request.method === "POST") {
     const cuerpo = await request.json().catch(() => ({}));
-    const hecho = servicioDe(cuerpo);
+    const hecho = servicioDe(cuerpo, deQuienEs(cuerpo.vendedor));
     if (hecho.error) return json({ error: hecho.error }, 400);
     if (await ordenCerrada(env, hecho.servicio.negocio)) {
       return cerrada(hecho.servicio.negocio);
@@ -562,8 +647,12 @@ async function api(request, env, accion, url, ctx) {
 
   if (accion === "comprobantes" && request.method === "GET") {
     const { keys } = await env.TARJETAS.list({ prefix: "r:" });
-    const comprobantes = keys.map((k) =>
+    let comprobantes = keys.map((k) =>
       Object.assign({ negocio: k.name.slice(2) }, k.metadata || {}));
+    if (!quien.dueno) {
+      const suyos = await negociosDe(env, quien.usuario);
+      comprobantes = comprobantes.filter((x) => suyos.has(x.negocio));
+    }
     return json({ comprobantes });
   }
 
@@ -591,6 +680,10 @@ async function api(request, env, accion, url, ctx) {
     const cuerpo = await request.json().catch(() => ({}));
     const negocio = String(cuerpo.negocio || "").trim();
     if (!negocio) return json({ error: "Falta el local" }, 400);
+    // borrar el cerrojo reabre una orden cobrada: que nadie destrabe la de otro
+    if (!quien.dueno && !(await negociosDe(env, quien.usuario)).has(negocio)) {
+      return json({ error: "Esa orden no es tuya" }, 403);
+    }
     await env.TARJETAS.delete("r:" + negocio);
     return json({ ok: true, negocio: negocio });
   }
@@ -643,7 +736,11 @@ async function api(request, env, accion, url, ctx) {
 
   if (accion === "compradores" && request.method === "GET") {
     const { keys } = await env.TARJETAS.list({ prefix: "b:" });
-    const compradores = keys.map((k) => Object.assign({ negocio: k.name.slice(2) }, k.metadata || {}));
+    let compradores = keys.map((k) => Object.assign({ negocio: k.name.slice(2) }, k.metadata || {}));
+    if (!quien.dueno) {
+      const suyos = await negociosDe(env, quien.usuario);
+      compradores = compradores.filter((x) => suyos.has(x.negocio));
+    }
     return json({ compradores });
   }
 
@@ -748,7 +845,7 @@ async function api(request, env, accion, url, ctx) {
       tipo: tipoValido(cuerpo.tipo),
       vendida: "",
       precio: 0,
-      vendedor: "",
+      vendedor: "",   // vuelve a estar libre: no es de nadie
       actualizado: new Date().toISOString(),
     };
     for (const codigo of codigos) await escribir(env, codigo, registro);
@@ -854,8 +951,20 @@ async function login(request, env, url) {
 
   const cuerpo = await request.json().catch(() => ({}));
   const clave = String(cuerpo.clave || "");
+  const usuario = String(cuerpo.usuario || "").trim().toLowerCase();
 
-  if (!igualdadConstante(clave, env.ADMIN_PASSWORD)) {
+  // sin usuario es el superadmin, que sigue entrando con la contraseña de siempre
+  let quien = "";
+  if (!usuario) {
+    if (igualdadConstante(clave, env.ADMIN_PASSWORD)) quien = DUENO;
+  } else if (FORMATO_USUARIO.test(usuario)) {
+    const u = await leerUsuario(env, usuario);
+    if (u && u.activo && u.hash && igualdadConstante(await amasar(clave, u.sal), u.hash)) {
+      quien = usuario;
+    }
+  }
+
+  if (!quien) {
     await env.TARJETAS.put(llaveIntentos, String(fallidos + 1), {
       expirationTtl: VENTANA_INTENTOS,
     });
@@ -867,27 +976,95 @@ async function login(request, env, url) {
   }
 
   await env.TARJETAS.delete(llaveIntentos);
-  const ficha = await crearFicha(env.ADMIN_PASSWORD);
+  const ficha = await crearFicha(env.ADMIN_PASSWORD, quien);
   return json({ ok: true }, 200, { "Set-Cookie": galleta(ficha, url, DURACION_SESION / 1000) });
 }
 
-async function crearFicha(secreto) {
-  const expira = String(Date.now() + DURACION_SESION);
-  return expira + "." + (await firmar(expira, secreto));
+async function crearFicha(secreto, usuario) {
+  const datos = usuario + "." + String(Date.now() + DURACION_SESION);
+  return datos + "." + (await firmar(datos, secreto));
 }
 
+// Devuelve quién es, o null. Antes devolvía un sí/no, y por eso "quién vendió"
+// era un desplegable de honor: cualquiera con la clave era cualquiera.
 async function sesionValida(request, env) {
   const ficha = leerCookie(request, COOKIE);
-  if (!ficha) return false;
+  if (!ficha) return null;
 
   const corte = ficha.lastIndexOf(".");
-  if (corte < 1) return false;
-
-  const expira = ficha.slice(0, corte);
+  if (corte < 1) return null;
+  const datos = ficha.slice(0, corte);
   const firma = ficha.slice(corte + 1);
-  if (!/^\d+$/.test(expira) || Date.now() > Number(expira)) return false;
 
-  return igualdadConstante(firma, await firmar(expira, env.ADMIN_PASSWORD));
+  const punto = datos.indexOf(".");
+  if (punto < 1) return null;
+  const usuario = datos.slice(0, punto);
+  const expira = datos.slice(punto + 1);
+  if (!/^\d+$/.test(expira) || Date.now() > Number(expira)) return null;
+  if (!igualdadConstante(firma, await firmar(datos, env.ADMIN_PASSWORD))) return null;
+
+  if (usuario === DUENO) return { usuario: DUENO, dueno: true, nombre: "Superadmin", pct: 100 };
+
+  // apagar o borrar un usuario le corta la sesión en la siguiente petición
+  const u = await leerUsuario(env, usuario);
+  if (!u || !u.activo) return null;
+  return { usuario: usuario, dueno: false, nombre: u.nombre, pct: u.pct };
+}
+
+/* ---------- usuarios ---------- */
+
+// Workers no trae bcrypt, pero sí PBKDF2 por WebCrypto, que para esto sirve: el
+// coste está en las vueltas y una clave robada no se descifra, se prueba.
+function aHex(buffer) {
+  let s = "";
+  for (const b of new Uint8Array(buffer)) s += b.toString(16).padStart(2, "0");
+  return s;
+}
+
+function salNueva() {
+  return aHex(crypto.getRandomValues(new Uint8Array(16)));
+}
+
+async function amasar(clave, sal) {
+  const cod = new TextEncoder();
+  const base = await crypto.subtle.importKey("raw", cod.encode(clave), "PBKDF2",
+    false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt: cod.encode(sal), iterations: VUELTAS_PBKDF2, hash: "SHA-256" },
+    base, 256);
+  return aHex(bits);
+}
+
+// Los locales de un vendedor: los de sus tarjetas y los de sus servicios. Sirve
+// para no enseñarle correos ni comprobantes de clientes que no son suyos.
+async function negociosDe(env, usuario) {
+  const suyos = new Set();
+  for (const prefijo of ["c:", "s:"]) {
+    const { keys } = await env.TARJETAS.list({ prefix: prefijo });
+    for (const k of keys) {
+      const m = k.metadata || {};
+      if (m.negocio && m.vendedor === usuario) suyos.add(m.negocio);
+    }
+  }
+  return suyos;
+}
+
+async function leerUsuario(env, usuario) {
+  if (!FORMATO_USUARIO.test(usuario)) return null;
+  return await env.TARJETAS.get("u:" + usuario, "json");
+}
+
+// Lo que se puede enseñar de un usuario. La clave nunca sale de aquí, ni siquiera
+// en la metadata: "list" la devolvería entera a quien pida el listado.
+function usuarioPublico(u) {
+  return {
+    usuario: u.usuario, nombre: u.nombre, cedula: u.cedula, telefono: u.telefono,
+    nota: u.nota, pct: u.pct, activo: u.activo, creado: u.creado,
+  };
+}
+
+async function guardarUsuario(env, u) {
+  await env.TARJETAS.put("u:" + u.usuario, JSON.stringify(u), { metadata: usuarioPublico(u) });
 }
 
 async function firmar(datos, secreto) {

@@ -952,3 +952,60 @@ por IP y quince minutos de bloqueo.
 KV no sirve para llevar contadores: es de consistencia eventual y admite ~1
 escritura por segundo por clave. Cuando lo quieras, la vía es Durable Objects,
 Workers Analytics Engine, o un Redis de Upstash con `INCR`. No está incluido aquí.
+
+## Usuarios: una identidad, no un desplegable
+
+Hasta aquí había **una sola contraseña** y «quién hizo la venta» era un
+desplegable de honor: cualquiera con la clave era cualquiera. Con gente fuera de
+los dos socios eso deja de servir, así que la sesión pasa a saber quién eres.
+
+**El superadmin sigue siendo lo de siempre**: una cuenta, la contraseña de
+`ADMIN_PASSWORD`, sin usuario. Es la de Felipe y Nicolás, y dentro siguen
+eligiendo con cuál de los dos se firma cada comprobante.
+
+**Los vendedores son usuarios en KV**, `u:<usuario>`, creados desde el
+superadmin. Entran con usuario y contraseña.
+
+### Cómo se guarda una contraseña
+
+Workers no trae bcrypt, pero sí PBKDF2 por WebCrypto: 120.000 vueltas de
+SHA-256 con sal de 16 bytes por usuario. Lo que se guarda es el hash, nunca la
+clave.
+
+**La sal y el hash viven solo en el valor, no en la metadata.** `list()` devuelve
+la metadata entera a quien pida el listado de usuarios, así que meterlos ahí
+sería repartir las credenciales con cada pantalla de administración.
+
+### La sesión
+
+La cookie pasa de `expira.firma` a `usuario.expira.firma`, firmada igual con
+HMAC-SHA256 sobre `ADMIN_PASSWORD`. `sesionValida()` ya no devuelve un sí/no sino
+quién es, y de ahí cuelga todo lo demás.
+
+Cada petición de un vendedor lee su `u:` para comprobar que sigue activo, así que
+**apagar un usuario le corta la sesión en la siguiente petición**, sin esperar a
+que caduque la cookie.
+
+Al desplegar esto, las cookies viejas dejan de valer: hay que entrar otra vez.
+
+### Qué garantiza el Worker, y qué no
+
+Lo que se cumple del lado del servidor, no del panel:
+
+| | |
+|---|---|
+| Un vendedor no ve gastos, cuentas ni la lista de usuarios | `403` |
+| Un vendedor no puede crear ni editar usuarios, ni tocar el modo pruebas | `403` |
+| Un vendedor no puede apuntarle una venta a otro | el `vendedor` que manda se ignora y se pone el suyo |
+| Un vendedor no ve las tarjetas de los demás | le llegan como `{codigo, tipo, ajena}`: sabe que están ocupadas y nada más |
+| Un vendedor no ve correos ni comprobantes de clientes ajenos | filtrados por sus propios locales |
+| Un vendedor no puede destrabar una orden cerrada que no es suya | `403` |
+
+Como las tarjetas ajenas le llegan sin `negocio`, tampoco le forman órdenes:
+su pestaña de Órdenes sale filtrada sin filtrar nada en el panel.
+
+**Lo que no se comprueba**, a propósito: que un vendedor escriba sobre un local
+ajeno adivinando el nombre. `rango` escribe hasta veinticinco tarjetas de un
+golpe y comprobar el dueño de cada una serían veinticinco lecturas más, contra
+las cincuenta subpeticiones del plan gratis. No gana nada con ello —estaría
+regalándole un comprobante a otro— y el panel no le ofrece la puerta.
