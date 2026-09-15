@@ -1045,7 +1045,16 @@ para que nadie tenga que descubrir a golpes qué le toca.
 
 ### Vendedores
 
-En **Cuentas › Vendedores**. Se crea con nombre, cédula, usuario, contraseña y el
+En **Cuentas › Vendedores**. La ventana tiene dos caras y se turnan, porque con
+veinte personas una lista encima de un formulario abierto no acaba nunca:
+
+- **La lista** —con la que abre—: una fila por persona con su nombre, su usuario,
+  quién le firma y su porcentaje. Los apagados salen en gris. El buscador aparece
+  a partir de siete; con tres, estorba.
+- **La ficha**: al tocar a alguien, o al darle a *Nuevo vendedor*. Vuelve con
+  «← Todos los vendedores», y al guardar vuelve sola.
+
+Se crea con nombre, cédula, usuario, contraseña y el
 porcentaje que se queda de lo que venda. El porcentaje se ve en plata mientras se
 escribe —«de un acrílico de $49.900: él $24.950, la casa $24.950»—, que es como
 se entiende un 50%.

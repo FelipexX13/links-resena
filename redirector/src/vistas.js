@@ -562,21 +562,31 @@ const ESTILOS = `
   .pct-fila{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
   .pct-fila input{width:92px}
   .pct-signo{font-size:17px;font-weight:600;color:var(--tinta-2)}
-  .gente{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 20px}
-  .gente button{background:var(--papel-2);color:var(--tinta);border:1px solid var(--linea);
-    padding:9px 13px;font-size:12.5px;font-weight:500;text-align:left;line-height:1.3}
-  .gente button:hover{background:var(--papel);border-color:var(--tinta-3);color:var(--tinta)}
-  .gente button.elegido{background:var(--azul-piel);border-color:var(--azul);
-    color:var(--azul-fuerte)}
-  .gente button{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-  .gente b{flex:1 0 100%;font-weight:600}
+  /* Una fila por persona y nada más: con veinte vendedores, unas fichas sueltas
+     encima de un formulario abierto son un rollo sin final. */
+  .busca-gente{width:auto;flex:1 1 130px;padding:9px 13px;font-size:13px}
+  .gente{margin:14px 0 0}
+  .gente button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+    background:none;border:0;border-top:1px solid var(--linea-suave);border-radius:0;
+    padding:12px 2px;color:var(--tinta);font-size:13.5px;font-weight:500;line-height:1.35}
+  .gente button:first-child{border-top:0}
+  .gente button:hover{background:var(--papel-2);color:var(--tinta)}
+  .gente .quien-es{min-width:0;flex:1 1 auto}
+  .gente b{display:block;font-weight:600}
+  .gente span{display:block;font-family:"Geist Mono",ui-monospace,monospace;
+    font-size:11px;color:var(--tinta-3);overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap}
   .gente .pct-ficha{font-style:normal;font-weight:600;font-size:12.5px;
     color:var(--azul-fuerte);background:var(--azul-piel);border-radius:999px;
-    padding:1px 8px;margin-left:auto}
-  .gente button.elegido .pct-ficha{background:var(--papel)}
-  .gente span{font-family:"Geist Mono",ui-monospace,monospace;font-size:11px;
-    color:var(--tinta-3)}
-  .gente .apagado{opacity:.55}
+    padding:2px 9px;flex:0 0 auto}
+  .gente .flecha{color:var(--tinta-3);flex:0 0 auto;font-size:15px}
+  .gente button.apagado b,.gente button.apagado span{opacity:.5}
+  .gente button.apagado .pct-ficha{background:var(--papel-2);color:var(--tinta-3)}
+  .gente .nadie{padding:18px 2px;color:var(--tinta-2);font-size:13px}
+
+  .volver{background:none;border:0;padding:0;margin-bottom:14px;color:var(--azul-fuerte);
+    font-size:12.5px;font-weight:500}
+  .volver:hover{background:none;color:var(--azul);text-decoration:underline}
   .sobre-tabla{margin:26px 0 2px}
   .importe.debe,b.debe{color:var(--rojo-fuerte)}
   .inv{font-family:"Geist Mono",ui-monospace,monospace;font-size:13px}
@@ -4216,27 +4226,65 @@ async function cargarUsuarios() {
 }
 
 function pintarListaUsuarios() {
+  const busca = sinTildes($("buscarUsuario").value);
+  const gente = USUARIOS.filter((u) => !busca ||
+    sinTildes(u.nombre).includes(busca) || sinTildes(u.usuario).includes(busca));
+
+  // el buscador solo aparece cuando hay bastantes: con tres, estorba
+  $("buscarUsuario").hidden = USUARIOS.length < 7;
+
   const caja = $("listaUsuarios");
-  if (!USUARIOS.length) {
-    caja.innerHTML = "<p class='ayuda'>Todavía no hay nadie. El primero, abajo.</p>";
+  if (!gente.length) {
+    caja.innerHTML = "<div class='gente'><div class='nadie'>" +
+      (USUARIOS.length ? "Nadie con ese nombre." :
+        "Todavía no hay nadie. Empieza por el botón de arriba.") + "</div></div>";
     return;
   }
-  caja.innerHTML = "<p class='ayuda ayuda-alta'>Toca a uno para cambiarle el " +
-    "porcentaje, la contraseña o apagarlo.</p>" +
-    "<div class='gente'>" + USUARIOS.map((u) =>
-    "<button type='button' data-usuario='" + escHtml(u.usuario) + "' class='" +
-    (u.usuario === EDITANDO_USUARIO ? "elegido" : "") + (u.activo ? "" : " apagado") + "'>" +
-    "<b>" + escHtml(u.nombre) + "</b><span>@" + escHtml(u.usuario) + " · firma " +
+
+  caja.innerHTML = "<div class='gente'>" + gente.map((u) =>
+    "<button type='button' data-usuario='" + escHtml(u.usuario) + "'" +
+    (u.activo ? "" : " class='apagado'") + ">" +
+    "<span class='quien-es'><b>" + escHtml(u.nombre) + "</b>" +
+    "<span>@" + escHtml(u.usuario) + " · firma " +
     escHtml(SOCIO_NOMBRE[u.jefe] || "Felipe") +
-    (u.activo ? "" : " · apagado") + "</span><i class='pct-ficha'>" + u.pct + "%</i>" +
+    (u.activo ? "" : " · apagado") + "</span></span>" +
+    "<i class='pct-ficha'>" + u.pct + "%</i><i class='flecha'>›</i>" +
     "</button>").join("") + "</div>";
 }
+
+$("buscarUsuario").addEventListener("input", pintarListaUsuarios);
+
+// La lista y la ficha no caben juntas, así que se turnan.
+function verLista() {
+  EDITANDO_USUARIO = "";
+  $("panelLista").hidden = false;
+  $("formUsuario").hidden = true;
+  $("usuariosKicker").textContent = "Equipo";
+  $("usuariosTitulo").textContent = "Vendedores";
+  $("usuariosSubtitulo").textContent =
+    "Cada uno entra con su usuario y solo ve sus propias órdenes.";
+  pintarListaUsuarios();
+}
+
+function verFicha(u) {
+  $("panelLista").hidden = true;
+  $("formUsuario").hidden = false;
+  $("usuariosKicker").textContent = u ? "Vendedor" : "Nuevo";
+  $("usuariosTitulo").textContent = u ? u.nombre : "Nuevo vendedor";
+  $("usuariosSubtitulo").textContent = u
+    ? "@" + u.usuario + " · entró el " + String(u.creado || "").slice(0, 10)
+    : "Entra con su usuario y solo ve sus propias órdenes.";
+  ponerUsuarioEnForm(u);
+}
+
+$("volverALista").onclick = verLista;
+$("cancelarUsuario").onclick = verLista;
 
 $("listaUsuarios").addEventListener("click", (e) => {
   const b = e.target.closest("[data-usuario]");
   if (!b) return;
   const u = USUARIOS.filter((x) => x.usuario === b.dataset.usuario)[0];
-  if (u) ponerUsuarioEnForm(u);
+  if (u) verFicha(u);
 });
 
 function ponerUsuarioEnForm(u) {
@@ -4258,7 +4306,6 @@ function ponerUsuarioEnForm(u) {
     : "Se la dictas a él. Mínimo 8 caracteres.";
   $("guardarUsuario").textContent = u ? "Guardar cambios" : "Crear vendedor";
   pintarEjemploPct();
-  pintarListaUsuarios();
 }
 
 // El porcentaje en plata, que es como se entiende: un acrílico de la lista.
@@ -4278,16 +4325,18 @@ $("verClave").onclick = () => {
 };
 
 $("usuarioPct").addEventListener("input", pintarEjemploPct);
-$("usuarioNuevo").onclick = () => { ponerUsuarioEnForm(null); $("usuarioNombre").focus(); };
+$("usuarioNuevo").onclick = () => { verFicha(null); $("usuarioNombre").focus(); };
 
 function abrirUsuarios() {
-  ponerUsuarioEnForm(null);
-  pintarListaUsuarios();
+  $("buscarUsuario").value = "";
+  // se abre en la lista: lo normal es venir a mirar o a tocar a alguien que ya
+  // está, no a crear uno nuevo
+  verLista();
   limpiarAviso();
   focoUsuarios = document.activeElement;
   $("modalUsuarios").hidden = false;
   document.body.style.overflow = "hidden";
-  $("usuarioNombre").focus();
+  $(USUARIOS.length ? "buscarUsuario" : "usuarioNuevo").focus();
 }
 
 function cerrarUsuarios() {
@@ -4326,7 +4375,7 @@ $("formUsuario").onsubmit = async (e) => {
     });
     const nuevo = !EDITANDO_USUARIO;
     await cargarUsuarios();
-    ponerUsuarioEnForm(r.usuario);
+    verLista();
     avisar("avisoPanel", (nuevo ? "Vendedor " : "Datos de ") + r.usuario.nombre +
       (nuevo ? " creado" : " guardados"), true);
   } catch (err) {
@@ -5668,14 +5717,22 @@ export function vistaAdmin(origen) {
   <div class="modal-fondo" data-cerrar-usuarios></div>
   <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="usuariosTitulo">
     <button type="button" class="modal-cerrar" id="cerrarUsuarios" aria-label="Cerrar">✕</button>
-    <div class="modal-kicker">Equipo</div>
+    <div class="modal-kicker" id="usuariosKicker">Equipo</div>
     <h1 id="usuariosTitulo">Vendedores</h1>
-    <p class="modal-subtitulo">Cada uno entra con su usuario y solo ve sus propias
-      órdenes. El porcentaje es lo que se queda de lo que venda.</p>
+    <p class="modal-subtitulo" id="usuariosSubtitulo">Cada uno entra con su usuario y
+      solo ve sus propias órdenes.</p>
 
-    <div id="listaUsuarios"></div>
+    <div id="panelLista">
+      <div class="modal-acciones acciones-izq sin-aire">
+        <input id="buscarUsuario" type="search" class="busca-gente"
+               placeholder="Buscar" autocomplete="off" aria-label="Buscar un vendedor">
+        <button type="button" class="leer" id="usuarioNuevo">Nuevo vendedor</button>
+      </div>
+      <div id="listaUsuarios"></div>
+    </div>
 
-    <form id="formUsuario">
+    <form id="formUsuario" hidden>
+      <button type="button" class="volver" id="volverALista">← Todos los vendedores</button>
       <label class="paso" for="usuarioNombre"><span class="n n1">1</span>Quién es</label>
       <input id="usuarioNombre" type="text" maxlength="80"
              autocomplete="off" required>
@@ -5724,7 +5781,7 @@ export function vistaAdmin(origen) {
         Puede entrar</label>
 
       <div class="modal-acciones">
-        <button type="button" class="fantasma" id="usuarioNuevo">Uno nuevo</button>
+        <button type="button" class="fantasma" id="cancelarUsuario">Cancelar</button>
         <button type="submit" id="guardarUsuario">Guardar</button>
       </div>
     </form>
