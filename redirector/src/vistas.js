@@ -563,6 +563,7 @@ const ESTILOS = `
     color:var(--tinta-3)}
   .gente .apagado{opacity:.55}
   .sobre-tabla{margin:26px 0 2px}
+  .importe.debe,b.debe{color:var(--rojo-fuerte)}
   .inv{font-family:"Geist Mono",ui-monospace,monospace;font-size:13px}
   .inv-malos{color:var(--rojo-fuerte)}
   .rot{display:none}
@@ -713,14 +714,18 @@ const ESTILOS = `
     #tablaComisiones tr,#tablaMio tr{display:flex;flex-wrap:wrap;align-items:baseline;
       gap:2px 13px;padding:11px 0}
     #tablaComisiones td,#tablaMio td{padding:0;width:auto;white-space:nowrap}
-    #tablaComisiones td:nth-child(1){order:1;min-width:0;overflow:hidden;
-      text-overflow:ellipsis}
-    #tablaComisiones td:nth-child(4){order:2;margin-left:auto;font-size:17px;
-      color:var(--tinta)}
-    #tablaComisiones td:nth-child(2){order:3;flex:1 0 100%;font-size:12px;
-      color:var(--tinta-2)}
-    #tablaComisiones td:nth-child(3),#tablaComisiones td:nth-child(5){order:4;
-      font-size:12px;color:var(--tinta-2)}
+    /* 1 vendedor · 2 facturado · 3 se lleva · 4 para la casa · 5 debe · 6 botón.
+       Arriba el nombre y lo que debe, que es lo que se viene a mirar. */
+    #tablaComisiones td:nth-child(1){order:1;min-width:0;white-space:normal}
+    #tablaComisiones td:nth-child(5){order:2;margin-left:auto;font-size:17px}
+    #tablaComisiones td:nth-child(2),#tablaComisiones td:nth-child(3),
+    #tablaComisiones td:nth-child(4){order:3;font-size:12px;color:var(--tinta-2)}
+    #tablaComisiones td:nth-child(6){order:4;flex:1 0 100%}
+    #tablaComisiones td:nth-child(6) .acciones{display:flex}
+    #tablaComisiones td:nth-child(6) button{width:auto;padding:7px 13px;font-size:12px}
+    #tablaComisiones td:nth-child(2)::before{content:"facturó "}
+    #tablaComisiones td:nth-child(3)::before{content:"· se lleva "}
+    #tablaComisiones td:nth-child(4)::before{content:"· casa "}
 
     #tablaMio td:nth-child(2){order:1;min-width:0;overflow:hidden;
       text-overflow:ellipsis;font-size:15px}
@@ -902,7 +907,9 @@ let TIPO = "acrilico";
 let FILTRO_TIPO = "";
 let MODO = "una";
 let ORIGEN_RANGO = "numero";
-let VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "", pct: 0 };
+let VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "", pct: 0, pago: "efectivo" };
+let COMO_PAGO = "efectivo";
+let LIQUIDACIONES = [];
 let VISTA = "locales";
 let PRUEBAS = false;
 let GASTOS = [];
@@ -1018,6 +1025,7 @@ function mostrar(dentro, quien) {
     cargarAjustes();
     // un vendedor no tiene gastos ni gente que administrar: pedirlos sería
     // llenarle la consola de 403 para nada
+    cargarLiquidaciones().then(repintarTodo);
     if (SESION.dueno) { cargarGastos(); cargarUsuarios(); }
   }
   else { cerrarQR(); cerrarTarjeta(); $("clave").focus(); }
@@ -1500,8 +1508,9 @@ function porVenta(codigos) {
   codigos.forEach((c) => {
     const t = TARJETAS.filter((x) => x.codigo === c)[0] || {};
     const venta = { vendida: t.vendida || "", precio: Number(t.precio) || 0,
-      vendedor: t.vendedor || "", pct: Number(t.pct) || 0 };
-    const llave = venta.vendida + "|" + venta.precio + "|" + venta.vendedor + "|" + venta.pct;
+      vendedor: t.vendedor || "", pct: Number(t.pct) || 0, pago: t.pago || "efectivo" };
+    const llave = venta.vendida + "|" + venta.precio + "|" + venta.vendedor + "|" +
+      venta.pct + "|" + venta.pago;
     if (!grupos[llave]) grupos[llave] = { venta: venta, codigos: [] };
     grupos[llave].codigos.push(c);
   });
@@ -1724,6 +1733,7 @@ $("formTarjeta").onsubmit = async (e) => {
         precio: VENTA_EDITADA.precio,
         vendedor: VENTA_EDITADA.vendedor,
         pct: VENTA_EDITADA.pct,
+        pago: VENTA_EDITADA.pago,
       }),
     });
     const editaba = Boolean(EDITANDO_CODIGO);
@@ -1759,7 +1769,7 @@ function editar(codigo) {
   pintarNumero(t.codigo);
   pintarTipo(tipoDe(t));
   VENTA_EDITADA = { vendida: t.vendida || "", precio: t.precio || 0,
-    vendedor: t.vendedor || "", pct: Number(t.pct) || 0 };
+    vendedor: t.vendedor || "", pct: Number(t.pct) || 0, pago: t.pago || "efectivo" };
   llenarLocales();
   $("localExistente").value = t.negocio || "";
   pintarModo("una");
@@ -2130,7 +2140,7 @@ function salirDeEdicion() {
   decirCodigo("");
   if ($("localExistente").options.length) $("localExistente").value = "";
   if ($("ordenRango").options.length) $("ordenRango").value = "";
-  VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "", pct: 0 };
+  VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "", pct: 0, pago: "efectivo" };
 }
 
 function prepararNuevaTarjeta() {
@@ -2570,19 +2580,23 @@ function comisionDe(precio, pct) {
   return Math.round((Number(precio) || 0) * (Number(pct) || 0) / 100);
 }
 
+const NOMBRE_PAGO = { efectivo: "efectivo", transferencia: "transferencia", otro: "otro" };
+
 // Todo lo vendido, agrupado por quién lo vendió, con sus líneas por local y día.
 function ventasPorVendedor() {
   const mapa = {};
-  const meter = (quien, precio, pct, fecha, negocio, cuantas) => {
+  const meter = (quien, precio, pct, fecha, negocio, cuantas, pago) => {
     if (!quien || !fecha) return;
     if (!mapa[quien]) {
-      mapa[quien] = { quien: quien, piezas: 0, facturado: 0, comision: 0, lineas: {} };
+      mapa[quien] = { quien: quien, piezas: 0, facturado: 0, comision: 0,
+        porPago: {}, lineas: {} };
     }
     const m = mapa[quien];
     const com = comisionDe(precio, pct);
     m.piezas += cuantas;
     m.facturado += precio;
     m.comision += com;
+    m.porPago[pago] = (m.porPago[pago] || 0) + precio;
     const llave = fecha + "|" + negocio;
     if (!m.lineas[llave]) {
       m.lineas[llave] = { fecha: fecha, negocio: negocio, piezas: 0, cobrado: 0, comision: 0 };
@@ -2595,13 +2609,36 @@ function ventasPorVendedor() {
 
   TARJETAS.forEach((t) => {
     if (!t.vendida) return;
-    meter(t.vendedor, Number(t.precio) || 0, t.pct, t.vendida, t.negocio || "", 1);
+    meter(t.vendedor, Number(t.precio) || 0, t.pct, t.vendida, t.negocio || "", 1,
+      t.pago || "efectivo");
   });
   SERVICIOS.forEach((x) => {
     if (!x.fecha) return;
-    meter(x.vendedor, Number(x.precio) || 0, x.pct, x.fecha, x.negocio || "", 0);
+    meter(x.vendedor, Number(x.precio) || 0, x.pct, x.fecha, x.negocio || "", 0,
+      x.pago || "efectivo");
   });
   return mapa;
+}
+
+// Lo que un vendedor le debe a la casa: cobró la venta entera y se queda su
+// parte, así que debe el resto, menos lo que ya haya entregado.
+function deudaDe(quien, resumen) {
+  const m = resumen || ventasPorVendedor()[quien];
+  if (!m) return { dela: 0, entregado: 0, debe: 0 };
+  const dela = m.facturado - m.comision;
+  const entregado = LIQUIDACIONES
+    .filter((x) => x.vendedor === quien)
+    .reduce((a, x) => a + (Number(x.monto) || 0), 0);
+  return { dela: dela, entregado: entregado, debe: dela - entregado };
+}
+
+async function cargarLiquidaciones() {
+  try {
+    const r = await llamar("liquidaciones");
+    LIQUIDACIONES = r.liquidaciones || [];
+  } catch (e) {
+    LIQUIDACIONES = [];
+  }
 }
 
 function ingresoFichas() {
@@ -3169,15 +3206,25 @@ function pintarComisiones() {
   if (!gente.length) return;
 
   $("tablaComisiones").innerHTML =
-    "<table><thead><tr><th>Vendedor</th><th>Piezas</th><th>Facturado</th>" +
-    "<th>Se lleva</th><th>Para la casa</th></tr></thead><tbody>" +
+    "<table><thead><tr><th>Vendedor</th><th>Facturado</th><th>Se lleva</th>" +
+    "<th>Para la casa</th><th>Debe</th><th></th></tr></thead><tbody>" +
     gente.map((k) => {
       const m = porQuien[k];
-      return "<tr><td class='negocio'>" + escHtml(nombreDeVendedor(k)) + "</td>" +
-        "<td class='inv'>" + m.piezas + "</td>" +
+      const d = deudaDe(k, m);
+      const pagos = Object.keys(m.porPago)
+        .map((p) => dinero(m.porPago[p]) + " en " + (NOMBRE_PAGO[p] || p)).join(" · ");
+      return "<tr><td class='negocio'>" + escHtml(nombreDeVendedor(k)) +
+        "<div class='fila-num'>" + plural(m.piezas, "pieza", "piezas") +
+        (pagos ? " · " + escHtml(pagos) : "") + "</div></td>" +
         "<td class='importe'>" + dinero(m.facturado) + "</td>" +
-        "<td class='importe'><b>" + dinero(m.comision) + "</b></td>" +
-        "<td class='importe'>" + dinero(m.facturado - m.comision) + "</td></tr>";
+        "<td class='importe'>" + dinero(m.comision) + "</td>" +
+        "<td class='importe'>" + dinero(d.dela) + "</td>" +
+        "<td class='importe" + (d.debe > 0 ? " debe" : "") + "'><b>" +
+        (d.debe > 0 ? dinero(d.debe) : "al día") + "</b>" +
+        (d.entregado ? "<div class='fila-num'>entregó " + dinero(d.entregado) + "</div>" : "") +
+        "</td>" +
+        "<td><div class='acciones'><button type='button' class='accion-editar' " +
+        "data-recibi='" + escHtml(k) + "'>Recibí</button></div></td></tr>";
     }).join("") + "</tbody></table>";
 }
 
@@ -3320,8 +3367,12 @@ function pintarMio() {
 
   $("mioMetrica").innerHTML = dinero(m.comision) +
     "<span class='unidad'>tuyo, de " + dinero(m.facturado) + " vendidos</span>";
+  const d = deudaDe(SESION.usuario, m);
   $("mioPie").innerHTML = "<span>" + plural(m.piezas, "pieza", "piezas") +
-    "</span><span>Tu parte <b>" + (Number(SESION.pct) || 0) + "%</b></span>";
+    " · tu parte <b>" + (Number(SESION.pct) || 0) + "%</b></span><span>" +
+    (d.debe > 0
+      ? "Debes entregar <b class='debe'>" + dinero(d.debe) + "</b>"
+      : "<b>Al día</b> con la casa") + "</span>";
 
   const lineas = Object.keys(m.lineas).map((k) => m.lineas[k])
     .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
@@ -3969,6 +4020,115 @@ $("modalNFC").addEventListener("click", (e) => {
   if (e.target.hasAttribute("data-cerrar-nfc")) cerrarNFC();
 });
 
+/* ---------- lo que entregan los vendedores ---------- */
+
+let RECIBI_DE = "";
+let focoRecibi = null;
+
+$("tablaComisiones").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-recibi]");
+  if (b) abrirRecibi(b.dataset.recibi);
+});
+
+function abrirRecibi(quien) {
+  RECIBI_DE = quien;
+  const d = deudaDe(quien);
+  $("recibiTitulo").textContent = "Recibí de " + nombreDeVendedor(quien);
+  $("recibiSubtitulo").textContent = d.debe > 0
+    ? "Te debe " + dinero(d.debe) + " de " + dinero(d.dela) + " que le toca entregar."
+    : "Está al día: ya entregó los " + dinero(d.dela) + " que le tocaban.";
+  $("recibiMonto").value = d.debe > 0 ? d.debe : "";
+  $("recibiFecha").value = hoyISO();
+  $("recibiQuien").value = QUIEN_VENDE === "nicolas" ? "nicolas" : "felipe";
+  $("recibiNota").value = "";
+  pintarEntregas();
+  limpiarAviso();
+  focoRecibi = document.activeElement;
+  $("modalRecibi").hidden = false;
+  document.body.style.overflow = "hidden";
+  $("recibiMonto").focus();
+}
+
+function pintarEntregas() {
+  const suyas = LIQUIDACIONES.filter((x) => x.vendedor === RECIBI_DE)
+    .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+  if (!suyas.length) { $("listaEntregas").innerHTML = ""; return; }
+  $("listaEntregas").innerHTML = "<p class='cejilla sobre-tabla'>Lo que ya entregó</p>" +
+    "<table><tbody>" + suyas.map((x) =>
+      "<tr><td class='piezas'>" + escHtml(x.fecha || "") + "</td>" +
+      "<td class='negocio'>" + dinero(x.monto) +
+      (x.nota ? "<div class='fila-num'>" + escHtml(x.nota) + "</div>" : "") + "</td>" +
+      "<td class='piezas'>" + escHtml(SOCIO_NOMBRE[x.recibio] || x.recibio || "") + "</td>" +
+      "<td><div class='acciones'><button type='button' class='accion-apagar' " +
+      "data-borrar-entrega='" + escHtml(x.id) + "'>Borrar</button></div></td></tr>").join("") +
+    "</tbody></table>";
+}
+
+$("listaEntregas").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-borrar-entrega]");
+  if (!b) return;
+  const id = b.dataset.borrarEntrega;
+  if (CONFIRMANDO !== "entrega" + id) { pedirConfirmacion(b, "entrega" + id); return; }
+  olvidarConfirmacion();
+  b.disabled = true;
+  try {
+    await llamar("liquidacion-borrar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: id }),
+    });
+    LIQUIDACIONES = LIQUIDACIONES.filter((x) => x.id !== id);
+    pintarEntregas();
+    abrirRecibi(RECIBI_DE);
+    repintarTodo();
+  } catch (err) {
+    avisar("avisoRecibi", err.message, false);
+    b.disabled = false;
+  }
+});
+
+function cerrarRecibi() {
+  if ($("modalRecibi").hidden) return;
+  $("modalRecibi").hidden = true;
+  document.body.style.overflow = "";
+  if (focoRecibi && focoRecibi.focus) focoRecibi.focus();
+  focoRecibi = null;
+}
+
+$("cerrarRecibi").onclick = cerrarRecibi;
+$("cancelarRecibi").onclick = cerrarRecibi;
+$("modalRecibi").addEventListener("click", (e) => {
+  if (e.target.hasAttribute("data-cerrar-recibi")) cerrarRecibi();
+});
+
+$("formRecibi").onsubmit = async (e) => {
+  e.preventDefault();
+  const boton = $("guardarRecibi");
+  boton.disabled = true;
+  try {
+    const r = await llamar("liquidacion", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vendedor: RECIBI_DE,
+        monto: Number($("recibiMonto").value),
+        fecha: $("recibiFecha").value,
+        recibio: $("recibiQuien").value,
+        nota: $("recibiNota").value,
+      }),
+    });
+    LIQUIDACIONES.push(r);
+    cerrarRecibi();
+    repintarTodo();
+    avisar("avisoPanel", "Entrega de " + nombreDeVendedor(RECIBI_DE) + " apuntada · " +
+      dinero(r.monto), true);
+  } catch (err) {
+    avisar("avisoRecibi", err.message, false);
+  } finally {
+    boton.disabled = false;
+  }
+};
+
 /* ---------- los vendedores ---------- */
 
 let EDITANDO_USUARIO = "";
@@ -4231,6 +4391,9 @@ function abrirVenta(negocio) {
   $("ventaCorreo").value = comp.correo || "";
   $("ventaNit").value = comp.nit || "";
   $("ventaTelefono").value = comp.telefono || "";
+  const conPago = TARJETAS.filter((x) => x.negocio === l.negocio && x.vendida && x.pago)[0];
+  COMO_PAGO = conPago ? conPago.pago : "efectivo";
+  marcarSegmento("comoPago", COMO_PAGO);
   pintarBotonVenta();
   pintarBloqueoVenta(l.negocio);
   limpiarAviso("avisoVenta");
@@ -4396,6 +4559,13 @@ function pintarResumenVenta() {
 }
 
 // cada uno usa su propio teléfono, así que el panel recuerda quién es
+$("comoPago").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-valor]");
+  if (!b) return;
+  COMO_PAGO = b.dataset.valor;
+  marcarSegmento("comoPago", COMO_PAGO);
+});
+
 $("quienVende").addEventListener("click", (e) => {
   const b = e.target.closest("[data-valor]");
   if (!b) return;
@@ -4466,6 +4636,7 @@ $("formVenta").onsubmit = async (e) => {
             precio: g.precio,
             vendedor: QUIEN_VENDE,
             pct: pctDeLaVenta(),
+            pago: COMO_PAGO,
           }),
         });
       }
@@ -4499,7 +4670,7 @@ $("formVenta").onsubmit = async (e) => {
     for (const g of grupos) {
       if (g.codigos.length) {
         parchearTarjetas(g.codigos, { vendida: fecha, precio: g.precio,
-          vendedor: QUIEN_VENDE, pct: pctDeLaVenta() });
+          vendedor: QUIEN_VENDE, pct: pctDeLaVenta(), pago: COMO_PAGO });
       }
     }
     if (fichaNueva) parchearServicio(fichaNueva.id, fichaNueva);
@@ -5370,6 +5541,42 @@ export function vistaAdmin(origen) {
   </div>
 </div>
 
+<div class="modal" id="modalRecibi" hidden>
+  <div class="modal-fondo" data-cerrar-recibi></div>
+  <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="recibiTitulo">
+    <button type="button" class="modal-cerrar" id="cerrarRecibi" aria-label="Cerrar">✕</button>
+    <div class="modal-kicker">Entrega</div>
+    <h1 id="recibiTitulo">Recibí de…</h1>
+    <p class="modal-subtitulo" id="recibiSubtitulo"></p>
+
+    <form id="formRecibi">
+      <label class="mini" for="recibiMonto">Cuánto entregó</label>
+      <input class="c3" id="recibiMonto" type="number" min="1" step="1" required>
+
+      <div class="rango-fila">
+        <div><label class="mini" for="recibiFecha">Cuándo</label>
+          <input id="recibiFecha" type="date"></div>
+        <div><label class="mini" for="recibiQuien">Quién recibió</label>
+          <select id="recibiQuien">
+            <option value="felipe">Felipe</option>
+            <option value="nicolas">Nicolás</option>
+          </select></div>
+      </div>
+
+      <label class="mini sobre-buscador" for="recibiNota">Nota <span class="suave">(opcional)</span></label>
+      <input id="recibiNota" type="text" maxlength="120" placeholder="en la reunión del lunes"
+             autocomplete="off">
+
+      <div id="listaEntregas"></div>
+
+      <div class="modal-acciones">
+        <button type="button" class="fantasma" id="cancelarRecibi">Cancelar</button>
+        <button type="submit" id="guardarRecibi">Apuntar la entrega</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="modal" id="modalUsuarios" hidden>
   <div class="modal-fondo" data-cerrar-usuarios></div>
   <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="usuariosTitulo">
@@ -5554,6 +5761,13 @@ export function vistaAdmin(origen) {
     </div>
 
     <form id="formVenta">
+      <p class="mini2 sin-aire">Cómo pagó</p>
+      <div class="segmento" id="comoPago" role="group" aria-label="Cómo pagó el cliente">
+        <button type="button" class="activa" data-valor="efectivo">Efectivo</button>
+        <button type="button" data-valor="transferencia">Transferencia</button>
+        <button type="button" data-valor="otro">Otro</button>
+      </div>
+
       <div id="filaQuienVende">
         <p class="mini2 sin-aire">Quién hizo la venta</p>
         <div class="segmento" id="quienVende" role="group" aria-label="Quién hizo la venta">

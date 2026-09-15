@@ -47,6 +47,8 @@
  *   "b:<negocio>"   a quién se le manda el comprobante: correo, NIT y teléfono
  *   "r:<negocio>"   comprobante ya enviado: cierra esa orden y no deja tocarle
  *                   nada hasta que se borre
+ *   "l:<id>"        una entrega: qué vendedor le pasó cuánto a la casa y cuándo
+ *   "u:<usuario>"   un vendedor: sus datos, su porcentaje y su clave (PBKDF2)
  *   "cfg:vendedor"  {felipe:{...},nicolas:{...},alexander:{...}} — quienes venden, para
  *                   firmar el comprobante con el que hizo esa venta
  *   "intentos:<ip>" contador de logins fallidos, expira solo a las 24 horas
@@ -86,6 +88,16 @@ const LLAVE_VENDEDOR = "cfg:vendedor";
 const DUENO = "*";
 const FORMATO_USUARIO = /^[a-z0-9_-]{3,20}$/;
 const VUELTAS_PBKDF2 = 120000;
+const PAGOS = new Set(["efectivo", "transferencia", "otro"]);
+// La fecha del servidor en UTC sirve de red: el panel manda la del teléfono.
+function hoyDelServidor() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function pagoValido(valor) {
+  const v = String(valor || "").trim().toLowerCase();
+  return PAGOS.has(v) ? v : "efectivo";
+}
 // Los únicos sitios a los que el Worker sigue un enlace por su cuenta. La lista
 // va cerrada a propósito: si no, esto sería un proxy para pedir lo que sea.
 const ACORTADORES = new Set(["maps.app.goo.gl", "goo.gl", "g.co", "maps.google.com",
@@ -167,7 +179,7 @@ function precioValido(valor) {
   return Number.isFinite(n) && n >= 0 ? Math.round(n) : 0;
 }
 
-function registroDe(cuerpo, vendedor, pct) {
+function registroDe(cuerpo, vendedor, pct, pago) {
   const destino = urlDestino(cuerpo.destino);
   if (!destino) return { error: "El destino debe ser una URL http:// o https://" };
   const negocio = String(cuerpo.negocio || "").trim().slice(0, 120);
@@ -181,6 +193,7 @@ function registroDe(cuerpo, vendedor, pct) {
       precio: precioValido(cuerpo.precio),
       vendedor: vendedor,
       pct: pct,
+      pago: pago,
       actualizado: new Date().toISOString(),
     },
   };
@@ -235,7 +248,7 @@ function gastoDe(cuerpo) {
 // El sitio en Google Maps se cobra aparte y no cuelga de ninguna tarjeta: un local
 // puede pedirla sin comprar un solo acrílico. Por eso vive en su propia clave y
 // se une a la orden por el nombre del negocio.
-function servicioDe(cuerpo, vendedor, pct) {
+function servicioDe(cuerpo, vendedor, pct, pago) {
   const negocio = String(cuerpo.negocio || "").trim().slice(0, 60);
   if (!negocio) return { error: "Falta el nombre del local" };
 
@@ -253,6 +266,7 @@ function servicioDe(cuerpo, vendedor, pct) {
       fecha: fecha,
       vendedor: vendedor,
       pct: pct,
+      pago: pago,
       hecha: Boolean(cuerpo.hecha),
       notas: String(cuerpo.notas || "").trim().slice(0, 200),
     },
@@ -490,6 +504,51 @@ async function api(request, env, accion, url, ctx) {
     return json({ ok: true, usuario: usuarioPublico(u) });
   }
 
+  /* ---------- lo que los vendedores han entregado ---------- */
+
+  // Un vendedor cobra la venta entera y le queda debiendo a la casa su parte. No
+  // se marca orden por orden —entrega plata cuando puede, no venta por venta—
+  // sino que se apunta cada entrega y la deuda es la resta. Así un abono parcial
+  // no necesita nada especial.
+  if (accion === "liquidaciones" && request.method === "GET") {
+    const { keys } = await env.TARJETAS.list({ prefix: "l:" });
+    let liquidaciones = keys.map((k) => Object.assign({ id: k.name.slice(2) }, k.metadata || {}));
+    if (!quien.dueno) liquidaciones = liquidaciones.filter((x) => x.vendedor === quien.usuario);
+    liquidaciones.sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+    return json({ liquidaciones });
+  }
+
+  // Solo el superadmin: es él quien recibe, así que es él quien confirma.
+  if (accion === "liquidacion" && request.method === "POST") {
+    if (!quien.dueno) return json({ error: "Eso lo confirma el superadmin" }, 403);
+    const cuerpo = await request.json().catch(() => ({}));
+    const vendedor = vendedorValido(String(cuerpo.vendedor || ""));
+    if (!vendedor) return json({ error: "Falta de quién es la entrega" }, 400);
+
+    const monto = Number(cuerpo.monto);
+    if (!Number.isFinite(monto) || monto <= 0) return json({ error: "El monto no es válido" }, 400);
+
+    const entrega = {
+      vendedor: vendedor,
+      monto: Math.round(monto),
+      fecha: fechaValida(cuerpo.fecha) || hoyDelServidor(),
+      recibio: String(cuerpo.recibio || "").trim().slice(0, 40),
+      nota: String(cuerpo.nota || "").trim().slice(0, 120),
+    };
+    const id = FORMATO_ID.test(String(cuerpo.id || "")) ? String(cuerpo.id) : Date.now().toString(36);
+    await env.TARJETAS.put("l:" + id, JSON.stringify(entrega), { metadata: entrega });
+    return json(Object.assign({ ok: true, id: id }, entrega));
+  }
+
+  if (accion === "liquidacion-borrar" && request.method === "POST") {
+    if (!quien.dueno) return json({ error: "Eso lo confirma el superadmin" }, 403);
+    const cuerpo = await request.json().catch(() => ({}));
+    const id = String(cuerpo.id || "");
+    if (!FORMATO_ID.test(id)) return json({ error: "Id inválido" }, 400);
+    await env.TARJETAS.delete("l:" + id);
+    return json({ ok: true, id: id });
+  }
+
   /* ---------- quién firma: el vendedor solo puede ser él mismo ---------- */
 
   // El panel manda "vendedor" en cada venta. Para el superadmin vale lo que diga
@@ -560,7 +619,8 @@ async function api(request, env, accion, url, ctx) {
       return json({ error: "Ese código está reservado por el sistema" }, 400);
     }
 
-    const hecho = registroDe(cuerpo, deQuienEs(cuerpo.vendedor), suPct(cuerpo.pct));
+    const hecho = registroDe(cuerpo, deQuienEs(cuerpo.vendedor), suPct(cuerpo.pct),
+      pagoValido(cuerpo.pago));
     if (hecho.error) return json({ error: hecho.error }, 400);
 
     // dos puertas: ni se saca una tarjeta de una orden cerrada, ni se mete en ella
@@ -587,7 +647,8 @@ async function api(request, env, accion, url, ctx) {
       return json({ error: "Máximo " + MAX_RANGO + " tarjetas por tanda" }, 400);
     }
 
-    const hecho = registroDe(cuerpo, deQuienEs(cuerpo.vendedor), suPct(cuerpo.pct));
+    const hecho = registroDe(cuerpo, deQuienEs(cuerpo.vendedor), suPct(cuerpo.pct),
+      pagoValido(cuerpo.pago));
     if (hecho.error) return json({ error: hecho.error }, 400);
 
     if (await ordenCerrada(env, hecho.registro.negocio)) {
@@ -634,7 +695,8 @@ async function api(request, env, accion, url, ctx) {
 
   if (accion === "servicio" && request.method === "POST") {
     const cuerpo = await request.json().catch(() => ({}));
-    const hecho = servicioDe(cuerpo, deQuienEs(cuerpo.vendedor), suPct(cuerpo.pct));
+    const hecho = servicioDe(cuerpo, deQuienEs(cuerpo.vendedor), suPct(cuerpo.pct),
+      pagoValido(cuerpo.pago));
     if (hecho.error) return json({ error: hecho.error }, 400);
     if (await ordenCerrada(env, hecho.servicio.negocio)) {
       return cerrada(hecho.servicio.negocio);

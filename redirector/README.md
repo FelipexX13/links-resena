@@ -1089,3 +1089,45 @@ se lleva y lo que queda para la casa.
 **El vendedor**, en su pestaña **Lo mío**: lo que lleva ganado, de cuánto
 vendido, y el detalle por local y día. No ve gastos, ni utilidad, ni lo de nadie
 más.
+
+## Cómo pagó, y quién le debe a quién
+
+Al aceptar una orden se marca **Efectivo · Transferencia · Otro**. Va escrito en
+cada tarjeta, igual que la fecha y el precio, así que viaja con ellas en
+`porVenta()` y reeditar una orden no lo borra.
+
+### La deuda es una resta, no una lista de marcas
+
+Un vendedor **cobra la venta entera** y se queda su porcentaje, así que le queda
+debiendo el resto a la casa. Lo que no se hace es marcar orden por orden: él
+entrega plata cuando puede, no venta por venta.
+
+En vez de eso se apunta cada entrega en `l:<id>` y la deuda es la resta:
+
+```
+debe = (facturado − su comisión) − lo que ya haya entregado
+```
+
+Así un abono parcial no necesita nada especial. De $64.340 que debía, entrega
+$40.000 y quedan $24.340; la próxima vez el campo ya viene con esa cifra.
+
+**Solo el superadmin apunta entregas**, porque es quien recibe. Se guarda con
+quién la recibió —Felipe o Nicolás— y la nota, y se puede borrar si se apuntó
+mal.
+
+### Lo que ve cada uno
+
+En **Cuentas**, por vendedor: facturado, lo que se lleva, lo que va para la casa
+y lo que **debe**, en rojo hasta que quede en «al día». Debajo del nombre, en qué
+pagaron sus clientes: *«3 piezas · $68.800 en efectivo · $49.900 en
+transferencia»*.
+
+En **Lo mío**, el vendedor ve su parte y lo que le toca entregar. No ve la deuda
+de nadie más.
+
+### El método de pago no cambia quién debe
+
+Se apunta y se enseña, pero la deuda se calcula igual con efectivo que con
+transferencia: el trato es que **el vendedor cobra y entrega la parte de la
+casa**. Si algún día una transferencia entra directo a la cuenta de la casa, ese
+caso habría que modelarlo aparte —la deuda iría al revés—.
