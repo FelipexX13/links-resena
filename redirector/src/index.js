@@ -907,6 +907,50 @@ async function api(request, env, accion, url, ctx) {
     }
   }
 
+  // El link que se usa en la calle —el de compartir del teléfono— no trae
+  // coordenadas por ningún lado, y no las trae nadie gratis: probamos el HTML de
+  // Maps (devuelve la IP de quien pide, no el local), geocodificar la dirección
+  // (186 a 806 metros, o nada) y el ftid (una celda de dos kilómetros). Lo único
+  // exacto es preguntárselo a Google por el placeId, que ya guardamos de cada
+  // local desde siempre —así que esto también sirve hacia atrás—.
+  //
+  // Se pide solo "location": ese campo entra en Place Details Essentials, que
+  // trae 10.000 llamadas gratis al mes. Aquí se harán unas cien.
+  //
+  // Sin clave puesta no es un error del que haya que rescatarse: el panel sigue
+  // funcionando como antes y el local se marca a mano.
+  if (accion === "sitio" && request.method === "POST") {
+    if (!env.GOOGLE_MAPS_KEY) {
+      return json({ error: "No hay clave de Google puesta todavía." }, 501);
+    }
+    const cuerpo = await request.json().catch(() => ({}));
+    const pid = String(cuerpo.placeId || "");
+    if (!/^[A-Za-z0-9_-]{15,256}$/.test(pid)) {
+      return json({ error: "Ese Place ID no tiene forma de Place ID" }, 400);
+    }
+    try {
+      const r = await fetch("https://places.googleapis.com/v1/places/" + pid, {
+        headers: {
+          "X-Goog-Api-Key": env.GOOGLE_MAPS_KEY,
+          "X-Goog-FieldMask": "location",
+        },
+      });
+      const d = await r.json().catch(() => null);
+      if (!r.ok || !d || !d.location) {
+        // el mensaje de Google no se reenvía tal cual: puede llevar la clave
+        return json({ error: "Google no dio la ubicación de ese local (" + r.status + ")" }, 502);
+      }
+      const lat = Number(d.location.latitude);
+      const lng = Number(d.location.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return json({ error: "Google contestó algo raro" }, 502);
+      }
+      return json({ ok: true, lat: lat, lng: lng });
+    } catch (e) {
+      return json({ error: "No se pudo preguntar a Google: " + e.message }, 502);
+    }
+  }
+
   if (accion === "ajustes" && request.method === "GET") {
     const guardado = await env.TARJETAS.get(LLAVE_VENDEDOR, "json");
     if (!quien.dueno) {

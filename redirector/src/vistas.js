@@ -1220,6 +1220,33 @@ function placeIdDesdeFtid(ftid) {
   return btoa(crudo).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+// Le pregunta a Google donde queda ese local. Es la unica fuente exacta para el
+// link que se usa en la calle: el de compartir del telefono no trae coordenadas
+// por ningun lado. Se probo el HTML de Maps (da la IP de quien pide, no el
+// local), geocodificar la direccion (186 a 806 metros, o nada) y el ftid (una
+// celda de dos kilometros). Ninguna servia.
+//
+// Devuelve null y se calla si no hay clave o si Google no contesta: el local se
+// marca a mano, que es como se hacia hasta ahora.
+// lo ultimo que dijo el servidor: "no hay clave puesta" y "ese local no existe"
+// se arreglan de maneras muy distintas, y desde fuera se ven igual
+let PORQUE_NO_SITIO = "";
+
+async function sitioDelPlaceId(placeId) {
+  if (!placeId) return null;
+  try {
+    const r = await llamar("sitio", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ placeId: placeId }),
+    });
+    return r && r.lat && r.lng ? { lat: r.lat, lng: r.lng } : null;
+  } catch (e) {
+    PORQUE_NO_SITIO = e.message;
+    return null;
+  }
+}
+
 function linkResena(placeId) {
   return "https://search.google.com/local/writereview?placeid=" + placeId;
 }
@@ -1436,7 +1463,8 @@ $("analizar").onclick = async () => {
   limpiarAviso("aviso");
   $("localExistente").value = "";
   URL_LEIDA = crudo;
-  DONDE_QUEDA = { lat: r.lat, lng: r.lng };
+  // solo se pisa si la URL trae algo: si no, la de antes vale mas que un null
+  if (r.lat && r.lng) DONDE_QUEDA = { lat: r.lat, lng: r.lng };
   $("fichaNombre").textContent = r.negocio || "Link listo";
   $("fichaReview").value = r.review;
   const bits = [];
@@ -1451,6 +1479,21 @@ $("analizar").onclick = async () => {
   if (r.negocio && (!actual || actual === NOMBRE_AUTO)) {
     $("negocio").value = r.negocio;
     NOMBRE_AUTO = r.negocio;
+  }
+
+  // El link de compartir no trae el sitio, pero el placeId lo consigue. Va al
+  // final para que la ficha ya este puesta: esto tarda su medio segundo.
+  if (!DONDE_QUEDA.lat && r.placeId) {
+    $("fichaMeta").textContent = (bits.length ? bits.join("  ·  ") + "  ·  " : "") +
+      "buscando donde queda…";
+    const sitio = await sitioDelPlaceId(r.placeId);
+    if (sitio) {
+      DONDE_QUEDA = sitio;
+      bits.push("Queda en " + sitio.lat.toFixed(5) + ", " + sitio.lng.toFixed(5));
+    } else {
+      bits.push("sin ubicación — lo marcas en el mapa");
+    }
+    $("fichaMeta").textContent = bits.join("  ·  ");
   }
 };
 
@@ -4427,12 +4470,44 @@ function faltanEnElMapa() {
 function pintarFaltan() {
   const faltan = faltanEnElMapa();
   const caja = $("faltanEnMapa");
+  // solo tiene sentido ofrecerlo si hay alguno al que preguntárselo a Google
+  $("buscarSitios").hidden =
+    !faltan.some((l) => !l.lat && placeIdDeDestino(l.destino));
   if (!faltan.length) { caja.innerHTML = ""; return; }
   caja.innerHTML = "<div class='faltan'><span class='rotulo'>Sin marcar:</span>" +
     faltan.map((l) => "<button type='button' data-colocar='" + escHtml(l.negocio) + "'" +
       (POR_COLOCAR === l.negocio ? " class='esperando'" : "") + ">" +
       escHtml(l.negocio) + "</button>").join("") + "</div>";
 }
+
+// Los locales de antes de que guardáramos coordenadas son casi todos, y
+// marcarlos de a uno es la parte aburrida. El placeId lo tienen todos desde
+// siempre, así que esto los rellena de golpe.
+$("buscarSitios").onclick = async () => {
+  const faltan = faltanEnElMapa().filter((l) => !l.lat && placeIdDeDestino(l.destino));
+  if (!faltan.length) return;
+  const b = $("buscarSitios");
+  b.disabled = true;
+  let puestos = 0;
+  const sin = [];
+  for (let i = 0; i < faltan.length; i++) {
+    const l = faltan[i];
+    b.textContent = "Buscando " + (i + 1) + " de " + faltan.length + "…";
+    const sitio = await sitioDelPlaceId(placeIdDeDestino(l.destino));
+    // una falla no para las demás: se apunta y se sigue
+    if (!sitio) { sin.push(l.negocio); continue; }
+    const ok = await dejarEnElMapa(Object.assign({}, l, sitio),
+      l.cobrado ? "verde" : "amarillo");
+    if (ok) puestos++; else sin.push(l.negocio);
+  }
+  b.disabled = false;
+  b.textContent = "Buscar los que faltan";
+  pintarFaltan();
+  decirMapa(puestos + (puestos === 1 ? " local puesto" : " locales puestos") +
+    (sin.length ? ". Sin conseguir: " + sin.join(", ") : "") +
+    // si no entro ninguno, el motivo importa mas que la lista
+    (!puestos && PORQUE_NO_SITIO ? " — " + PORQUE_NO_SITIO : ""));
+};
 
 $("faltanEnMapa").addEventListener("click", async (e) => {
   const b = e.target.closest("[data-colocar]");
@@ -6095,6 +6170,7 @@ export function vistaAdmin(origen) {
       <div id="vistaMapa" hidden>
         <div class="mapa-barra">
           <button type="button" class="leer" id="marcarAqui">Marcar dónde estoy</button>
+          <button type="button" class="boton fantasma mini" id="buscarSitios" hidden>Buscar los que faltan</button>
           <span class="mini2" id="mapaDicho">O toca el mapa donde quieras poner uno.</span>
         </div>
         <div id="faltanEnMapa"></div>

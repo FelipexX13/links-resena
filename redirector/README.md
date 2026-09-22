@@ -670,8 +670,49 @@ En producción habría sido peor: el Worker corre en un datacenter de Cloudflare
 sea que **todas las órdenes habrían caído en el mismo punto falso**.
 
 Las coordenadas reales las pone Maps con JavaScript, pidiéndolas a
-`/maps/preview/place`. Sin ejecutar JS o sin llave de la API de Google, de un
-link corto **no se sacan**. De momento: se pega el link largo, o se toca el mapa.
+`/maps/preview/place`. Sin ejecutar JS, de un link corto **no se sacan**.
+
+#### Lo que se probó y no sirvió
+
+Todo medido contra los puntos que ya estaban puestos a mano, que hacen de
+respuesta correcta:
+
+| Vía | Resultado |
+|---|---|
+| El link corto, en sus dos formatos | no trae coordenadas, con ningún User-Agent |
+| `APP_INITIALIZATION_STATE` del HTML | la IP de quien pide, no el local |
+| Geocodificar la dirección (Nominatim) | 4 de 6 sin resultado; los otros a 186 m y 806 m |
+| El `ftid` de la URL | una celda de ~2 km: `0x8e38c5…` cubre locales a 1,9 km unos de otros |
+| El GPS del teléfono | la orden no siempre se crea en el local |
+
+#### El placeId sí lo consigue
+
+De cada local guardamos su **Place ID** desde el primer día —va dentro del link
+de reseña—. Preguntándoselo a Google, da la coordenada exacta:
+
+```
+GET https://places.googleapis.com/v1/places/<placeId>
+    X-Goog-Api-Key: <clave>
+    X-Goog-FieldMask: location
+```
+
+Pedir **solo** `location` cae en *Place Details Essentials*: **10.000 llamadas
+gratis al mes**, y $5 por cada 1.000 después. Aquí se hacen unas cien.
+
+Lo bueno de que el dato ya estuviera guardado es que esto sirve **hacia atrás**:
+el botón *Buscar los que faltan*, en el mapa, recorre los locales sin punto y los
+coloca de golpe —verde si está cobrado, amarillo si sigue pendiente—.
+
+La clave va como secreto del Worker, nunca en el repo:
+
+```
+npx wrangler secret put GOOGLE_MAPS_KEY
+```
+
+**Sin clave no es un error.** El endpoint contesta 501, el panel lo dice
+—«sin ubicación — lo marcas en el mapa»— y todo lo demás sigue igual que antes.
+El mensaje de Google no se reenvía tal cual al panel: puede llevar la clave
+dentro.
 
 ### Enviado el comprobante, la orden se cierra
 
