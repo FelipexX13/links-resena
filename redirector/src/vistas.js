@@ -1265,9 +1265,16 @@ function analizarMaps(crudo) {
   // Usábamos el primero y por eso los puntos caían corridos media cuadra: el
   // centro del mapa no es el negocio, sobre todo si Google desplazó la vista para
   // hacerle sitio al panel de la ficha.
-  let lat = null, lng = null;
-  const suyo = url.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
-  const centro = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  // Un link puede llegar con los "!" escapados como %21 —pasa cuando viaja por
+  // WhatsApp o se copia de otra app—, así que se mira también descodificado.
+  let plano = url;
+  try { plano = decodeURIComponent(url); } catch (e) {}
+
+  let lat = null, lng = null, deDonde = "";
+  const suyo = plano.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+  const centro = plano.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+  if (suyo) { deDonde = "local"; }
+  else if (centro) { deDonde = "centro"; }
   const en = suyo || centro;
   if (en) { lat = Number(en[1]); lng = Number(en[2]); }
 
@@ -1279,19 +1286,19 @@ function analizarMaps(crudo) {
 
   // 1 · el Place ID ya viene dado: un link de reseña hecho antes, una URL que lo
   //     lleva como parámetro, o el identificador pegado tal cual del buscador
-  const dado = url.match(/[?&#](?:placeid|place_id)=([A-Za-z0-9_-]{15,})/i) ||
-               url.match(/place_id[:=]([A-Za-z0-9_-]{15,})/i) ||
-               url.match(/!1s(Ch[A-Za-z0-9_-]{15,})/) ||
-               url.match(/^([A-Za-z0-9_-]{15,})$/);
+  const dado = plano.match(/[?&#](?:placeid|place_id)=([A-Za-z0-9_-]{15,})/i) ||
+               plano.match(/place_id[:=]([A-Za-z0-9_-]{15,})/i) ||
+               plano.match(/!1s(Ch[A-Za-z0-9_-]{15,})/) ||
+               plano.match(/^([A-Za-z0-9_-]{15,})$/);
   if (dado) {
     return { negocio: negocio, placeId: dado[1], review: linkResena(dado[1]),
-      lat: lat, lng: lng };
+      lat: lat, lng: lng, deDonde: deDonde };
   }
 
   if (esLinkCorto(url)) return { corto: true };
 
   // 2 · identificador hexadecimal: !1s0xAAAA:0xBBBB  o  ftid=0xAAAA:0xBBBB
-  const ft = url.match(/(?:!1s|ftid=)(0x[0-9a-f]+:0x[0-9a-f]+)/i);
+  const ft = plano.match(/(?:!1s|ftid=)(0x[0-9a-f]+:0x[0-9a-f]+)/i);
   if (ft) {
     const ftid = ft[1].toLowerCase();
     let placeId = "";
@@ -1300,15 +1307,16 @@ function analizarMaps(crudo) {
       return { error: "No se pudo convertir el identificador de esa URL. Busca el negocio en el buscador de Place ID y pega aquí el ChIJ… que te dé." };
     }
     return { negocio: negocio, ftid: ftid, placeId: placeId, review: linkResena(placeId),
-      lat: lat, lng: lng };
+      lat: lat, lng: lng, deDonde: deDonde };
   }
 
-  const cd = url.match(/(?:[?&](?:lu)?cid=)(\d{5,})/i);
+  const cd = plano.match(/(?:[?&](?:lu)?cid=)(\d{5,})/i);
   if (cd) {
     return { error: "Esa URL solo trae el CID, no el identificador completo. Abre el sitio del negocio en Google Maps y copia la URL larga, o pega su Place ID." };
   }
 
-  return { error: "No se encontró el identificador del negocio en esa URL. Abre su sitio en Google Maps (clic en el nombre del lugar) y copia la URL completa, o pega el Place ID del buscador." };
+  return { error: "No se encontró el identificador del negocio en esa URL. Abre su sitio en Google Maps (clic en el nombre del lugar) y copia la URL completa, o pega el Place ID del buscador.",
+    lat: lat, lng: lng, deDonde: deDonde, negocio: negocio };
 }
 
 // Un local que ya está en el sistema tiene su link guardado. Volver a pegar la
@@ -4526,22 +4534,48 @@ function cerrarPunto() {
 // que las guardáramos el link de Maps es la única fuente exacta que hay. Buscar
 // el local por nombre en un geocodificador sería adivinar, y un punto en el
 // barrio equivocado manda a alguien a manejar para nada.
-function leerLinkDelPunto() {
-  const crudo = $("puntoLink").value.trim();
+async function leerLinkDelPunto() {
+  let crudo = $("puntoLink").value.trim();
   if (!crudo || !PUNTO_EDITADO) return;
+
+  // El botón de compartir de Maps da un maps.app.goo.gl, que no trae coordenadas.
+  // El Worker lo abre y devuelve la URL larga, igual que en el formulario de la
+  // orden. Es el link que sale del teléfono, o sea el más común de todos.
+  if (esLinkCorto(crudo)) {
+    $("puntoLinkDice").textContent = "Abriendo el link…";
+    try {
+      const r = await llamar("resolver", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: crudo }),
+      });
+      crudo = r.url;
+      $("puntoLink").value = crudo;
+    } catch (err) {
+      $("puntoLinkDice").textContent = "No se pudo abrir ese link corto: " + err.message;
+      return;
+    }
+  }
+
+  // al punto le da igual el Place ID: con saber dónde queda le basta
   const r = analizarMaps(crudo);
   if (r.lat && r.lng) {
     PUNTO_EDITADO.lat = r.lat;
     PUNTO_EDITADO.lng = r.lng;
     if (!$("puntoNombre").value.trim() && r.negocio) $("puntoNombre").value = r.negocio;
-    $("puntoLinkDice").textContent = "Listo: queda en " + r.lat.toFixed(5) + ", " +
-      r.lng.toFixed(5) + ".";
-    if (MAPA) MAPA.setView([r.lat, r.lng], 17);
+    // se dice de dónde salieron: si el link no trae las del local, el punto queda
+    // donde estaba encuadrado el mapa y conviene saberlo antes de fiarse
+    $("puntoLinkDice").textContent = r.deDonde === "local"
+      ? "Listo: " + r.lat.toFixed(5) + ", " + r.lng.toFixed(5) + " — las del local."
+      : "Puesto en " + r.lat.toFixed(5) + ", " + r.lng.toFixed(5) +
+        " — ojo, ese link solo trae el centro del mapa, no el local. Puede quedar " +
+        "corrido; si no cae bien, múevelo tocando el mapa.";
+    if (MAPA) MAPA.setView([r.lat, r.lng], 18);
     return;
   }
-  $("puntoLinkDice").textContent = r.corto
-    ? "Ese link corto no trae coordenadas. Ábrelo en Maps y copia la URL larga."
-    : "Ese link no trae el @lat,lng. Abre el local en Google Maps y copia la URL de arriba.";
+  $("puntoLinkDice").textContent =
+    "Ese link no trae coordenadas. Abre el local en Google Maps y copia la URL de la " +
+    "barra de arriba, la larga.";
 }
 
 $("puntoLink").addEventListener("paste", () => { setTimeout(leerLinkDelPunto, 0); });

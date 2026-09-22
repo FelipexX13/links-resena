@@ -1324,6 +1324,18 @@ leyendo el número equivocado.
 El campo del link se queda siempre en la ventana del punto, también en los que ya
 existen: pegándolo otra vez, un punto torcido se recoloca solo.
 
+Tres formas en que un link llegaba y no se entendía, todas arregladas:
+
+| | |
+|---|---|
+| `maps.app.goo.gl/…` —el del botón de compartir, el que sale del teléfono— | lo abre el Worker y devuelve la URL larga, igual que en el formulario de la orden |
+| Con los `!` escapados como `%21` —pasa al viajar por WhatsApp— | se mira también la versión descodificada |
+| Sin identificador de negocio, solo `/maps/@lat,lng` | a un punto le basta con saber dónde queda; quién es no hace falta |
+
+Y el mensaje dice de dónde salieron las coordenadas: *«las del local»* o *«ojo, ese
+link solo trae el centro del mapa»*. Un punto puesto desde el encuadre puede
+quedar corrido, y conviene saberlo antes de fiarse de él.
+
 **Por qué no se buscan solas.** Sería fácil mandar el nombre del local a un
 geocodificador gratis y quedarse con lo que conteste. Pero con negocios pequeños
 de Ibagué acierta poco, y su forma de fallar es la mala: no dice «no sé», deja un
