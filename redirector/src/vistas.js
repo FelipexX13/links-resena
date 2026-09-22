@@ -3700,12 +3700,14 @@ $("modalCancelar").addEventListener("click", async (e) => {
   // si la orden ya se fue sola, aquí solo queda apuntar qué pasó
   if (caso.yaSeFue) {
     b.disabled = true;
+    let puesto = true;
     try {
-      if (salida !== "nada") await dejarEnElMapa(caso, salida);
+      if (salida !== "nada") puesto = await dejarEnElMapa(caso, salida);
     } finally {
       b.disabled = false;
     }
     siguienteVaciada();
+    if (salida !== "nada" && !puesto) pedirElSitio(negocio, salida);
     return;
   }
 
@@ -3753,14 +3755,17 @@ $("modalCancelar").addEventListener("click", async (e) => {
     if (l.ficha) parchearServicio(l.ficha.id, null);
 
     // la visita se queda aunque la orden se vaya
-    if (salida !== "nada") await dejarEnElMapa(l, salida);
+    const puesto = salida === "nada" ? false : await dejarEnElMapa(l, salida);
 
     cerrarCancelar();
     const suelto = [];
     if (total) suelto.push(plural(total, "tarjeta libre", "tarjetas libres") + " otra vez");
     if (l.ficha) suelto.push("sitio quitado");
-    if (salida === "amarillo") suelto.push("queda en tu mapa como \"hablando\"");
-    if (salida === "gris") suelto.push("queda gris en el mapa");
+    // solo se dice si de verdad quedó: antes lo daba por hecho y las órdenes sin
+    // coordenadas se cancelaban con el aviso mintiendo
+    if (puesto && salida === "amarillo") suelto.push("queda en tu mapa como \"hablando\"");
+    if (puesto && salida === "gris") suelto.push("queda gris en el mapa");
+    if (!puesto && salida !== "nada") pedirElSitio(negocio, salida);
     avisar("avisoPanel", "Orden de " + negocio + " cancelada · " + suelto.join(" y "), true);
   } catch (err) {
     avisar("avisoPanel", err.message, false);
@@ -3772,10 +3777,19 @@ $("modalCancelar").addEventListener("click", async (e) => {
   }
 });
 
+// La orden se acaba de ir y no tenía coordenadas —las de antes de que las
+// guardáramos—. Es la última oportunidad de apuntar dónde quedaba ese local: en
+// cuanto se cierre esto, ya no hay de dónde sacarlo.
+function pedirElSitio(negocio, estado) {
+  abrirPunto(null, null, null, { nombre: negocio, estado: estado });
+  $("puntoSubtitulo").textContent = "La orden ya se fue. Pega su link de Maps para " +
+    "dejarlo apuntado, o cierra y tócalo en el mapa.";
+}
+
 // Las coordenadas vienen de la tarjeta, que las guardó del link de Maps al crear
 // la orden. Sin ellas no se marca nada: inventarle un sitio sería peor.
 async function dejarEnElMapa(l, estado) {
-  if (!l.lat || !l.lng) return;
+  if (!l.lat || !l.lng) return false;
   const suyo = PUNTOS.filter((x) => x.nombre === l.negocio && x.mio)[0];
   try {
     const r = await llamar("punto", {
@@ -3790,8 +3804,11 @@ async function dejarEnElMapa(l, estado) {
     PUNTOS = PUNTOS.filter((x) => x.id !== r.id);
     PUNTOS.push(Object.assign({ mio: true }, r));
     pintarPuntos();
+    pintarFaltan();
+    return true;
   } catch (e) {
-    // la orden ya se cancel\u00f3: que el mapa falle no puede tumbar eso
+    // la orden ya se canceló: que el mapa falle no puede tumbar eso
+    return false;
   }
 }
 
@@ -4344,8 +4361,10 @@ async function marcarVerde(l) {
     PUNTOS.push(Object.assign({ mio: true }, r));
     pintarPuntos();
     pintarFaltan();
+    return true;
   } catch (e) {
     // el cobro ya quedó: que el mapa falle no puede tumbarlo
+    return false;
   }
 }
 
@@ -4426,7 +4445,8 @@ $("faltanEnMapa").addEventListener("click", async (e) => {
   POR_COLOCAR = l.negocio;
   pintarFaltan();
   decirMapa("Pega su link de Maps, o toca el mapa donde queda " + l.negocio + ".");
-  abrirPunto(null, null, null, l);
+  abrirPunto(null, null, null,
+    { nombre: l.negocio, estado: l.cobrado ? "verde" : "amarillo" });
 });
 
 function decirMapa(texto, malo) {
@@ -4448,7 +4468,8 @@ function armarMapa() {
     const l = POR_COLOCAR
       ? locales().filter((x) => x.negocio === POR_COLOCAR)[0]
       : null;
-    abrirPunto(null, e.latlng.lat, e.latlng.lng, l);
+    abrirPunto(null, e.latlng.lat, e.latlng.lng,
+      l ? { nombre: l.negocio, estado: l.cobrado ? "verde" : "amarillo" } : null);
     POR_COLOCAR = null;
     pintarFaltan();
   });
@@ -4490,11 +4511,11 @@ $("estadoPunto").addEventListener("click", (e) => {
   if (b) pintarEstadoPunto(b.dataset.valor);
 });
 
-function abrirPunto(punto, lat, lng, orden) {
+function abrirPunto(punto, lat, lng, sugerido) {
   PUNTO_EDITADO = punto
     ? Object.assign({}, punto)
-    : { lat: lat, lng: lng, nombre: orden ? orden.negocio : "",
-        estado: orden ? (orden.cobrado ? "verde" : "amarillo") : "gris", nota: "" };
+    : { lat: lat, lng: lng, nombre: sugerido ? sugerido.nombre : "",
+        estado: sugerido ? sugerido.estado : "gris", nota: "" };
   $("puntoKicker").textContent = punto ? "Visita" : "Nueva";
   $("puntoTitulo").textContent = punto ? punto.nombre : "Marcar un local";
   $("puntoSubtitulo").textContent = punto && punto.fecha

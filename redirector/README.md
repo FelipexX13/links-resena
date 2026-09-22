@@ -1277,7 +1277,15 @@ La misma ventana sale al darle a *Cancelar*, que además libera las piezas. Es l
 otra puerta por la que muere una orden, y las dos acaban en el mismo sitio: la
 orden se va, la visita se queda en el mapa.
 
-Sin coordenadas no se pregunta nada —no habría dónde marcarlo—.
+Si la orden no tiene coordenadas —las de antes de que las guardáramos— no hay
+dónde marcarla, y ese es justo el último momento en que existe el dato: en cuanto
+se cierre, del local no queda nada. Así que se abre la ventana del punto con el
+nombre y el color ya puestos, pidiendo el link de Maps o un toque en el mapa.
+
+**El aviso dice solo lo que de verdad pasó.** Antes daba por hecho que el punto
+quedaba y lo anunciaba igual, así que las órdenes sin coordenadas se cancelaban
+diciendo «queda en tu mapa» sin que quedara nada. `dejarEnElMapa()` devuelve si
+pudo, y el texto se arma con eso.
 
 **De paso, un error viejo.** `cerrarTarjeta()` vacía el formulario, y el código
 leía el nombre del negocio *después* de cerrar: llegaba en blanco. La orden recién
