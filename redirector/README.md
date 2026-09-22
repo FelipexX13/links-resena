@@ -1244,6 +1244,18 @@ Sin coordenadas —órdenes de antes de esto, o un Place ID pegado a mano— no 
 marca nada: inventarle un sitio al local sería peor que no tenerlo. Y si ya
 había un amarillo tuyo en ese local, pasa a verde **conservando la nota**.
 
+Pero no marcar nada **no puede hacerse en silencio**. Dos ventas de un mismo día
+no aparecieron en el mapa y desde el panel eran indistinguibles de dos ventas
+bien marcadas: el aviso decía "aceptada" y nada más. Ahora el aviso solo dice
+"· en verde en el mapa" cuando de verdad quedó, y cuando no, sale un segundo
+aviso diciendo que esa orden no guardó dónde queda y que el local está
+esperando en **Sin marcar**.
+
+Es el mismo error que el de *Cancelar*: una función que se sale temprano, quien
+la llama ignorando lo que devuelve, y el aviso afirmando lo que no comprobó.
+Una salida temprana que el que llama no puede distinguir del éxito es un bug
+esperándose, aunque el `return` sea correcto.
+
 Si el mapa falla, el cobro no se cae: ya quedó guardado antes.
 
 Los mapas son de **Leaflet con teselas de OpenStreetMap**: sin llave de API y sin

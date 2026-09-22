@@ -4343,10 +4343,14 @@ $("modalNFC").addEventListener("click", (e) => {
 // pedirlo aparte. Las coordenadas vienen del link de Maps que se pegó al crear
 // la orden; sin ellas —órdenes viejas, o un Place ID pegado a mano— no se marca
 // nada y ya, que inventarle un sitio al local sería peor.
+// Devuelve "ya", "puesto", "sinSitio" o "fallo". Se salía en silencio cuando la
+// orden no tenía coordenadas —todas las de antes de que las guardáramos— y el
+// aviso del cobro no decía nada: la venta quedaba bien y el punto no aparecía
+// nunca, sin una sola pista de por qué.
 async function marcarVerde(l) {
-  if (!l || !l.lat || !l.lng) return;
+  if (!l || !l.lat || !l.lng) return "sinSitio";
   const suyo = PUNTOS.filter((p) => p.nombre === l.negocio && p.mio)[0];
-  if (suyo && suyo.estado === "verde") return;
+  if (suyo && suyo.estado === "verde") return "ya";
   try {
     const r = await llamar("punto", {
       method: "POST",
@@ -4361,10 +4365,10 @@ async function marcarVerde(l) {
     PUNTOS.push(Object.assign({ mio: true }, r));
     pintarPuntos();
     pintarFaltan();
-    return true;
+    return "puesto";
   } catch (e) {
     // el cobro ya quedó: que el mapa falle no puede tumbarlo
-    return false;
+    return "fallo";
   }
 }
 
@@ -5419,8 +5423,15 @@ $("formVenta").onsubmit = async (e) => {
       }
     }
     if (fichaNueva) parchearServicio(fichaNueva.id, fichaNueva);
-    await marcarVerde(l);
-    avisar("avisoPanel", "Orden de " + l.negocio + " aceptada · " + dinero(importe), true);
+    const enElMapa = await marcarVerde(l);
+    avisar("avisoPanel", "Orden de " + l.negocio + " aceptada · " + dinero(importe) +
+      (enElMapa === "puesto" ? " · en verde en el mapa" : ""), true);
+    // no se pudo marcar: no se calla, pero tampoco se interrumpe una venta con una
+    // ventana. El local sigue existiendo, así que sale en "Sin marcar" del mapa.
+    if (enElMapa === "sinSitio") {
+      avisar("avisoPanel", l.negocio + " no quedó en el mapa: esa orden no guardó " +
+        "dónde queda. Pónlo desde Mapa, en \"Sin marcar\".", false);
+    }
     // Aceptar es cobrar: de aquí en adelante la orden no se toca. Con correo sale
     // el comprobante y eso mismo la cierra; sin correo se cierra igual, porque el
     // cliente pagó aunque no quisiera papel.
