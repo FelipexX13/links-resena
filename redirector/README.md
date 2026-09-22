@@ -625,6 +625,39 @@ La lista de sitios a los que el Worker sigue un enlace va cerrada —los acortad
 de Google y nada más—: si no, esto sería un proxy para pedir lo que sea desde
 nuestra IP.
 
+#### Y la URL larga tampoco trae coordenadas
+
+El link que sale del botón de compartir llega con `?g_st=ac`, y ese resuelve a
+algo así:
+
+```
+https://www.google.com/maps/place/Autoservicio+limonar,+Taller+58+%236a-31,+Ibagué,+Tolima/data=!4m2!3m1!1s0x8e38c5001baa4345:0xf30dd69073298a1e!18m1!1e1?…
+```
+
+**Ni `@lat,lng` ni `!3d/!4d`.** El local va solo en el ftid. O sea que el link
+que de verdad se usa en la calle —el único, en la práctica— era justo el que no
+guardaba dónde queda nada. Probado con cuatro User-Agents y quitando el
+`?g_st=ac`: ninguno devuelve coordenadas en la URL.
+
+Sí viajan en el HTML de esa página, al principio:
+
+```
+APP_INITIALIZATION_STATE=[[[<alcance>,<lng>,<lat>], …
+```
+
+Mismo orden que el `!1d!2d!3d` de siempre. Es la cámara con la que Maps abre ese
+local y, como el link viene recién compartido —nadie arrastró el mapa antes—, la
+cámara **es** el local.
+
+Leerlo **no cuesta una subpetición más ni una llave de API**: el Worker ya
+descargaba esa página para saber a dónde llevaba el enlace y tiraba el cuerpo sin
+mirarlo. Ahora lo mira. Un `indexOf` y noventa caracteres de recorte, para no
+gastar los 10 ms de CPU del plan gratis en un HTML de 200 KB.
+
+Hay que pedirla con **User-Agent de escritorio**: la página móvil no trae ese
+bloque. Y si Google cambia su HTML, `sacarElSitio()` devuelve vacío y el panel se
+comporta como antes —lo dice y manda el local a *Sin marcar*—, no se cae.
+
 ### Enviado el comprobante, la orden se cierra
 
 El papel ya está en manos del cliente, así que a partir de ahí **no se toca
@@ -1230,7 +1263,8 @@ estabas. Tocar el mapa sirve para marcarlos después, desde la casa.
 Cobrar una orden es la definición de un punto verde, así que no se pide aparte:
 al aceptar, el punto se marca o se actualiza sin tocar nada.
 
-Las coordenadas salen del `@lat,lng` que el link largo de Maps lleva en la
+Las coordenadas salen del link de Maps —de tres sitios distintos según cómo
+llegue; el de abajo lo cuenta—, empezando por el `@lat,lng` que lleva en la
 mitad —estaba ahí desde siempre y lo tirábamos—. Se guardan en la tarjeta al
 crear la orden, porque entre crear y cobrar pueden pasar días.
 
@@ -1294,6 +1328,12 @@ dónde marcarla, y ese es justo el último momento en que existe el dato: en cua
 se cierre, del local no queda nada. Así que se abre la ventana del punto con el
 nombre y el color ya puestos, pidiendo el link de Maps o un toque en el mapa.
 
+**La pregunta se hace siempre, tenga coordenadas o no.** La cola de vaciadas
+filtraba por `lat && lng`, y eso se comía justo el caso común: las órdenes viejas
+no las tienen y desaparecían calladas, que es el agujero que la ventana venía a
+tapar. La pregunta no es «dónde queda», es «qué pasó con el local». Y no depende
+de quién haya entrado: le sale igual al superadmin y a un vendedor.
+
 **El aviso dice solo lo que de verdad pasó.** Antes daba por hecho que el punto
 quedaba y lo anunciaba igual, así que las órdenes sin coordenadas se cancelaban
 diciendo «queda en tu mapa» sin que quedara nada. `dejarEnElMapa()` devuelve si
@@ -1332,6 +1372,11 @@ Un link de Maps lleva **dos** juegos de coordenadas y no son el mismo:
 |---|---|
 | `@lat,lng` | dónde estaba **centrado el mapa** al copiar el link |
 | `!3dlat!4dlng` | dónde está **el local** |
+
+—y un tercero, el `APP_INITIALIZATION_STATE` del HTML, que es el único que traen
+los links compartidos desde la app. El Worker lo devuelve aparte y el panel se lo
+pega a la URL como `!3d!4d`, que es la notación de Google para exactamente eso: así
+entra por el mismo sitio que las demás y no hay un segundo camino que mantener.
 
 Usábamos el primero, y por eso los puntos caían corridos media cuadra: el centro
 del encuadre no es el negocio, sobre todo porque Google desplaza la vista para

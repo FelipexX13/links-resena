@@ -1231,6 +1231,14 @@ function placeIdDeDestino(destino) {
 
 // El botón de compartir de la app de Maps da uno de estos, y por dentro no
 // traen nada: el identificador aparece al seguirlos, que lo hace el Worker.
+// El resolver saca las coordenadas del HTML cuando la URL no las trae. Se le
+// pegan al final en la notación de Google en vez de pasarlas por otro camino:
+// así analizarMaps las lee como lo que son —las del local— y el campo queda con
+// un link que vuelve a servir si se copia o se relee.
+function conElSitio(url, r) {
+  return r && r.lat && r.lng ? url + "!3d" + r.lat + "!4d" + r.lng : url;
+}
+
 function esLinkCorto(url) {
   return /^https?:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps|g\.co\/kgs)/i.test(String(url).trim());
 }
@@ -1411,7 +1419,7 @@ $("analizar").onclick = async () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: crudo }),
       });
-      crudo = r.url;
+      crudo = conElSitio(r.url, r);
       $("maps").value = crudo;
     } catch (err) {
       avisar("aviso", err.message, false);
@@ -1821,11 +1829,17 @@ $("formTarjeta").onsubmit = async (e) => {
         (plan.base ? " actualizada · " : " creada · ") + cola.join(" y "), true);
 
       // ¿alguna se quedó vacía? Se pregunta ahora, con el local fresco, que es lo
-      // único que queda de él
+      // único que queda de él.
+      //
+      // Antes solo se preguntaba por las que tenían coordenadas, y eso se comía el
+      // caso más común: las órdenes viejas no las tienen y desaparecían sin que
+      // nadie dijera nada. La pregunta no es "dónde queda", es "qué pasó con el
+      // local", y esa hay que hacerla siempre. Sin coordenadas, contestarla abre
+      // la ventana del punto para pedir el link —última oportunidad de apuntarlo—.
       const vivas = {};
       locales().forEach((x) => { vivas[x.negocio] = 1; });
       COLA_VACIADAS = Object.keys(deDonde)
-        .filter((n) => !vivas[n] && deDonde[n].lat && deDonde[n].lng)
+        .filter((n) => !vivas[n])
         .map((n) => deDonde[n]);
       if (COLA_VACIADAS.length) siguienteVaciada();
       return;
@@ -4574,7 +4588,7 @@ async function leerLinkDelPunto() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: crudo }),
       });
-      crudo = r.url;
+      crudo = conElSitio(r.url, r);
       $("puntoLink").value = crudo;
     } catch (err) {
       $("puntoLinkDice").textContent = "No se pudo abrir ese link corto: " + err.message;

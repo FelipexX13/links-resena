@@ -121,6 +121,40 @@ function pagoValido(valor) {
 }
 // Los únicos sitios a los que el Worker sigue un enlace por su cuenta. La lista
 // va cerrada a propósito: si no, esto sería un proxy para pedir lo que sea.
+// El link del botón de compartir —el "?g_st=ac" que sale del teléfono, o sea el
+// único que se usa en la calle— resuelve a una URL larga **sin** "@lat,lng" y
+// **sin** "!3d/!4d": el local va solo en el ftid. Las coordenadas sí viajan en el
+// HTML de esa página, que ya estábamos descargando para saber a dónde llevaba el
+// enlace y tirando sin leer. Google las pone al principio, así:
+//
+//   APP_INITIALIZATION_STATE=[[[<alcance>,<lng>,<lat>], ...
+//
+// Mismo orden que el "!1d!2d!3d" de siempre: alcance, longitud, latitud. Es la
+// cámara con la que Maps abre ese local, y como el link viene recién compartido
+// —nadie arrastró el mapa antes— la cámara es el local. Leerlo no cuesta una
+// subpetición más ni una llave de API: es el mismo fetch.
+const ANCLA_SITIO = "APP_INITIALIZATION_STATE=[[[";
+
+async function sacarElSitio(respuesta) {
+  try {
+    const html = await respuesta.text();
+    const i = html.indexOf(ANCLA_SITIO);
+    if (i < 0) return {};
+    const trozo = html.slice(i + ANCLA_SITIO.length, i + ANCLA_SITIO.length + 90);
+    const par = trozo.match(/^[-\d.e+]+,(-?[\d.]+),(-?[\d.]+)/);
+    if (!par) return {};
+    const lng = Number(par[1]);
+    const lat = Number(par[2]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return {};
+    if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return {};
+    return { lat: lat, lng: lng };
+  } catch (e) {
+    // que Google cambie su HTML no puede tumbar el resolver: sin coordenadas el
+    // panel se comporta como siempre y lo dice
+    return {};
+  }
+}
+
 const ACORTADORES = new Set(["maps.app.goo.gl", "goo.gl", "g.co", "maps.google.com",
   "www.google.com", "google.com"]);
 const ESTADOS_GASTO = new Set(["pendiente", "entregado"]);
@@ -893,15 +927,21 @@ async function api(request, env, accion, url, ctx) {
     }
 
     try {
+      // De escritorio a propósito: la página móvil de Maps no trae el bloque
+      // donde van las coordenadas, y es lo único que vinimos a buscar.
       const r = await fetch(destino.toString(), {
         redirect: "follow",
-        headers: { "User-Agent": "Mozilla/5.0 (Android 14; Mobile) Chrome/126" },
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+          "Accept-Language": "es-CO,es",
+        },
       });
       const largo = r.url || "";
       if (!largo || largo === destino.toString()) {
         return json({ error: "El enlace no llevó a ninguna parte" }, 502);
       }
-      return json({ ok: true, url: largo });
+      return json(Object.assign({ ok: true, url: largo }, await sacarElSitio(r)));
     } catch (e) {
       return json({ error: "No se pudo abrir el enlace: " + e.message }, 502);
     }
