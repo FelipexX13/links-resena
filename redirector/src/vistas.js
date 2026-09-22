@@ -597,6 +597,13 @@ const ESTILOS = `
   .salidas b{display:block;font-weight:600;margin-bottom:3px}
   .salidas span{display:block;font-size:12px;color:var(--tinta-2);font-weight:400}
   .salidas button:hover span{color:var(--tinta-2)}
+  .faltan{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 12px}
+  .faltan .rotulo{font-size:12.5px;color:var(--tinta-2);margin-right:2px}
+  .faltan button{background:var(--papel-2);color:var(--tinta);border:1px solid var(--linea);
+    padding:7px 12px;font-size:12.5px;font-weight:500}
+  .faltan button:hover{background:var(--papel);border-color:var(--tinta-3);color:var(--tinta)}
+  .faltan button.esperando{background:var(--azul-piel);border-color:var(--azul);
+    color:var(--azul-fuerte)}
   .mapa-barra{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin:18px 0 10px}
   #mapa{height:62vh;min-height:340px;border-radius:var(--r-l);border:1px solid var(--linea);
     overflow:hidden;background:var(--papel-2);z-index:0}
@@ -3555,6 +3562,7 @@ function pintarVista(valor) {
     // ya está a la vista: ahora sí tiene tamaño que medir
     armarMapa();
     if (MAPA) { MAPA.invalidateSize(); pintarPuntos(); }
+    pintarFaltan();
   }
 }
 
@@ -4317,6 +4325,7 @@ async function marcarVerde(l) {
     PUNTOS = PUNTOS.filter((x) => x.id !== r.id);
     PUNTOS.push(Object.assign({ mio: true }, r));
     pintarPuntos();
+    pintarFaltan();
   } catch (e) {
     // el cobro ya quedó: que el mapa falle no puede tumbarlo
   }
@@ -4346,6 +4355,7 @@ async function cargarPuntos() {
     const r = await llamar("mapa");
     PUNTOS = r.puntos || [];
     pintarPuntos();
+    pintarFaltan();
     decirMapa(PUNTOS.length
       ? plural(PUNTOS.length, "punto", "puntos") + " en el mapa"
       : "Todavía no hay ninguno. Toca el mapa, o el botón de arriba.");
@@ -4355,6 +4365,48 @@ async function cargarPuntos() {
     decirMapa("No se pudieron traer los puntos: " + e.message, true);
   }
 }
+
+// Los locales que ya son clientes pero no están en el mapa. Salen como botones
+// porque el problema no es marcarlos —eso es un toque— sino acordarse de cuáles
+// faltan.
+let POR_COLOCAR = null;
+
+function faltanEnElMapa() {
+  const puestos = {};
+  PUNTOS.forEach((p) => { puestos[p.nombre] = 1; });
+  return locales().filter((l) => !puestos[l.negocio]);
+}
+
+function pintarFaltan() {
+  const faltan = faltanEnElMapa();
+  const caja = $("faltanEnMapa");
+  if (!faltan.length) { caja.innerHTML = ""; return; }
+  caja.innerHTML = "<div class='faltan'><span class='rotulo'>Sin marcar:</span>" +
+    faltan.map((l) => "<button type='button' data-colocar='" + escHtml(l.negocio) + "'" +
+      (POR_COLOCAR === l.negocio ? " class='esperando'" : "") + ">" +
+      escHtml(l.negocio) + "</button>").join("") + "</div>";
+}
+
+$("faltanEnMapa").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-colocar]");
+  if (!b) return;
+  const l = locales().filter((x) => x.negocio === b.dataset.colocar)[0];
+  if (!l) return;
+
+  // si la orden ya sabe dónde queda —se creó pegando el link de Maps— no hay nada
+  // que preguntar: se pone y ya
+  if (l.lat && l.lng) {
+    await dejarEnElMapa(l, l.cobrado ? "verde" : "amarillo");
+    POR_COLOCAR = null;
+    pintarFaltan();
+    decirMapa(l.negocio + " puesto en el mapa");
+    return;
+  }
+
+  POR_COLOCAR = l.negocio;
+  pintarFaltan();
+  decirMapa("Toca el mapa donde queda " + l.negocio + ".");
+});
 
 function decirMapa(texto, malo) {
   $("mapaDicho").textContent = texto;
@@ -4371,7 +4423,14 @@ function armarMapa() {
     attribution: "&copy; OpenStreetMap",
   }).addTo(MAPA);
   CAPA_PUNTOS = L.layerGroup().addTo(MAPA);
-  MAPA.on("click", (e) => abrirPunto(null, e.latlng.lat, e.latlng.lng));
+  MAPA.on("click", (e) => {
+    const l = POR_COLOCAR
+      ? locales().filter((x) => x.negocio === POR_COLOCAR)[0]
+      : null;
+    abrirPunto(null, e.latlng.lat, e.latlng.lng, l);
+    POR_COLOCAR = null;
+    pintarFaltan();
+  });
   pintarPuntos();
 }
 
@@ -4410,10 +4469,11 @@ $("estadoPunto").addEventListener("click", (e) => {
   if (b) pintarEstadoPunto(b.dataset.valor);
 });
 
-function abrirPunto(punto, lat, lng) {
+function abrirPunto(punto, lat, lng, orden) {
   PUNTO_EDITADO = punto
     ? Object.assign({}, punto)
-    : { lat: lat, lng: lng, nombre: "", estado: "gris", nota: "" };
+    : { lat: lat, lng: lng, nombre: orden ? orden.negocio : "",
+        estado: orden ? (orden.cobrado ? "verde" : "amarillo") : "gris", nota: "" };
   $("puntoKicker").textContent = punto ? "Visita" : "Nueva";
   $("puntoTitulo").textContent = punto ? punto.nombre : "Marcar un local";
   $("puntoSubtitulo").textContent = punto && punto.fecha
@@ -4497,6 +4557,7 @@ $("formPunto").onsubmit = async (e) => {
     PUNTOS.push(Object.assign({ mio: true }, r));
     cerrarPunto();
     pintarPuntos();
+    pintarFaltan();
     decirMapa(plural(PUNTOS.length, "punto", "puntos") + " en el mapa");
     avisar("avisoPanel", r.nombre + " marcado en el mapa", true);
   } catch (err) {
@@ -5911,6 +5972,7 @@ export function vistaAdmin(origen) {
           <button type="button" class="leer" id="marcarAqui">Marcar dónde estoy</button>
           <span class="mini2" id="mapaDicho">O toca el mapa donde quieras poner uno.</span>
         </div>
+        <div id="faltanEnMapa"></div>
         <div id="mapa"></div>
         <div class="mapa-clave">
           <span><i class="bolita verde"></i>Compraron</span>

@@ -1283,3 +1283,22 @@ Sin coordenadas no se pregunta nada —no habría dónde marcarlo—.
 leía el nombre del negocio *después* de cerrar: llegaba en blanco. La orden recién
 creada no aparecía hasta darle a Refrescar, y el aviso decía «Orden de creada».
 Ahora el nombre se guarda antes de cerrar.
+
+### Los que faltan por marcar
+
+Un mapa vacío no dice qué hacer con él. Encima de él va la lista de locales que
+ya son órdenes y todavía no tienen punto:
+
+```
+Sin marcar:  [Capoluz]  [Chingones]  [Panadería del Jordán]
+```
+
+El problema nunca fue marcarlos —eso es un toque— sino acordarse de cuáles
+faltan. Tocando uno:
+
+- **Si la orden ya sabe dónde queda** —se creó pegando el link de Maps— se pone
+  ahí mismo, de un toque. Verde si está cobrada, amarillo si sigue pendiente.
+- **Si no** —las órdenes de antes de que guardáramos coordenadas— el botón queda
+  esperando y se toca el mapa donde queda. El nombre y el color vienen puestos.
+
+El botón desaparece de la lista en cuanto el local tiene su punto.
