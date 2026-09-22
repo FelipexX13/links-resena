@@ -587,6 +587,21 @@ const ESTILOS = `
   .volver{background:none;border:0;padding:0;margin-bottom:14px;color:var(--azul-fuerte);
     font-size:12.5px;font-weight:500}
   .volver:hover{background:none;color:var(--azul);text-decoration:underline}
+  .mapa-barra{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin:18px 0 10px}
+  #mapa{height:62vh;min-height:340px;border-radius:var(--r-l);border:1px solid var(--linea);
+    overflow:hidden;background:var(--papel-2);z-index:0}
+  .mapa-clave{display:flex;gap:16px;flex-wrap:wrap;padding:12px 2px 0;font-size:12.5px;
+    color:var(--tinta-2)}
+  .mapa-clave span{display:flex;align-items:center;gap:6px}
+  .bolita{width:11px;height:11px;border-radius:50%;display:block;flex:0 0 auto;
+    border:2px solid #fff;box-shadow:0 0 0 1px rgba(22,32,46,.25)}
+  .bolita.verde{background:var(--verde)}
+  .bolita.amarillo{background:#f9ab00}
+  .bolita.gris{background:var(--tinta-3)}
+  /* el segmentado de estado, con el color de cada uno */
+  #estadoPunto .activa[data-valor=verde]{background:var(--verde);color:#fff}
+  #estadoPunto .activa[data-valor=amarillo]{background:#f9ab00;color:#4a3400}
+  #estadoPunto .activa[data-valor=gris]{background:var(--tinta-3);color:#fff}
   .sobre-tabla{margin:26px 0 2px}
   .importe.debe,b.debe{color:var(--rojo-fuerte)}
   .inv{font-family:"Geist Mono",ui-monospace,monospace;font-size:13px}
@@ -1061,6 +1076,7 @@ function mostrar(dentro, quien) {
     // un vendedor no tiene gastos ni gente que administrar: pedirlos sería
     // llenarle la consola de 403 para nada
     cargarLiquidaciones().then(repintarTodo);
+    cargarPuntos();
     if (SESION.dueno) { cargarGastos(); cargarUsuarios(); }
   }
   else { cerrarQR(); cerrarTarjeta(); $("clave").focus(); }
@@ -3411,8 +3427,10 @@ function pintarRol() {
   const dueno = SESION.dueno;
   document.querySelectorAll("[data-dueno]").forEach((e) => { e.hidden = !dueno; });
   // "Lo mío" es de quien cobra comisión; el resto, de la casa
+  // el mapa es de todos: es lo único que se comparte de lado a lado
+  const deTodos = { locales: 1, mapa: 1 };
   document.querySelectorAll("#vistaPanel [data-valor]").forEach((b) => {
-    b.hidden = b.dataset.valor === "mio" ? dueno : !dueno && b.dataset.valor !== "locales";
+    b.hidden = b.dataset.valor === "mio" ? dueno : !dueno && !deTodos[b.dataset.valor];
   });
   $("marcaQuien").textContent = dueno ? "" : SESION.nombre;
   if (!dueno) {
@@ -3459,7 +3477,7 @@ function pintarMio() {
 }
 
 function pintarVista(valor) {
-  const conocidas = { locales: 1, cuentas: 1, inventario: 1, mio: 1 };
+  const conocidas = { locales: 1, cuentas: 1, inventario: 1, mio: 1, mapa: 1 };
   VISTA = conocidas[valor] ? valor : "tarjetas";
   marcarSegmento("vistaPanel", VISTA);
   $("vistaTarjetas").hidden = VISTA !== "tarjetas";
@@ -3467,6 +3485,7 @@ function pintarVista(valor) {
   $("vistaCuentas").hidden = VISTA !== "cuentas";
   $("vistaInventario").hidden = VISTA !== "inventario";
   $("vistaMio").hidden = VISTA !== "mio";
+  $("vistaMapa").hidden = VISTA !== "mapa";
   // activar tarjetas es reponer plástico: va con el inventario, no con la lista
   $("abrirActivar").hidden = !SESION.dueno || VISTA !== "inventario";
   $("togglePruebas").hidden = !SESION.dueno || VISTA !== "inventario";
@@ -3476,6 +3495,11 @@ function pintarVista(valor) {
   if (VISTA === "locales") pintarVentas();
   if (VISTA === "cuentas" || VISTA === "inventario") pintarCuentas();
   if (VISTA === "mio") pintarMio();
+  if (VISTA === "mapa") {
+    // ya está a la vista: ahora sí tiene tamaño que medir
+    armarMapa();
+    if (MAPA) MAPA.invalidateSize();
+  }
 }
 
 $("vistaPanel").addEventListener("click", (e) => {
@@ -4091,6 +4115,202 @@ $("cerrarNFCModal").onclick = cerrarNFC;
 $("modalNFC").addEventListener("click", (e) => {
   if (e.target.hasAttribute("data-cerrar-nfc")) cerrarNFC();
 });
+
+/* ---------- el mapa de visitas ---------- */
+
+// El mapa existe para no mandar a dos personas al mismo sitio. Por eso lo ve
+// todo el mundo y por eso es anónimo salvo para el superadmin: quién fue no
+// cambia la ruta de nadie.
+const COLOR_PUNTO = { verde: "#1e8e3e", amarillo: "#f9ab00", gris: "#667287" };
+const DICE_ESTADO = {
+  gris: "Se pasó por ahí y no salió nada. Los demás lo ven igual.",
+  amarillo: "Hay conversación abierta. Solo tú lo ves amarillo; para los demás es gris, " +
+    "que ya con eso no vuelven a pasar.",
+  verde: "Compraron. Lo ven todos en verde.",
+};
+const IBAGUE = [4.4389, -75.2322];
+
+let PUNTOS = [];
+let MAPA = null;
+let CAPA_PUNTOS = null;
+let PUNTO_EDITADO = null;
+let ESTADO_PUNTO = "gris";
+let focoPunto = null;
+
+async function cargarPuntos() {
+  try {
+    const r = await llamar("mapa");
+    PUNTOS = r.puntos || [];
+    pintarPuntos();
+  } catch (e) {
+    // si la carga falla, mejor el mapa de antes que un mapa en blanco
+  }
+}
+
+// Leaflet necesita que su caja ya esté en pantalla y con tamaño: si se crea con
+// la pestaña oculta, el mapa nace de cero píxeles y se queda gris.
+function armarMapa() {
+  if (MAPA || typeof L === "undefined") return;
+  MAPA = L.map("mapa", { zoomControl: true }).setView(IBAGUE, 14);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap",
+  }).addTo(MAPA);
+  CAPA_PUNTOS = L.layerGroup().addTo(MAPA);
+  MAPA.on("click", (e) => abrirPunto(null, e.latlng.lat, e.latlng.lng));
+  pintarPuntos();
+}
+
+function pintarPuntos() {
+  if (!CAPA_PUNTOS) return;
+  CAPA_PUNTOS.clearLayers();
+  PUNTOS.forEach((p) => {
+    const color = COLOR_PUNTO[p.estado] || COLOR_PUNTO.gris;
+    const bola = L.circleMarker([p.lat, p.lng], {
+      radius: p.estado === "gris" ? 7 : 9,
+      color: "#fff", weight: 2, fillColor: color, fillOpacity: 1,
+    });
+    const suyo = SESION.dueno || p.mio;
+    bola.bindTooltip(escHtml(p.nombre) + (p.nota ? "<br><i>" + escHtml(p.nota) + "</i>" : "") +
+      (SESION.dueno && p.vendedor ? "<br>" + escHtml(nombreDeVendedor(p.vendedor)) : ""));
+    if (suyo) bola.on("click", (e) => { L.DomEvent.stop(e); abrirPunto(p); });
+    CAPA_PUNTOS.addLayer(bola);
+  });
+
+  if (PUNTOS.length && MAPA) {
+    MAPA.fitBounds(L.latLngBounds(PUNTOS.map((p) => [p.lat, p.lng])).pad(0.2),
+      { maxZoom: 16 });
+  }
+}
+
+function pintarEstadoPunto(valor) {
+  ESTADO_PUNTO = COLOR_PUNTO[valor] ? valor : "gris";
+  marcarSegmento("estadoPunto", ESTADO_PUNTO);
+  $("ayudaEstado").textContent = DICE_ESTADO[ESTADO_PUNTO];
+}
+
+$("estadoPunto").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-valor]");
+  if (b) pintarEstadoPunto(b.dataset.valor);
+});
+
+function abrirPunto(punto, lat, lng) {
+  PUNTO_EDITADO = punto
+    ? Object.assign({}, punto)
+    : { lat: lat, lng: lng, nombre: "", estado: "gris", nota: "" };
+  $("puntoKicker").textContent = punto ? "Visita" : "Nueva";
+  $("puntoTitulo").textContent = punto ? punto.nombre : "Marcar un local";
+  $("puntoSubtitulo").textContent = punto && punto.fecha
+    ? "Marcado el " + punto.fecha
+    : "Queda donde tocaste el mapa.";
+  $("puntoNombre").value = PUNTO_EDITADO.nombre;
+  $("puntoNota").value = PUNTO_EDITADO.nota || "";
+  pintarEstadoPunto(PUNTO_EDITADO.estado);
+  $("borrarPunto").hidden = !punto;
+  olvidarConfirmacion();
+  limpiarAviso();
+  focoPunto = document.activeElement;
+  $("modalPunto").hidden = false;
+  document.body.style.overflow = "hidden";
+  $("puntoNombre").focus();
+}
+
+function cerrarPunto() {
+  if ($("modalPunto").hidden) return;
+  $("modalPunto").hidden = true;
+  document.body.style.overflow = "";
+  if (focoPunto && focoPunto.focus) focoPunto.focus();
+  focoPunto = null;
+  PUNTO_EDITADO = null;
+}
+
+$("cerrarPunto").onclick = cerrarPunto;
+$("cancelarPunto").onclick = cerrarPunto;
+$("modalPunto").addEventListener("click", (e) => {
+  if (e.target.hasAttribute("data-cerrar-punto")) cerrarPunto();
+});
+
+// El caso de verdad: sales del local y lo marcas ahí mismo, sin buscarlo en el
+// mapa ni saber en qué calle estás.
+$("marcarAqui").onclick = () => {
+  if (!navigator.geolocation) {
+    $("mapaDicho").textContent = "Este navegador no sabe dónde estás. Toca el mapa.";
+    return;
+  }
+  const boton = $("marcarAqui");
+  const etiqueta = boton.textContent;
+  boton.disabled = true;
+  boton.textContent = "Buscándote…";
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      boton.disabled = false;
+      boton.textContent = etiqueta;
+      $("mapaDicho").textContent = "";
+      if (MAPA) MAPA.setView([pos.coords.latitude, pos.coords.longitude], 17);
+      abrirPunto(null, pos.coords.latitude, pos.coords.longitude);
+    },
+    (err) => {
+      boton.disabled = false;
+      boton.textContent = etiqueta;
+      $("mapaDicho").textContent = "No se pudo ubicar: " + err.message +
+        ". Toca el mapa donde estás.";
+    },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
+  );
+};
+
+$("formPunto").onsubmit = async (e) => {
+  e.preventDefault();
+  if (!PUNTO_EDITADO) return;
+  const boton = $("guardarPunto");
+  boton.disabled = true;
+  try {
+    const r = await llamar("punto", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: PUNTO_EDITADO.id,
+        lat: PUNTO_EDITADO.lat,
+        lng: PUNTO_EDITADO.lng,
+        nombre: $("puntoNombre").value,
+        estado: ESTADO_PUNTO,
+        nota: $("puntoNota").value,
+      }),
+    });
+    PUNTOS = PUNTOS.filter((x) => x.id !== r.id);
+    PUNTOS.push(Object.assign({ mio: true }, r));
+    cerrarPunto();
+    pintarPuntos();
+    avisar("avisoPanel", r.nombre + " marcado en el mapa", true);
+  } catch (err) {
+    avisar("avisoPunto", err.message, false);
+  } finally {
+    boton.disabled = false;
+  }
+};
+
+$("borrarPunto").onclick = async () => {
+  if (!PUNTO_EDITADO || !PUNTO_EDITADO.id) return;
+  const boton = $("borrarPunto");
+  if (CONFIRMANDO !== "punto") { pedirConfirmacion(boton, "punto"); return; }
+  olvidarConfirmacion();
+  boton.disabled = true;
+  try {
+    await llamar("punto-borrar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: PUNTO_EDITADO.id }),
+    });
+    PUNTOS = PUNTOS.filter((x) => x.id !== PUNTO_EDITADO.id);
+    cerrarPunto();
+    pintarPuntos();
+    avisar("avisoPanel", "Punto borrado del mapa", true);
+  } catch (err) {
+    avisar("avisoPunto", err.message, false);
+  } finally {
+    boton.disabled = false;
+  }
+};
 
 /* ---------- lo que entregan los vendedores ---------- */
 
@@ -5306,6 +5526,8 @@ export function vistaAdmin(origen) {
 <meta name="robots" content="noindex,nofollow">
 <meta name="description" content="Panel interno para activar y reasignar las tarjetas de reseña.">
 <title>Panel de tarjetas</title><style>${ESTILOS}</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js"></script>
 
@@ -5371,6 +5593,7 @@ export function vistaAdmin(origen) {
           <button type="button" data-valor="cuentas">Cuentas</button>
           <button type="button" data-valor="tarjetas">Tarjetas</button>
           <button type="button" data-valor="inventario">Inventario</button>
+          <button type="button" data-valor="mapa">Mapa</button>
           <button type="button" data-valor="mio">Lo mío</button>
         </div>
         <div class="cabecera-acciones">
@@ -5461,6 +5684,19 @@ export function vistaAdmin(origen) {
           <input type="date" id="fechaOrdenes" aria-label="Ver otro día">
         </div>
         <div id="tablaLocales"></div>
+      </div>
+
+      <div id="vistaMapa" hidden>
+        <div class="mapa-barra">
+          <button type="button" class="leer" id="marcarAqui">Marcar dónde estoy</button>
+          <span class="mini2" id="mapaDicho">O toca el mapa donde quieras poner uno.</span>
+        </div>
+        <div id="mapa"></div>
+        <div class="mapa-clave">
+          <span><i class="bolita verde"></i>Compraron</span>
+          <span><i class="bolita amarillo"></i>Hablando</span>
+          <span><i class="bolita gris"></i>Ya se pasó por ahí</span>
+        </div>
       </div>
 
       <div id="vistaMio" hidden>
@@ -5674,6 +5910,39 @@ export function vistaAdmin(origen) {
       <button type="button" class="fantasma" id="saltarSello" hidden>Sin sellar, siguiente</button>
       <button type="button" id="siguienteNFC" disabled>Siguiente pieza</button>
     </div>
+  </div>
+</div>
+
+<div class="modal" id="modalPunto" hidden>
+  <div class="modal-fondo" data-cerrar-punto></div>
+  <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="puntoTitulo">
+    <button type="button" class="modal-cerrar" id="cerrarPunto" aria-label="Cerrar">✕</button>
+    <div class="modal-kicker" id="puntoKicker">Visita</div>
+    <h1 id="puntoTitulo">Marcar un local</h1>
+    <p class="modal-subtitulo" id="puntoSubtitulo"></p>
+
+    <form id="formPunto">
+      <label class="mini" for="puntoNombre">Qué local es</label>
+      <input id="puntoNombre" type="text" maxlength="80" autocomplete="off" required>
+
+      <p class="mini2 sobre-buscador">Cómo quedó</p>
+      <div class="segmento" id="estadoPunto" role="group" aria-label="Cómo quedó la visita">
+        <button type="button" data-valor="gris">Nada</button>
+        <button type="button" data-valor="amarillo">Hablando</button>
+        <button type="button" data-valor="verde">Compraron</button>
+      </div>
+      <p class="ayuda" id="ayudaEstado"></p>
+
+      <label class="mini" for="puntoNota">Qué pasó <span class="suave">(opcional)</span></label>
+      <input id="puntoNota" type="text" maxlength="200" autocomplete="off"
+             placeholder="pidió que volviera el jueves">
+
+      <div class="modal-acciones">
+        <button type="button" class="alerta" id="borrarPunto" hidden>Borrar</button>
+        <button type="button" class="fantasma" id="cancelarPunto">Cancelar</button>
+        <button type="submit" id="guardarPunto">Guardar</button>
+      </div>
+    </form>
   </div>
 </div>
 

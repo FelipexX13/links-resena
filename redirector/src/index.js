@@ -47,6 +47,7 @@
  *   "b:<negocio>"   a quién se le manda el comprobante: correo, NIT y teléfono
  *   "r:<negocio>"   comprobante ya enviado: cierra esa orden y no deja tocarle
  *                   nada hasta que se borre
+ *   "p:<id>"        un punto del mapa: dónde se visitó, cómo quedó y quién fue
  *   "l:<id>"        una entrega: qué vendedor le pasó cuánto a la casa y cuándo
  *   "u:<usuario>"   un vendedor: sus datos, su porcentaje y su clave (PBKDF2)
  *   "cfg:vendedor"  {felipe:{...},nicolas:{...},alexander:{...}} — quienes venden, para
@@ -87,6 +88,19 @@ const LLAVE_VENDEDOR = "cfg:vendedor";
 // un nombre que ningún usuario puede tener, porque FORMATO_USUARIO no deja "*".
 const DUENO = "*";
 const FORMATO_USUARIO = /^[a-z0-9_-]{3,20}$/;
+
+// Cómo quedó un local que se visitó. El mapa existe para no repetir viaje, así
+// que estos tres estados son los que cambian una ruta.
+const ESTADOS_MAPA = new Set(["gris", "amarillo", "verde"]);
+function estadoValido(valor) {
+  const v = String(valor || "").trim().toLowerCase();
+  return ESTADOS_MAPA.has(v) ? v : "gris";
+}
+
+function gradoValido(valor, tope) {
+  const n = Number(valor);
+  return Number.isFinite(n) && Math.abs(n) <= tope ? Math.round(n * 1e6) / 1e6 : null;
+}
 
 const PAGOS = new Set(["efectivo", "transferencia", "otro"]);
 // Un vendedor no firma sus comprobantes: los firma su jefe, que es uno de los
@@ -512,6 +526,81 @@ async function api(request, env, accion, url, ctx) {
     };
     await guardarUsuario(env, u);
     return json({ ok: true, usuario: usuarioPublico(u) });
+  }
+
+  /* ---------- el mapa de visitas ---------- */
+
+  // El mapa es de todos: cualquiera aporta y cualquiera lo ve, porque sirve para
+  // no mandar a dos personas al mismo sitio. Lo que no es de todos son dos cosas:
+  //
+  //   1. Quién puso cada punto. Solo el superadmin lo ve; para los demás el mapa
+  //      es anónimo, que es lo que lo vuelve útil sin volverlo un marcador.
+  //   2. Los amarillos ajenos. Un amarillo es una conversación abierta y es de
+  //      quien la abrió: los demás lo ven gris —"por ahí ya pasaron"— y con eso
+  //      les basta para no volver.
+  if (accion === "mapa" && request.method === "GET") {
+    const { keys } = await env.TARJETAS.list({ prefix: "p:" });
+    const puntos = keys.map((k) => {
+      const m = Object.assign({ id: k.name.slice(2) }, k.metadata || {});
+      if (quien.dueno) return m;
+      const mio = m.vendedor === quien.usuario;
+      return {
+        id: m.id, lat: m.lat, lng: m.lng, nombre: m.nombre, fecha: m.fecha,
+        estado: m.estado === "amarillo" && !mio ? "gris" : m.estado,
+        nota: mio ? m.nota : "",
+        mio: mio,
+      };
+    });
+    puntos.sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+    return json({ puntos });
+  }
+
+  if (accion === "punto" && request.method === "POST") {
+    const cuerpo = await request.json().catch(() => ({}));
+    const lat = gradoValido(cuerpo.lat, 90);
+    const lng = gradoValido(cuerpo.lng, 180);
+    if (lat === null || lng === null) return json({ error: "Faltan las coordenadas" }, 400);
+
+    const nombre = String(cuerpo.nombre || "").trim().slice(0, 80);
+    if (!nombre) return json({ error: "Ponle el nombre del local" }, 400);
+
+    const id = FORMATO_ID.test(String(cuerpo.id || "")) ? String(cuerpo.id) : "";
+    let antes = null;
+    if (id) {
+      antes = await env.TARJETAS.get("p:" + id, "json");
+      // un punto es de quien lo puso: nadie le borra la conversación a otro
+      if (antes && !quien.dueno && antes.vendedor !== quien.usuario) {
+        return json({ error: "Ese punto no es tuyo" }, 403);
+      }
+    }
+
+    const punto = {
+      lat: lat,
+      lng: lng,
+      nombre: nombre,
+      estado: estadoValido(cuerpo.estado),
+      nota: String(cuerpo.nota || "").trim().slice(0, 200),
+      // de quien lo pone y de nadie más: no hay motivo para apuntarle una visita
+      // a otro, y así no hace falta "deQuienEs", que se declara más abajo
+      vendedor: antes ? antes.vendedor : quien.usuario,
+      fecha: fechaValida(cuerpo.fecha) || hoyDelServidor(),
+      actualizado: new Date().toISOString(),
+    };
+    const llave = id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    await env.TARJETAS.put("p:" + llave, JSON.stringify(punto), { metadata: punto });
+    return json(Object.assign({ ok: true, id: llave }, punto));
+  }
+
+  if (accion === "punto-borrar" && request.method === "POST") {
+    const cuerpo = await request.json().catch(() => ({}));
+    const id = String(cuerpo.id || "");
+    if (!FORMATO_ID.test(id)) return json({ error: "Id inválido" }, 400);
+    const antes = await env.TARJETAS.get("p:" + id, "json");
+    if (antes && !quien.dueno && antes.vendedor !== quien.usuario) {
+      return json({ error: "Ese punto no es tuyo" }, 403);
+    }
+    await env.TARJETAS.delete("p:" + id);
+    return json({ ok: true, id: id });
   }
 
   /* ---------- lo que los vendedores han entregado ---------- */

@@ -1179,3 +1179,46 @@ para Felipe: ese papel ya está en manos de un cliente.
 Para que el vendedor pueda armar el PDF, `ajustes` le devuelve los datos de su
 jefe. No es una fuga: ese nombre y esa cédula salen impresos en cada comprobante
 que entrega.
+
+## El mapa de visitas
+
+Una pestaña con un mapa de Ibagué y un punto por cada local que se visitó. Existe
+para una sola cosa: **que no vayan dos personas al mismo sitio.**
+
+| Color | Qué quiere decir |
+|---|---|
+| 🟢 Verde | compraron |
+| 🟡 Amarillo | hay conversación abierta |
+| ⚪ Gris | se pasó por ahí y no salió nada |
+
+**Cualquiera aporta y cualquiera lo ve**, sea superadmin o vendedor. Es lo único
+que se comparte de lado a lado.
+
+### Las dos cosas que no son de todos
+
+**Quién puso cada punto.** Solo el superadmin lo ve. Para los demás el mapa es
+anónimo, que es lo que lo vuelve útil sin volverlo un marcador de quién trabaja
+más.
+
+**Los amarillos ajenos.** Un amarillo es una conversación abierta y es de quien la
+abrió. Los demás lo ven **gris** —«por ahí ya pasaron»— y con eso les basta para
+no volver, sin enterarse de que hay algo cocinándose ni con quién.
+
+Las dos reglas viven en el Worker, no en el panel: a un vendedor le llegan los
+puntos ya recortados, sin `vendedor` y con los amarillos ajenos convertidos en
+grises. No hay nada que mirar en la respuesta.
+
+Un punto es de quien lo puso: editarlo o borrarlo siendo otro devuelve `403`. Si
+dos personas visitan el mismo local, cada una tiene el suyo —no hay edición
+compartida y por tanto no hay quién le pise la conversación a quién—.
+
+### Cómo se marca
+
+**Marcar dónde estoy** usa el GPS del teléfono: sales del local, tocas el botón y
+el punto queda donde estás, sin buscar la calle ni saber en qué dirección
+estabas. Tocar el mapa sirve para marcarlos después, desde la casa.
+
+Los mapas son de **Leaflet con teselas de OpenStreetMap**: sin llave de API y sin
+costo, a diferencia de Google Maps. La caja del mapa se crea al entrar a la
+pestaña y no antes: Leaflet mide su contenedor al nacer, y con la pestaña oculta
+nacería de cero píxeles y se quedaría gris.
