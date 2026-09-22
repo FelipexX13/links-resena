@@ -345,6 +345,8 @@ const ESTILOS = `
 
   /* De todo el formulario, este es el campo que decide la orden: se ve de lejos
      y no se confunde con el buscador de locales que tiene encima. */
+  #puntoLink{background:var(--azul-piel);border-color:var(--azul);font-weight:500}
+  #puntoLink::placeholder{color:var(--tinta-2);font-weight:400}
   #maps{background:var(--azul-piel);border-color:var(--azul);font-weight:500}
   #maps::placeholder{color:var(--tinta-2);font-weight:400}
   #maps:focus{background:var(--papel);border-color:var(--azul);
@@ -4403,9 +4405,12 @@ $("faltanEnMapa").addEventListener("click", async (e) => {
     return;
   }
 
+  // sin coordenadas hay dos caminos y los dos valen: pegar su link —exacto— o
+  // tocar el mapa —a ojo, pero suficiente para una ruta—
   POR_COLOCAR = l.negocio;
   pintarFaltan();
-  decirMapa("Toca el mapa donde queda " + l.negocio + ".");
+  decirMapa("Pega su link de Maps, o toca el mapa donde queda " + l.negocio + ".");
+  abrirPunto(null, null, null, l);
 });
 
 function decirMapa(texto, malo) {
@@ -4478,9 +4483,14 @@ function abrirPunto(punto, lat, lng, orden) {
   $("puntoTitulo").textContent = punto ? punto.nombre : "Marcar un local";
   $("puntoSubtitulo").textContent = punto && punto.fecha
     ? "Marcado el " + punto.fecha
-    : "Queda donde tocaste el mapa.";
+    : (lat ? "Queda donde tocaste el mapa." : "Pega su link de Maps y queda exacto.");
   $("puntoNombre").value = PUNTO_EDITADO.nombre;
   $("puntoNota").value = PUNTO_EDITADO.nota || "";
+  const sinSitio = !PUNTO_EDITADO.lat || !PUNTO_EDITADO.lng;
+  $("bloquePuntoLink").hidden = !sinSitio;
+  $("puntoLink").value = "";
+  $("puntoLinkDice").textContent = "De ahí salen las coordenadas exactas. Si no lo " +
+    "tienes a mano, cierra esto y toca el mapa donde queda.";
   pintarEstadoPunto(PUNTO_EDITADO.estado);
   $("borrarPunto").hidden = !punto;
   olvidarConfirmacion();
@@ -4499,6 +4509,31 @@ function cerrarPunto() {
   focoPunto = null;
   PUNTO_EDITADO = null;
 }
+
+// Un punto sin coordenadas no se puede guardar, y para las órdenes de antes de
+// que las guardáramos el link de Maps es la única fuente exacta que hay. Buscar
+// el local por nombre en un geocodificador sería adivinar, y un punto en el
+// barrio equivocado manda a alguien a manejar para nada.
+function leerLinkDelPunto() {
+  const crudo = $("puntoLink").value.trim();
+  if (!crudo || !PUNTO_EDITADO) return;
+  const r = analizarMaps(crudo);
+  if (r.lat && r.lng) {
+    PUNTO_EDITADO.lat = r.lat;
+    PUNTO_EDITADO.lng = r.lng;
+    if (!$("puntoNombre").value.trim() && r.negocio) $("puntoNombre").value = r.negocio;
+    $("puntoLinkDice").textContent = "Listo: queda en " + r.lat.toFixed(5) + ", " +
+      r.lng.toFixed(5) + ".";
+    if (MAPA) MAPA.setView([r.lat, r.lng], 17);
+    return;
+  }
+  $("puntoLinkDice").textContent = r.corto
+    ? "Ese link corto no trae coordenadas. Ábrelo en Maps y copia la URL larga."
+    : "Ese link no trae el @lat,lng. Abre el local en Google Maps y copia la URL de arriba.";
+}
+
+$("puntoLink").addEventListener("paste", () => { setTimeout(leerLinkDelPunto, 0); });
+$("puntoLink").addEventListener("change", leerLinkDelPunto);
 
 $("cerrarPunto").onclick = cerrarPunto;
 $("cancelarPunto").onclick = cerrarPunto;
@@ -4538,6 +4573,12 @@ $("marcarAqui").onclick = () => {
 $("formPunto").onsubmit = async (e) => {
   e.preventDefault();
   if (!PUNTO_EDITADO) return;
+  if (!PUNTO_EDITADO.lat || !PUNTO_EDITADO.lng) {
+    $("puntoLinkDice").textContent = "Falta saber dónde queda: pega el link, o cierra " +
+      "esto y toca el mapa.";
+    $("puntoLink").focus();
+    return;
+  }
   const boton = $("guardarPunto");
   boton.disabled = true;
   try {
@@ -6231,6 +6272,14 @@ export function vistaAdmin(origen) {
     <p class="modal-subtitulo" id="puntoSubtitulo"></p>
 
     <form id="formPunto">
+      <div id="bloquePuntoLink" hidden>
+        <label class="mini" for="puntoLink">Link de Google Maps</label>
+        <input id="puntoLink" type="text" autocomplete="off"
+               placeholder="Pega aquí el link del local">
+        <p class="ayuda" id="puntoLinkDice">De ahí salen las coordenadas exactas. Si no
+          lo tienes a mano, cierra esto y toca el mapa donde queda.</p>
+      </div>
+
       <label class="mini" for="puntoNombre">Qué local es</label>
       <input id="puntoNombre" type="text" maxlength="80" autocomplete="off" required>
 

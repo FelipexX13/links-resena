@@ -1298,7 +1298,15 @@ faltan. Tocando uno:
 
 - **Si la orden ya sabe dónde queda** —se creó pegando el link de Maps— se pone
   ahí mismo, de un toque. Verde si está cobrada, amarillo si sigue pendiente.
-- **Si no** —las órdenes de antes de que guardáramos coordenadas— el botón queda
-  esperando y se toca el mapa donde queda. El nombre y el color vienen puestos.
+- **Si no** —las órdenes de antes de que guardáramos coordenadas— se abre la
+  ventana con el nombre y el color ya puestos, y dos caminos: **pegar su link de
+  Maps**, que deja el punto exacto, o cerrar y tocar el mapa a ojo.
 
 El botón desaparece de la lista en cuanto el local tiene su punto.
+
+**Por qué no se buscan solas.** Sería fácil mandar el nombre del local a un
+geocodificador gratis y quedarse con lo que conteste. Pero con negocios pequeños
+de Ibagué acierta poco, y su forma de fallar es la mala: no dice «no sé», deja un
+punto plausible en el barrio de al lado. En un mapa que existe para armar rutas,
+eso manda a alguien a manejar para nada. Un punto que no está se nota; uno que
+miente, no.
