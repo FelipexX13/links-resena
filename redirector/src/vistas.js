@@ -587,6 +587,16 @@ const ESTILOS = `
   .volver{background:none;border:0;padding:0;margin-bottom:14px;color:var(--azul-fuerte);
     font-size:12.5px;font-weight:500}
   .volver:hover{background:none;color:var(--azul);text-decoration:underline}
+  /* tres salidas, cada una con lo que implica escrito debajo: cancelar es de las
+     pocas cosas de aquí que no se deshacen */
+  .salidas{display:flex;flex-direction:column;gap:9px;margin-top:6px}
+  .salidas button{display:block;width:100%;text-align:left;background:var(--papel-2);
+    color:var(--tinta);border:1px solid var(--linea);padding:13px 15px;
+    border-radius:var(--r-l);font-size:13.5px;line-height:1.4}
+  .salidas button:hover{background:var(--papel);border-color:var(--tinta-3);color:var(--tinta)}
+  .salidas b{display:block;font-weight:600;margin-bottom:3px}
+  .salidas span{display:block;font-size:12px;color:var(--tinta-2);font-weight:400}
+  .salidas button:hover span{color:var(--tinta-2)}
   .mapa-barra{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin:18px 0 10px}
   #mapa{height:62vh;min-height:340px;border-radius:var(--r-l);border:1px solid var(--linea);
     overflow:hidden;background:var(--papel-2);z-index:0}
@@ -1648,6 +1658,9 @@ $("formTarjeta").onsubmit = async (e) => {
     avisar("aviso", "Falta el nombre del negocio.", false);
     return;
   }
+  // cerrarTarjeta() vacía el formulario, así que el nombre hay que tenerlo antes:
+  // lo que se lea después del cierre viene en blanco
+  const elNegocio = $("negocio").value.trim();
   const boton = $("guardar");
   const etiqueta = boton.textContent;
   boton.disabled = true;
@@ -1658,6 +1671,19 @@ $("formTarjeta").onsubmit = async (e) => {
         avisar("aviso", "No hay tarjetas libres suficientes. Revisa el resumen.", false);
         return;
       }
+      // de dónde salen las piezas que nos estamos llevando: si esas órdenes se
+      // quedan en cero, desaparecen, y con ellas el rastro del local
+      const deDonde = {};
+      ["acrilico", "sticker"].forEach((tipo) => {
+        plan.tomar[tipo].forEach((c) => {
+          const t = TARJETAS.filter((x) => x.codigo === c)[0];
+          if (!t || !t.negocio || t.negocio === $("negocio").value.trim()) return;
+          if (!deDonde[t.negocio]) {
+            deDonde[t.negocio] = { negocio: t.negocio, lat: t.lat, lng: t.lng };
+          }
+        });
+      });
+
       const aTomar = plan.tomar.acrilico.length + plan.tomar.sticker.length;
       const aSoltar = plan.soltar.acrilico.length + plan.soltar.sticker.length;
       const previa = fichaDe($("negocio").value.trim());
@@ -1745,7 +1771,7 @@ $("formTarjeta").onsubmit = async (e) => {
       for (const tipo of ["acrilico", "sticker"]) {
         if (plan.tomar[tipo].length) {
           parchearTarjetas(plan.tomar[tipo], {
-            negocio: $("negocio").value.trim(), destino: destino, tipo: tipo,
+            negocio: elNegocio, destino: destino, tipo: tipo,
             vendida: "", precio: 0, vendedor: QUIEN_VENDE,
           });
         }
@@ -1760,8 +1786,17 @@ $("formTarjeta").onsubmit = async (e) => {
       if (aSoltar) cola.push(plural(aSoltar, "tarjeta liberada", "tarjetas liberadas"));
       if (fichaNueva) cola.push("sitio en Google Maps");
       if (fichaFuera) cola.push("sitio quitado");
-      avisar("avisoPanel", "Orden de " + $("negocio").value +
+      avisar("avisoPanel", "Orden de " + elNegocio +
         (plan.base ? " actualizada · " : " creada · ") + cola.join(" y "), true);
+
+      // ¿alguna se quedó vacía? Se pregunta ahora, con el local fresco, que es lo
+      // único que queda de él
+      const vivas = {};
+      locales().forEach((x) => { vivas[x.negocio] = 1; });
+      COLA_VACIADAS = Object.keys(deDonde)
+        .filter((n) => !vivas[n] && deDonde[n].lat && deDonde[n].lng)
+        .map((n) => deDonde[n]);
+      if (COLA_VACIADAS.length) siguienteVaciada();
       return;
     }
 
@@ -1796,10 +1831,10 @@ $("formTarjeta").onsubmit = async (e) => {
       }
       cerrarTarjeta();
       for (const [tipo, codigos] of grupos) {
-        parchearTarjetas(codigos, { negocio: $("negocio").value.trim(), destino: destino, tipo: tipo });
+        parchearTarjetas(codigos, { negocio: elNegocio, destino: destino, tipo: tipo });
       }
       avisar("avisoPanel", plural(total, "tarjeta apuntando", "tarjetas apuntando") +
-        " a " + $("negocio").value, true);
+        " a " + elNegocio, true);
       return;
     }
 
@@ -3555,14 +3590,103 @@ $("tablaLocales").addEventListener("click", async (e) => {
   if (v) { abrirVenta(v.dataset.vender); return; }
 
   const c = e.target.closest("[data-cancelar]");
-  if (!c) return;
-  const negocio = c.dataset.cancelar;
-  if (CONFIRMANDO !== negocio) { pedirConfirmacion(c, negocio); return; }
+  if (c) { abrirCancelar(c.dataset.cancelar); return; }
+});
 
-  olvidarConfirmacion();
+// Cancelar liberaba las piezas y borraba el rastro. Pero un local que queda en
+// stand by no es lo mismo que uno que dijo que no, y las dos cosas hay que
+// saberlas: la pieza se necesita para otro cliente hoy, y el local puede llamar
+// en un mes. La orden se va, la visita se queda en el mapa.
+// La misma ventana para las dos puertas por las que se muere una orden: darle a
+// Cancelar, o quedarse sin piezas porque te las llevaste a otra. La segunda es
+// la que pasa de verdad en la calle.
+let CANCELANDO = null;
+let COLA_VACIADAS = [];
+let focoCancelar = null;
+
+function abrirCancelar(negocio) {
   const l = locales().filter((x) => x.negocio === negocio)[0];
   if (!l) return;
-  c.disabled = true;
+  CANCELANDO = { negocio: negocio, lat: l.lat, lng: l.lng, yaSeFue: false, orden: l };
+  $("cancelarTitulo").textContent = "Cancelar la orden de " + negocio;
+  const suelta = [];
+  if (l.piezas) suelta.push(plural(l.piezas, "pieza", "piezas") + " que vuelven a estar libres");
+  if (l.ficha) suelta.push("el sitio en Google Maps");
+  $("cancelarSubtitulo").textContent = suelta.length
+    ? "Se va con " + suelta.join(" y ") + "."
+    : "No tiene piezas: solo se quita la fila.";
+  $("errorSalida").textContent = "Se borra la orden y no queda nada en el mapa.";
+  abrirVentanaCancelar();
+}
+
+// Te llevaste sus piezas a otra orden, así que esa ya no existe. Es el momento
+// exacto en que se sabe qué pasó con el local, y el único en que se va a apuntar.
+function preguntarPorVaciada(v) {
+  CANCELANDO = { negocio: v.negocio, lat: v.lat, lng: v.lng, yaSeFue: true };
+  $("cancelarTitulo").textContent = v.negocio + " se quedó sin piezas";
+  $("cancelarSubtitulo").textContent =
+    "Le quitaste las que tenía, así que esa orden ya no existe. ¿Qué pasó con el local?";
+  $("errorSalida").textContent = "No queda nada en el mapa.";
+  abrirVentanaCancelar();
+}
+
+function abrirVentanaCancelar() {
+  limpiarAviso();
+  if ($("modalCancelar").hidden) focoCancelar = document.activeElement;
+  $("modalCancelar").hidden = false;
+  document.body.style.overflow = "hidden";
+}
+
+function siguienteVaciada() {
+  const v = COLA_VACIADAS.shift();
+  if (v) preguntarPorVaciada(v); else cerrarCancelar();
+}
+
+function cerrarCancelar() {
+  if ($("modalCancelar").hidden) return;
+  $("modalCancelar").hidden = true;
+  document.body.style.overflow = "";
+  if (focoCancelar && focoCancelar.focus) focoCancelar.focus();
+  focoCancelar = null;
+  CANCELANDO = null;
+  COLA_VACIADAS = [];
+}
+
+$("cerrarCancelar").onclick = cerrarCancelar;
+$("modalCancelar").addEventListener("click", (e) => {
+  if (e.target.hasAttribute("data-cerrar-cancelar")) cerrarCancelar();
+});
+
+$("modalCancelar").addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-salida]");
+  if (!b || !CANCELANDO) return;
+  const caso = CANCELANDO;
+  const negocio = caso.negocio;
+  const salida = b.dataset.salida;
+
+  // si la orden ya se fue sola, aquí solo queda apuntar qué pasó
+  if (caso.yaSeFue) {
+    b.disabled = true;
+    try {
+      if (salida !== "nada") await dejarEnElMapa(caso, salida);
+    } finally {
+      b.disabled = false;
+    }
+    siguienteVaciada();
+    return;
+  }
+
+  const l = caso.orden;
+  if (!l) return;
+
+  [].slice.call($("modalCancelar").querySelectorAll("button"))
+    .forEach((x) => { x.disabled = true; });
+  const etiqueta = b.querySelector("b").textContent;
+  b.querySelector("b").textContent = "Cancelando…";
+  // el código de abajo va contando "Liberando 3 de 12…": que se vea en el botón
+  // que se acaba de tocar
+  const rotulo = b.querySelector("b");
+  const c = { set textContent(t) { rotulo.textContent = t; }, disabled: false };
   try {
     const total = l.acrilico + l.sticker;
     let hechas = 0;
@@ -3595,15 +3719,48 @@ $("tablaLocales").addEventListener("click", async (e) => {
       { negocio: "", destino: "", vendida: "", precio: 0, vendedor: "" });
     if (l.ficha) parchearServicio(l.ficha.id, null);
 
+    // la visita se queda aunque la orden se vaya
+    if (salida !== "nada") await dejarEnElMapa(l, salida);
+
+    cerrarCancelar();
     const suelto = [];
     if (total) suelto.push(plural(total, "tarjeta libre", "tarjetas libres") + " otra vez");
-    if (l.ficha) suelto.push("ficha quitada");
+    if (l.ficha) suelto.push("sitio quitado");
+    if (salida === "amarillo") suelto.push("queda en tu mapa como \"hablando\"");
+    if (salida === "gris") suelto.push("queda gris en el mapa");
     avisar("avisoPanel", "Orden de " + negocio + " cancelada · " + suelto.join(" y "), true);
   } catch (err) {
     avisar("avisoPanel", err.message, false);
     pintarVentas();
+  } finally {
+    [].slice.call($("modalCancelar").querySelectorAll("button"))
+      .forEach((x) => { x.disabled = false; });
+    b.querySelector("b").textContent = etiqueta;
   }
 });
+
+// Las coordenadas vienen de la tarjeta, que las guardó del link de Maps al crear
+// la orden. Sin ellas no se marca nada: inventarle un sitio sería peor.
+async function dejarEnElMapa(l, estado) {
+  if (!l.lat || !l.lng) return;
+  const suyo = PUNTOS.filter((x) => x.nombre === l.negocio && x.mio)[0];
+  try {
+    const r = await llamar("punto", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: suyo ? suyo.id : undefined,
+        lat: l.lat, lng: l.lng, nombre: l.negocio, estado: estado,
+        nota: suyo ? suyo.nota : "",
+      }),
+    });
+    PUNTOS = PUNTOS.filter((x) => x.id !== r.id);
+    PUNTOS.push(Object.assign({ mio: true }, r));
+    pintarPuntos();
+  } catch (e) {
+    // la orden ya se cancel\u00f3: que el mapa falle no puede tumbar eso
+  }
+}
 
 /* ---------- comprobante de venta ---------- */
 
@@ -5954,6 +6111,33 @@ export function vistaAdmin(origen) {
     <div class="modal-acciones">
       <button type="button" class="fantasma" id="saltarSello" hidden>Sin sellar, siguiente</button>
       <button type="button" id="siguienteNFC" disabled>Siguiente pieza</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modalCancelar" hidden>
+  <div class="modal-fondo" data-cerrar-cancelar></div>
+  <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="cancelarTitulo">
+    <button type="button" class="modal-cerrar" id="cerrarCancelar" aria-label="Cerrar">✕</button>
+    <div class="modal-kicker">Orden</div>
+    <h1 id="cancelarTitulo">Cancelar la orden</h1>
+    <p class="modal-subtitulo" id="cancelarSubtitulo"></p>
+
+    <p class="mini2 sin-aire">¿Qué pasó con el local?</p>
+    <div class="salidas">
+      <button type="button" data-salida="amarillo">
+        <b>Quedó en stand by</b>
+        <span>Puede que llamen. Queda amarillo en tu mapa y las piezas vuelven a estar
+          libres para otro.</span>
+      </button>
+      <button type="button" data-salida="gris">
+        <b>No les interesó</b>
+        <span>Queda gris en el mapa, para que nadie del equipo vuelva a pasar por ahí.</span>
+      </button>
+      <button type="button" data-salida="nada">
+        <b>Fue un error</b>
+        <span id="errorSalida">Se borra la orden y no queda nada en el mapa.</span>
+      </button>
     </div>
   </div>
 </div>

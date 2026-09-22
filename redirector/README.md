@@ -1244,3 +1244,36 @@ Los mapas son de **Leaflet con teselas de OpenStreetMap**: sin llave de API y si
 costo, a diferencia de Google Maps. La caja del mapa se crea al entrar a la
 pestaña y no antes: Leaflet mide su contenedor al nacer, y con la pestaña oculta
 nacería de cero píxeles y se quedaría gris.
+
+### Cuando una orden se queda sin piezas
+
+En la calle nadie le da a *Cancelar*. Lo que pasa es esto: un local queda en
+stand by, el acrílico hace falta para el cliente de mañana, y se reutiliza
+escaneándolo dentro de otra orden. La orden vieja se queda sin piezas y —como se
+deduce de ellas— **desaparece sin dejar rastro**. Con ella se iba lo único que
+importaba: que ese local puede llamar.
+
+Así que la pregunta salta ahí, **al guardar la orden nueva**:
+
+```
+Chingones se quedó sin piezas
+Le quitaste las que tenía, así que esa orden ya no existe. ¿Qué pasó con el local?
+
+  Quedó en stand by  → amarillo en tu mapa
+  No les interesó    → gris, para que nadie del equipo vuelva
+  Fue un error       → nada
+```
+
+No en el escaneo: se escanean cinco seguidas y una ventana en medio estorba. Al
+guardar ya se sabe qué órdenes murieron, y se pregunta por todas en fila.
+
+La misma ventana sale al darle a *Cancelar*, que además libera las piezas. Es la
+otra puerta por la que muere una orden, y las dos acaban en el mismo sitio: la
+orden se va, la visita se queda en el mapa.
+
+Sin coordenadas no se pregunta nada —no habría dónde marcarlo—.
+
+**De paso, un error viejo.** `cerrarTarjeta()` vacía el formulario, y el código
+leía el nombre del negocio *después* de cerrar: llegaba en blanco. La orden recién
+creada no aparecía hasta darle a Refrescar, y el aviso decía «Orden de creada».
+Ahora el nombre se guarda antes de cerrar.
