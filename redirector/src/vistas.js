@@ -1231,14 +1231,6 @@ function placeIdDeDestino(destino) {
 
 // El botón de compartir de la app de Maps da uno de estos, y por dentro no
 // traen nada: el identificador aparece al seguirlos, que lo hace el Worker.
-// El resolver saca las coordenadas del HTML cuando la URL no las trae. Se le
-// pegan al final en la notación de Google en vez de pasarlas por otro camino:
-// así analizarMaps las lee como lo que son —las del local— y el campo queda con
-// un link que vuelve a servir si se copia o se relee.
-function conElSitio(url, r) {
-  return r && r.lat && r.lng ? url + "!3d" + r.lat + "!4d" + r.lng : url;
-}
-
 function esLinkCorto(url) {
   return /^https?:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps|g\.co\/kgs)/i.test(String(url).trim());
 }
@@ -1419,7 +1411,7 @@ $("analizar").onclick = async () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: crudo }),
       });
-      crudo = conElSitio(r.url, r);
+      crudo = r.url;
       $("maps").value = crudo;
     } catch (err) {
       avisar("aviso", err.message, false);
@@ -4588,7 +4580,7 @@ async function leerLinkDelPunto() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: crudo }),
       });
-      crudo = conElSitio(r.url, r);
+      crudo = r.url;
       $("puntoLink").value = crudo;
     } catch (err) {
       $("puntoLinkDice").textContent = "No se pudo abrir ese link corto: " + err.message;

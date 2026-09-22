@@ -635,28 +635,43 @@ https://www.google.com/maps/place/Autoservicio+limonar,+Taller+58+%236a-31,+Ibag
 ```
 
 **Ni `@lat,lng` ni `!3d/!4d`.** El local va solo en el ftid. O sea que el link
-que de verdad se usa en la calle —el único, en la práctica— era justo el que no
-guardaba dónde queda nada. Probado con cuatro User-Agents y quitando el
-`?g_st=ac`: ninguno devuelve coordenadas en la URL.
+que de verdad se usa en la calle —el único, en la práctica— es justo el que no
+dice dónde queda nada. Probado con cuatro User-Agents y quitando el `?g_st=ac`:
+ninguno devuelve coordenadas en la URL.
 
-Sí viajan en el HTML de esa página, al principio:
+##### El HTML de esa página **no** sirve para sacarlas
+
+Parece que sí. El cuerpo trae, cerca del principio:
 
 ```
 APP_INITIALIZATION_STATE=[[[<alcance>,<lng>,<lat>], …
 ```
 
-Mismo orden que el `!1d!2d!3d` de siempre. Es la cámara con la que Maps abre ese
-local y, como el link viene recién compartido —nadie arrastró el mapa antes—, la
-cámara **es** el local.
+Se llegó a escribir el extractor y a desplegarlo. **Está mal.** Ese par no es el
+local: es **la ubicación por IP de quien pide la página**. La prueba que lo
+destapa es de una línea —pedir tres sitios de tres continentes:
 
-Leerlo **no cuesta una subpetición más ni una llave de API**: el Worker ya
-descargaba esa página para saber a dónde llevaba el enlace y tiraba el cuerpo sin
-mirarlo. Ahora lo mira. Un `indexOf` y noventa caracteres de recorte, para no
-gastar los 10 ms de CPU del plan gratis en un HTML de 200 KB.
+| Se pidió | Devolvió |
+|---|---|
+| Torre Colpatria, Bogotá | `4.440064, -75.1992832` |
+| Sagrada Familia, Barcelona | `4.440064, -75.1992832` |
+| place_id de Sydney | `4.440064, -75.1992832` |
 
-Hay que pedirla con **User-Agent de escritorio**: la página móvil no trae ese
-bloque. Y si Google cambia su HTML, `sacarElSitio()` devuelve vacío y el panel se
-comporta como antes —lo dice y manda el local a *Sin marcar*—, no se cae.
+Siempre lo mismo, y lo mismo es Ibagué, que es desde donde salía la petición. El
+local de verdad estaba a unos 400 metros de ahí.
+
+Lo que engañó: el primer local probado **sí** cuadraba —un reverse-geocode decía
+«Jordán, Ibagué» y la dirección del local también—. Pero eso no confirmaba el
+local, confirmaba la ciudad desde la que se estaba probando. **Una comprobación
+que no puede fallar no comprueba nada**: para validar «esto devuelve el sitio
+pedido» hay que pedir un sitio que esté lejos de uno.
+
+En producción habría sido peor: el Worker corre en un datacenter de Cloudflare, o
+sea que **todas las órdenes habrían caído en el mismo punto falso**.
+
+Las coordenadas reales las pone Maps con JavaScript, pidiéndolas a
+`/maps/preview/place`. Sin ejecutar JS o sin llave de la API de Google, de un
+link corto **no se sacan**. De momento: se pega el link largo, o se toca el mapa.
 
 ### Enviado el comprobante, la orden se cierra
 
@@ -1263,8 +1278,7 @@ estabas. Tocar el mapa sirve para marcarlos después, desde la casa.
 Cobrar una orden es la definición de un punto verde, así que no se pide aparte:
 al aceptar, el punto se marca o se actualiza sin tocar nada.
 
-Las coordenadas salen del link de Maps —de tres sitios distintos según cómo
-llegue; el de abajo lo cuenta—, empezando por el `@lat,lng` que lleva en la
+Las coordenadas salen del `@lat,lng` que el link largo de Maps lleva en la
 mitad —estaba ahí desde siempre y lo tirábamos—. Se guardan en la tarjeta al
 crear la orden, porque entre crear y cobrar pueden pasar días.
 
@@ -1373,10 +1387,8 @@ Un link de Maps lleva **dos** juegos de coordenadas y no son el mismo:
 | `@lat,lng` | dónde estaba **centrado el mapa** al copiar el link |
 | `!3dlat!4dlng` | dónde está **el local** |
 
-—y un tercero, el `APP_INITIALIZATION_STATE` del HTML, que es el único que traen
-los links compartidos desde la app. El Worker lo devuelve aparte y el panel se lo
-pega a la URL como `!3d!4d`, que es la notación de Google para exactamente eso: así
-entra por el mismo sitio que las demás y no hay un segundo camino que mantener.
+Los links cortos compartidos desde la app no traen ninguno de los dos. Arriba
+está por qué, y por qué el HTML tampoco vale.
 
 Usábamos el primero, y por eso los puntos caían corridos media cuadra: el centro
 del encuadre no es el negocio, sobre todo porque Google desplaza la vista para
