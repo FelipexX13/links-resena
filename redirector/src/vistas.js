@@ -1661,6 +1661,11 @@ $("formTarjeta").onsubmit = async (e) => {
   // cerrarTarjeta() vacía el formulario, así que el nombre hay que tenerlo antes:
   // lo que se lea después del cierre viene en blanco
   const elNegocio = $("negocio").value.trim();
+  // del link que se acaba de leer; si se eligió un local ya registrado, de lo que
+  // ya sabían sus tarjetas
+  const yaEstaba = locales().filter((x) => x.negocio === elNegocio)[0];
+  const elSitio = DONDE_QUEDA.lat ? DONDE_QUEDA
+    : { lat: (yaEstaba || {}).lat, lng: (yaEstaba || {}).lng };
   const boton = $("guardar");
   const etiqueta = boton.textContent;
   boton.disabled = true;
@@ -1717,8 +1722,8 @@ $("formTarjeta").onsubmit = async (e) => {
               // quién la levantó, para que la fila lo diga desde que nace y no
               // solo cuando se cobre
               vendedor: QUIEN_VENDE,
-              lat: DONDE_QUEDA.lat,
-              lng: DONDE_QUEDA.lng,
+              lat: elSitio.lat,
+              lng: elSitio.lng,
             }),
           });
         }
@@ -1773,6 +1778,7 @@ $("formTarjeta").onsubmit = async (e) => {
           parchearTarjetas(plan.tomar[tipo], {
             negocio: elNegocio, destino: destino, tipo: tipo,
             vendida: "", precio: 0, vendedor: QUIEN_VENDE,
+            lat: elSitio.lat, lng: elSitio.lng,
           });
         }
         if (plan.soltar[tipo].length) {
@@ -2249,6 +2255,7 @@ $("negocio").addEventListener("input", () => {
 function salirDeEdicion() {
   EDITANDO_CODIGO = "";
   $("codigo").value = $("negocio").value = $("maps").value = "";
+  DONDE_QUEDA = { lat: null, lng: null };
   $("ficha").hidden = true;
   $("fichaReview").value = "";
   NOMBRE_AUTO = "";

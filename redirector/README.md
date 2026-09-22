@@ -1234,6 +1234,12 @@ Las coordenadas salen del `@lat,lng` que el link largo de Maps lleva en la
 mitad —estaba ahí desde siempre y lo tirábamos—. Se guardan en la tarjeta al
 crear la orden, porque entre crear y cobrar pueden pasar días.
 
+El sitio viaja por tres sitios y hay que ponerlo en los tres: en la llamada al
+servidor, **en el parche local de la tarjeta** y de ahí a la orden. Faltaba el del
+medio, así que la orden no sabía dónde estaba hasta darle a Refrescar y el verde
+solo nacía si cobrabas después de refrescar. Mismo error que el del nombre del
+negocio: lo que el servidor guarda y lo que el panel parchea tenían que coincidir.
+
 Sin coordenadas —órdenes de antes de esto, o un Place ID pegado a mano— no se
 marca nada: inventarle un sitio al local sería peor que no tenerlo. Y si ya
 había un amarillo tuyo en ese local, pasa a verde **conservando la nota**.
