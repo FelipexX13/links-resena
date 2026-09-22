@@ -3554,7 +3554,7 @@ function pintarVista(valor) {
   if (VISTA === "mapa") {
     // ya está a la vista: ahora sí tiene tamaño que medir
     armarMapa();
-    if (MAPA) MAPA.invalidateSize();
+    if (MAPA) { MAPA.invalidateSize(); pintarPuntos(); }
   }
 }
 
@@ -4346,9 +4346,19 @@ async function cargarPuntos() {
     const r = await llamar("mapa");
     PUNTOS = r.puntos || [];
     pintarPuntos();
+    decirMapa(PUNTOS.length
+      ? plural(PUNTOS.length, "punto", "puntos") + " en el mapa"
+      : "Todavía no hay ninguno. Toca el mapa, o el botón de arriba.");
   } catch (e) {
-    // si la carga falla, mejor el mapa de antes que un mapa en blanco
+    // si la carga falla, mejor el mapa de antes que un mapa en blanco. Pero que
+    // se diga: un mapa vacío y un mapa roto se veían igual, y eso no vale.
+    decirMapa("No se pudieron traer los puntos: " + e.message, true);
   }
+}
+
+function decirMapa(texto, malo) {
+  $("mapaDicho").textContent = texto;
+  $("mapaDicho").classList.toggle("malo", Boolean(malo));
 }
 
 // Leaflet necesita que su caja ya esté en pantalla y con tamaño: si se crea con
@@ -4487,6 +4497,7 @@ $("formPunto").onsubmit = async (e) => {
     PUNTOS.push(Object.assign({ mio: true }, r));
     cerrarPunto();
     pintarPuntos();
+    decirMapa(plural(PUNTOS.length, "punto", "puntos") + " en el mapa");
     avisar("avisoPanel", r.nombre + " marcado en el mapa", true);
   } catch (err) {
     avisar("avisoPunto", err.message, false);
