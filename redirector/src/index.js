@@ -937,8 +937,13 @@ async function api(request, env, accion, url, ctx) {
       });
       const d = await r.json().catch(() => null);
       if (!r.ok || !d || !d.location) {
-        // el mensaje de Google no se reenvía tal cual: puede llevar la clave
-        return json({ error: "Google no dio la ubicación de ese local (" + r.status + ")" }, 502);
+        // El texto de Google dice exactamente qué pasa —cuota en cero, API sin
+        // activar, facturación sin poner— y sin él esto es adivinar. Se puede
+        // enseñar: la clave va en una cabecera, no en la URL, así que no aparece
+        // en sus mensajes de error.
+        const dice = d && d.error && d.error.message ? String(d.error.message) : "";
+        return json({ error: "Google no dio la ubicación de ese local (" + r.status + ")" +
+          (dice ? ": " + dice.slice(0, 300) : "") }, 502);
       }
       const lat = Number(d.location.latitude);
       const lng = Number(d.location.longitude);
