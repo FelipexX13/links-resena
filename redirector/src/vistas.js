@@ -949,6 +949,8 @@ let MODO = "una";
 let ORIGEN_RANGO = "numero";
 let VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "", pct: 0, pago: "efectivo",
   jefe: "" };
+// dónde está el local del link que se acaba de leer
+let DONDE_QUEDA = { lat: null, lng: null };
 let COMO_PAGO = "efectivo";
 let LIQUIDACIONES = [];
 let VISTA = "locales";
@@ -1236,6 +1238,12 @@ function analizarMaps(crudo) {
   const url = String(crudo || "").trim();
   if (!url) return { error: "Pega la URL de Google Maps del negocio, o su Place ID." };
 
+  // El link largo de Maps lleva el punto del mapa en el "@lat,lng" de la mitad.
+  // Estaba ahí desde siempre y lo tirábamos.
+  let lat = null, lng = null;
+  const en = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (en) { lat = Number(en[1]); lng = Number(en[2]); }
+
   let negocio = "";
   const nm = url.match(/\/maps\/place\/([^/@?]+)/);
   if (nm && nm[1]) {
@@ -1249,7 +1257,8 @@ function analizarMaps(crudo) {
                url.match(/!1s(Ch[A-Za-z0-9_-]{15,})/) ||
                url.match(/^([A-Za-z0-9_-]{15,})$/);
   if (dado) {
-    return { negocio: negocio, placeId: dado[1], review: linkResena(dado[1]) };
+    return { negocio: negocio, placeId: dado[1], review: linkResena(dado[1]),
+      lat: lat, lng: lng };
   }
 
   if (esLinkCorto(url)) return { corto: true };
@@ -1263,7 +1272,8 @@ function analizarMaps(crudo) {
     if (!placeId) {
       return { error: "No se pudo convertir el identificador de esa URL. Busca el negocio en el buscador de Place ID y pega aquí el ChIJ… que te dé." };
     }
-    return { negocio: negocio, ftid: ftid, placeId: placeId, review: linkResena(placeId) };
+    return { negocio: negocio, ftid: ftid, placeId: placeId, review: linkResena(placeId),
+      lat: lat, lng: lng };
   }
 
   const cd = url.match(/(?:[?&](?:lu)?cid=)(\d{5,})/i);
@@ -1391,6 +1401,7 @@ $("analizar").onclick = async () => {
   limpiarAviso("aviso");
   $("localExistente").value = "";
   URL_LEIDA = crudo;
+  DONDE_QUEDA = { lat: r.lat, lng: r.lng };
   $("fichaNombre").textContent = r.negocio || "Link listo";
   $("fichaReview").value = r.review;
   const bits = [];
@@ -1680,6 +1691,8 @@ $("formTarjeta").onsubmit = async (e) => {
               // quién la levantó, para que la fila lo diga desde que nace y no
               // solo cuando se cobre
               vendedor: QUIEN_VENDE,
+              lat: DONDE_QUEDA.lat,
+              lng: DONDE_QUEDA.lng,
             }),
           });
         }
@@ -2578,6 +2591,7 @@ function locales() {
     g[tipo]++;
     g.codigos[tipo].push(t.codigo);
     if (t.vendedor) g.quienes[t.vendedor] = 1;
+    if (t.lat && t.lng && !g.lat) { g.lat = t.lat; g.lng = t.lng; }
     const tocada = diaLocal(t.actualizado);
     if (tocada > g.tocada) g.tocada = tocada;
     if (t.vendida) {
@@ -4118,6 +4132,32 @@ $("modalNFC").addEventListener("click", (e) => {
 
 /* ---------- el mapa de visitas ---------- */
 
+// Cobrar una orden es la definición de un punto verde, así que no hay por qué
+// pedirlo aparte. Las coordenadas vienen del link de Maps que se pegó al crear
+// la orden; sin ellas —órdenes viejas, o un Place ID pegado a mano— no se marca
+// nada y ya, que inventarle un sitio al local sería peor.
+async function marcarVerde(l) {
+  if (!l || !l.lat || !l.lng) return;
+  const suyo = PUNTOS.filter((p) => p.nombre === l.negocio && p.mio)[0];
+  if (suyo && suyo.estado === "verde") return;
+  try {
+    const r = await llamar("punto", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: suyo ? suyo.id : undefined,
+        lat: l.lat, lng: l.lng, nombre: l.negocio, estado: "verde",
+        nota: suyo ? suyo.nota : "",
+      }),
+    });
+    PUNTOS = PUNTOS.filter((x) => x.id !== r.id);
+    PUNTOS.push(Object.assign({ mio: true }, r));
+    pintarPuntos();
+  } catch (e) {
+    // el cobro ya quedó: que el mapa falle no puede tumbarlo
+  }
+}
+
 // El mapa existe para no mandar a dos personas al mismo sitio. Por eso lo ve
 // todo el mundo y por eso es anónimo salvo para el superadmin: quién fue no
 // cambia la ruta de nadie.
@@ -4170,7 +4210,9 @@ function pintarPuntos() {
       radius: p.estado === "gris" ? 7 : 9,
       color: "#fff", weight: 2, fillColor: color, fillOpacity: 1,
     });
-    const suyo = SESION.dueno || p.mio;
+    // Solo los propios se abren, también para el superadmin: un punto ajeno le
+    // llega degradado a gris, y guardarlo así le borraría el amarillo a su dueño.
+    const suyo = p.mio;
     bola.bindTooltip(escHtml(p.nombre) + (p.nota ? "<br><i>" + escHtml(p.nota) + "</i>" : "") +
       (SESION.dueno && p.vendedor ? "<br>" + escHtml(nombreDeVendedor(p.vendedor)) : ""));
     if (suyo) bola.on("click", (e) => { L.DomEvent.stop(e); abrirPunto(p); });
@@ -4993,6 +5035,8 @@ $("formVenta").onsubmit = async (e) => {
             pct: pctDeLaVenta(),
             pago: COMO_PAGO,
             jefe: quienFirma(),
+            lat: l.lat,
+            lng: l.lng,
           }),
         });
       }
@@ -5031,6 +5075,7 @@ $("formVenta").onsubmit = async (e) => {
       }
     }
     if (fichaNueva) parchearServicio(fichaNueva.id, fichaNueva);
+    await marcarVerde(l);
     avisar("avisoPanel", "Orden de " + l.negocio + " aceptada · " + dinero(importe), true);
     // Aceptar es cobrar: de aquí en adelante la orden no se toca. Con correo sale
     // el comprobante y eso mismo la cierra; sin correo se cierra igual, porque el

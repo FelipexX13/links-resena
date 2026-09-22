@@ -1201,22 +1201,44 @@ anónimo, que es lo que lo vuelve útil sin volverlo un marcador de quién traba
 más.
 
 **Los amarillos ajenos.** Un amarillo es una conversación abierta y es de quien la
-abrió. Los demás lo ven **gris** —«por ahí ya pasaron»— y con eso les basta para
-no volver, sin enterarse de que hay algo cocinándose ni con quién.
+abrió. Cualquier otro lo ve **gris** —«por ahí ya pasaron»— y con eso le basta
+para no volver, sin enterarse de que hay algo cocinándose ni con quién.
 
-Las dos reglas viven en el Worker, no en el panel: a un vendedor le llegan los
-puntos ya recortados, sin `vendedor` y con los amarillos ajenos convertidos en
-grises. No hay nada que mirar en la respuesta.
+**Eso vale también para el superadmin.** Si Alexander está hablando con alguien,
+que Felipe tampoco se aparezca por ahí: el mapa sirve para lo mismo mire quien
+mire. El superadmin ve el nombre de quién puso el punto, pero no el color ni la
+nota de una conversación que no es suya.
 
-Un punto es de quien lo puso: editarlo o borrarlo siendo otro devuelve `403`. Si
-dos personas visitan el mismo local, cada una tiene el suyo —no hay edición
-compartida y por tanto no hay quién le pise la conversación a quién—.
+La nota se va con el color, que si no el gris sería mentira.
+
+Las dos reglas viven en el Worker, no en el panel: los puntos llegan ya
+recortados. No hay nada que mirar en la respuesta.
+
+Un punto es de quien lo puso: editarlo o borrarlo siendo otro devuelve `403`, y
+**el mapa solo abre los propios, también para el superadmin**. No es cortesía: un
+punto ajeno le llega degradado a gris, y guardarlo así le borraría el amarillo a
+su dueño. Si dos personas visitan el mismo local, cada una tiene el suyo.
 
 ### Cómo se marca
 
 **Marcar dónde estoy** usa el GPS del teléfono: sales del local, tocas el botón y
 el punto queda donde estás, sin buscar la calle ni saber en qué dirección
 estabas. Tocar el mapa sirve para marcarlos después, desde la casa.
+
+### El verde nace solo
+
+Cobrar una orden es la definición de un punto verde, así que no se pide aparte:
+al aceptar, el punto se marca o se actualiza sin tocar nada.
+
+Las coordenadas salen del `@lat,lng` que el link largo de Maps lleva en la
+mitad —estaba ahí desde siempre y lo tirábamos—. Se guardan en la tarjeta al
+crear la orden, porque entre crear y cobrar pueden pasar días.
+
+Sin coordenadas —órdenes de antes de esto, o un Place ID pegado a mano— no se
+marca nada: inventarle un sitio al local sería peor que no tenerlo. Y si ya
+había un amarillo tuyo en ese local, pasa a verde **conservando la nota**.
+
+Si el mapa falla, el cobro no se cae: ya quedó guardado antes.
 
 Los mapas son de **Leaflet con teselas de OpenStreetMap**: sin llave de API y sin
 costo, a diferencia de Google Maps. La caja del mapa se crea al entrar a la

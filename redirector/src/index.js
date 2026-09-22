@@ -216,6 +216,11 @@ function registroDe(cuerpo, vendedor, pct, pago, jefe) {
       pct: pct,
       pago: pago,
       jefe: jefe,
+      // de dónde: salen del "@lat,lng" del link de Maps que se pegó al crear la
+      // orden. Se guardan aquí porque entre crear y cobrar pueden pasar días, y
+      // al cobrar es cuando nace el punto verde del mapa.
+      lat: gradoValido(cuerpo.lat, 90),
+      lng: gradoValido(cuerpo.lng, 180),
       actualizado: new Date().toISOString(),
     },
   };
@@ -536,20 +541,24 @@ async function api(request, env, accion, url, ctx) {
   //   1. Quién puso cada punto. Solo el superadmin lo ve; para los demás el mapa
   //      es anónimo, que es lo que lo vuelve útil sin volverlo un marcador.
   //   2. Los amarillos ajenos. Un amarillo es una conversación abierta y es de
-  //      quien la abrió: los demás lo ven gris —"por ahí ya pasaron"— y con eso
-  //      les basta para no volver.
+  //      quien la abrió: cualquier otro lo ve gris —"por ahí ya pasaron"— y con
+  //      eso le basta para no volver. Vale igual para el superadmin: si Alexander
+  //      está hablando con alguien, que Felipe tampoco se aparezca.
+  //
+  // La nota se va con el color, que si no el gris sería mentira.
   if (accion === "mapa" && request.method === "GET") {
     const { keys } = await env.TARJETAS.list({ prefix: "p:" });
     const puntos = keys.map((k) => {
       const m = Object.assign({ id: k.name.slice(2) }, k.metadata || {});
-      if (quien.dueno) return m;
       const mio = m.vendedor === quien.usuario;
-      return {
+      const visto = {
         id: m.id, lat: m.lat, lng: m.lng, nombre: m.nombre, fecha: m.fecha,
         estado: m.estado === "amarillo" && !mio ? "gris" : m.estado,
         nota: mio ? m.nota : "",
         mio: mio,
       };
+      if (quien.dueno) visto.vendedor = m.vendedor;
+      return visto;
     });
     puntos.sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
     return json({ puntos });
