@@ -1752,7 +1752,9 @@ $("formTarjeta").onsubmit = async (e) => {
           const t = TARJETAS.filter((x) => x.codigo === c)[0];
           if (!t || !t.negocio || t.negocio === $("negocio").value.trim()) return;
           if (!deDonde[t.negocio]) {
-            deDonde[t.negocio] = { negocio: t.negocio, lat: t.lat, lng: t.lng };
+            // el destino va con ello: de ahí sale el placeId si no hay coordenadas
+            deDonde[t.negocio] = { negocio: t.negocio, lat: t.lat, lng: t.lng,
+              destino: t.destino };
           }
         });
       });
@@ -3689,7 +3691,8 @@ let focoCancelar = null;
 function abrirCancelar(negocio) {
   const l = locales().filter((x) => x.negocio === negocio)[0];
   if (!l) return;
-  CANCELANDO = { negocio: negocio, lat: l.lat, lng: l.lng, yaSeFue: false, orden: l };
+  CANCELANDO = { negocio: negocio, lat: l.lat, lng: l.lng, destino: l.destino,
+    yaSeFue: false, orden: l };
   $("cancelarTitulo").textContent = "Cancelar la orden de " + negocio;
   const suelta = [];
   if (l.piezas) suelta.push(plural(l.piezas, "pieza", "piezas") + " que vuelven a estar libres");
@@ -3704,7 +3707,8 @@ function abrirCancelar(negocio) {
 // Te llevaste sus piezas a otra orden, así que esa ya no existe. Es el momento
 // exacto en que se sabe qué pasó con el local, y el único en que se va a apuntar.
 function preguntarPorVaciada(v) {
-  CANCELANDO = { negocio: v.negocio, lat: v.lat, lng: v.lng, yaSeFue: true };
+  CANCELANDO = { negocio: v.negocio, lat: v.lat, lng: v.lng, destino: v.destino,
+    yaSeFue: true };
   $("cancelarTitulo").textContent = v.negocio + " se quedó sin piezas";
   $("cancelarSubtitulo").textContent =
     "Le quitaste las que tenía, así que esa orden ya no existe. ¿Qué pasó con el local?";
@@ -3837,8 +3841,18 @@ function pedirElSitio(negocio, estado) {
 
 // Las coordenadas vienen de la tarjeta, que las guardó del link de Maps al crear
 // la orden. Sin ellas no se marca nada: inventarle un sitio sería peor.
+// Las coordenadas de un local salen de dos sitios y da igual cual: las que
+// guardo la orden, o las que da Google por el placeId. Preguntarle al vendedor
+// por el link era pedirle dos veces lo mismo, porque ese link ya lo pegó al
+// crear la orden —de ahí sale el placeId—.
+async function sitioDe(l) {
+  if (l && l.lat && l.lng) return { lat: l.lat, lng: l.lng };
+  return await sitioDelPlaceId(placeIdDeDestino(l && l.destino));
+}
+
 async function dejarEnElMapa(l, estado) {
-  if (!l.lat || !l.lng) return false;
+  const donde = await sitioDe(l);
+  if (!donde) return false;
   const suyo = PUNTOS.filter((x) => x.nombre === l.negocio && x.mio)[0];
   try {
     const r = await llamar("punto", {
@@ -3846,7 +3860,7 @@ async function dejarEnElMapa(l, estado) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id: suyo ? suyo.id : undefined,
-        lat: l.lat, lng: l.lng, nombre: l.negocio, estado: estado,
+        lat: donde.lat, lng: donde.lng, nombre: l.negocio, estado: estado,
         nota: suyo ? suyo.nota : "",
       }),
     });
@@ -4397,16 +4411,18 @@ $("modalNFC").addEventListener("click", (e) => {
 // aviso del cobro no decía nada: la venta quedaba bien y el punto no aparecía
 // nunca, sin una sola pista de por qué.
 async function marcarVerde(l) {
-  if (!l || !l.lat || !l.lng) return "sinSitio";
+  if (!l) return "sinSitio";
   const suyo = PUNTOS.filter((p) => p.nombre === l.negocio && p.mio)[0];
   if (suyo && suyo.estado === "verde") return "ya";
+  const donde = await sitioDe(l);
+  if (!donde) return "sinSitio";
   try {
     const r = await llamar("punto", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id: suyo ? suyo.id : undefined,
-        lat: l.lat, lng: l.lng, nombre: l.negocio, estado: "verde",
+        lat: donde.lat, lng: donde.lng, nombre: l.negocio, estado: "verde",
         nota: suyo ? suyo.nota : "",
       }),
     });
@@ -4515,10 +4531,13 @@ $("faltanEnMapa").addEventListener("click", async (e) => {
   const l = locales().filter((x) => x.negocio === b.dataset.colocar)[0];
   if (!l) return;
 
-  // si la orden ya sabe dónde queda —se creó pegando el link de Maps— no hay nada
-  // que preguntar: se pone y ya
-  if (l.lat && l.lng) {
-    await dejarEnElMapa(l, l.cobrado ? "verde" : "amarillo");
+  // Se intenta poner sin preguntar nada: las coordenadas están en la orden o las
+  // saca Google del placeId. Solo si las dos fallan se molesta a nadie.
+  b.disabled = true;
+  decirMapa("Buscando dónde queda " + l.negocio + "…");
+  const puesto = await dejarEnElMapa(l, l.cobrado ? "verde" : "amarillo");
+  b.disabled = false;
+  if (puesto) {
     POR_COLOCAR = null;
     pintarFaltan();
     decirMapa(l.negocio + " puesto en el mapa");

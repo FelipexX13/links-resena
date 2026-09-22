@@ -1378,10 +1378,20 @@ La misma ventana sale al darle a *Cancelar*, que además libera las piezas. Es l
 otra puerta por la que muere una orden, y las dos acaban en el mismo sitio: la
 orden se va, la visita se queda en el mapa.
 
-Si la orden no tiene coordenadas —las de antes de que las guardáramos— no hay
-dónde marcarla, y ese es justo el último momento en que existe el dato: en cuanto
-se cierre, del local no queda nada. Así que se abre la ventana del punto con el
-nombre y el color ya puestos, pidiendo el link de Maps o un toque en el mapa.
+Si la orden no tiene coordenadas, **primero se le pregunta a Google por el
+placeId** y normalmente con eso basta: ni se entera nadie. Pedirle el link al
+vendedor era pedirle dos veces lo mismo —ese link ya lo pegó al crear la orden,
+de ahí salió el placeId—.
+
+Solo si Google tampoco lo conoce se abre la ventana del punto, con el nombre y el
+color ya puestos, pidiendo el link o un toque en el mapa. Y ese es justo el
+último momento en que el dato existe: en cuanto se cierre, del local no queda
+nada.
+
+Las cuatro puertas por las que se marca un local —aceptar, cancelar, quedarse sin
+piezas, y tocarlo en *Sin marcar*— pasan todas por `sitioDe()`, que mira las
+coordenadas de la orden y si no, el placeId. Una sola puerta, un solo sitio donde
+equivocarse.
 
 **La pregunta se hace siempre, tenga coordenadas o no.** La cola de vaciadas
 filtraba por `lat && lng`, y eso se comía justo el caso común: las órdenes viejas
