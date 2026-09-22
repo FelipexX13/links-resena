@@ -1257,10 +1257,18 @@ function analizarMaps(crudo) {
   const url = String(crudo || "").trim();
   if (!url) return { error: "Pega la URL de Google Maps del negocio, o su Place ID." };
 
-  // El link largo de Maps lleva el punto del mapa en el "@lat,lng" de la mitad.
-  // Estaba ahí desde siempre y lo tirábamos.
+  // Dos juegos de coordenadas viven en un link de Maps y no son el mismo:
+  //
+  //   @lat,lng      → dónde estaba centrado el mapa cuando se copió el link
+  //   !3dlat!4dlng  → dónde está el local
+  //
+  // Usábamos el primero y por eso los puntos caían corridos media cuadra: el
+  // centro del mapa no es el negocio, sobre todo si Google desplazó la vista para
+  // hacerle sitio al panel de la ficha.
   let lat = null, lng = null;
-  const en = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  const suyo = url.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+  const centro = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  const en = suyo || centro;
   if (en) { lat = Number(en[1]); lng = Number(en[2]); }
 
   let negocio = "";
@@ -4487,10 +4495,14 @@ function abrirPunto(punto, lat, lng, orden) {
   $("puntoNombre").value = PUNTO_EDITADO.nombre;
   $("puntoNota").value = PUNTO_EDITADO.nota || "";
   const sinSitio = !PUNTO_EDITADO.lat || !PUNTO_EDITADO.lng;
-  $("bloquePuntoLink").hidden = !sinSitio;
+  // el campo se queda siempre: sirve para poner uno nuevo y para corregir uno que
+  // quedó torcido
+  $("bloquePuntoLink").hidden = false;
   $("puntoLink").value = "";
-  $("puntoLinkDice").textContent = "De ahí salen las coordenadas exactas. Si no lo " +
-    "tienes a mano, cierra esto y toca el mapa donde queda.";
+  $("puntoLinkDice").textContent = sinSitio
+    ? "De ahí salen las coordenadas exactas. Si no lo tienes a mano, cierra esto y " +
+      "toca el mapa donde queda."
+    : "Pégalo si quedó corrido y se recoloca solo.";
   pintarEstadoPunto(PUNTO_EDITADO.estado);
   $("borrarPunto").hidden = !punto;
   olvidarConfirmacion();
