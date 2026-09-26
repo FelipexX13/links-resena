@@ -1198,9 +1198,18 @@ vinilo**. El 50% no es la mitad de la ganancia, es la mitad de la venta.
 **El superadmin**, en Cuentas, una tabla por vendedor: piezas, facturado, lo que
 se lleva y lo que queda para la casa.
 
-**El vendedor**, en su pestaña **Lo mío**: lo que lleva ganado, de cuánto
-vendido, y el detalle por local y día. No ve gastos, ni utilidad, ni lo de nadie
-más.
+**El vendedor: solo Órdenes.** Ni Cuentas, ni Inventario, ni el mapa, ni sus
+propios ingresos. Lo que se le debe se lo dice quien le paga.
+
+No basta con esconder el botón —`pintarVista()` devuelve cualquier otra vista a
+Órdenes, y `liquidaciones` responde 403 a quien no sea el superadmin—. Esconder
+la pestaña y seguir sirviendo el dato no esconde nada.
+
+Sus ventas **sí siguen saliendo en el mapa de la casa**, aunque él no lo vea: el
+mapa existe para no mandar a dos personas al mismo sitio, y con los locales de un
+vendedor en blanco dejaría de servir para eso. Por eso el panel de un vendedor
+carga los puntos aunque no los pinte: sin ellos, aceptar una orden de un local que
+ya tenía punto crearía uno repetido en vez de actualizarlo.
 
 ## Cómo pagó, y quién le debe a quién
 
@@ -1234,8 +1243,8 @@ y lo que **debe**, en rojo hasta que quede en «al día». Debajo del nombre, en
 pagaron sus clientes: *«3 piezas · $68.800 en efectivo · $49.900 en
 transferencia»*.
 
-En **Lo mío**, el vendedor ve su parte y lo que le toca entregar. No ve la deuda
-de nadie más.
+El vendedor no ve nada de esto: su pestaña **Lo mío** se retiró y las
+liquidaciones son del superadmin también en el servidor.
 
 ### El método de pago no cambia quién debe
 

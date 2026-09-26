@@ -473,7 +473,10 @@ async function api(request, env, accion, url, ctx) {
 
   // Lo que solo mira el superadmin: la plata de la casa, el inventario y la
   // gente. Un vendedor entra a vender, no a ver las cuentas.
-  const SOLO_DUENO = new Set(["gastos", "gasto", "gasto-borrar", "usuarios", "usuario"]);
+  // Las liquidaciones entran aquí desde que un vendedor dejó de ver sus ingresos:
+// esconder la pestaña y seguir sirviendo el dato no esconde nada.
+const SOLO_DUENO = new Set(["gastos", "gasto", "gasto-borrar", "usuarios", "usuario",
+  "liquidaciones", "liquidacion", "liquidacion-borrar"]);
   if (SOLO_DUENO.has(accion) && !quien.dueno) {
     return json({ error: "Eso es del superadmin" }, 403);
   }

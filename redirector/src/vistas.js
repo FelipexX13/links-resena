@@ -1094,11 +1094,19 @@ function mostrar(dentro, quien) {
     llamar("modo").then((r) => pintarPruebas(r.prueba)).catch(() => {});
     cargarServicios();
     cargarAjustes();
-    // un vendedor no tiene gastos ni gente que administrar: pedirlos sería
-    // llenarle la consola de 403 para nada
-    cargarLiquidaciones().then(repintarTodo);
+    // Un vendedor no tiene gastos, ni gente que administrar, ni liquidaciones que
+    // mirar: pedirlos sería llenarle la consola de 403 para nada.
+    //
+    // Los puntos sí se cargan aunque no vea el mapa: sin ellos, aceptar una orden
+    // de un local que ya tenía punto crearía uno repetido en vez de actualizarlo.
     cargarPuntos();
-    if (SESION.dueno) { cargarGastos(); cargarUsuarios(); }
+    if (SESION.dueno) {
+      cargarGastos();
+      cargarUsuarios();
+      cargarLiquidaciones().then(repintarTodo);
+    } else {
+      repintarTodo();
+    }
   }
   else { cerrarQR(); cerrarTarjeta(); $("clave").focus(); }
 }
@@ -3558,11 +3566,11 @@ function pintarCuentas() {
 function pintarRol() {
   const dueno = SESION.dueno;
   document.querySelectorAll("[data-dueno]").forEach((e) => { e.hidden = !dueno; });
-  // "Lo mío" es de quien cobra comisión; el resto, de la casa
-  // el mapa es de todos: es lo único que se comparte de lado a lado
-  const deTodos = { locales: 1, mapa: 1 };
+  // Un vendedor solo tiene Órdenes. Ni el mapa ni sus ingresos: lo que se le debe
+  // se lo dice quien le paga, y el mapa es de la casa.
+  const SUYAS = { locales: 1 };
   document.querySelectorAll("#vistaPanel [data-valor]").forEach((b) => {
-    b.hidden = b.dataset.valor === "mio" ? dueno : !dueno && !deTodos[b.dataset.valor];
+    b.hidden = dueno ? b.dataset.valor === "mio" : !SUYAS[b.dataset.valor];
   });
   $("marcaQuien").textContent = dueno ? "" : SESION.nombre;
   if (!dueno) {
@@ -3611,6 +3619,8 @@ function pintarMio() {
 function pintarVista(valor) {
   const conocidas = { locales: 1, cuentas: 1, inventario: 1, mio: 1, mapa: 1 };
   VISTA = conocidas[valor] ? valor : "tarjetas";
+  // no basta con esconder el botón: la vista tampoco se abre por otro camino
+  if (!SESION.dueno && VISTA !== "locales") VISTA = "locales";
   marcarSegmento("vistaPanel", VISTA);
   $("vistaTarjetas").hidden = VISTA !== "tarjetas";
   $("vistaLocales").hidden = VISTA !== "locales";
