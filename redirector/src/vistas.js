@@ -2321,6 +2321,8 @@ function pintarModo(valor) {
   $("campoUna").hidden = MODO !== "una";
   $("campoRango").hidden = MODO !== "rango";
   $("campoPiezas").hidden = MODO !== "local";
+  // el sitio de Google es algo que lleva la orden, no una tarjeta suelta
+  $("bloqueFicha").hidden = MODO !== "local";
   // añadir por código es para cuando no se puede escanear; en la calle se escanea
   $("campoCuantas").hidden = MODO !== "local" || !SESION.dueno;
   $("guardar").textContent = MODO === "rango" ? "Aplicar al rango"
@@ -3647,6 +3649,7 @@ function pintarRol() {
   document.querySelectorAll("#vistaPanel [data-valor]").forEach((b) => {
     b.hidden = dueno ? b.dataset.valor === "mio" : !SUYAS[b.dataset.valor];
   });
+  $("negocio").placeholder = dueno ? "Mercacentro Av. Guabinal" : "Nombre del negocio";
   $("marcaQuien").textContent = dueno ? "" : SESION.nombre;
   if (!dueno) {
     VISTA = "locales";
@@ -6315,7 +6318,7 @@ export function vistaAdmin(origen) {
       </div>
 
       <div id="campoPiezas" hidden>
-        <label class="paso"><span class="n n1">1</span>Qué piezas lleva</label>
+        <label class="paso" data-dueno><span class="n n1">1</span>Qué piezas lleva</label>
         <div class="modal-acciones acciones-izq sin-aire">
           <button type="button" class="leer" id="escanear">Escanear una pieza</button>
           <button type="button" class="fantasma" id="vaciarPiezas" hidden>Vaciar la lista</button>
@@ -6330,16 +6333,6 @@ export function vistaAdmin(origen) {
 
         <div class="rango-resumen" id="localResumen">Escanea las piezas del montón, una tras otra.</div>
 
-        <label class="casilla" id="filaLlevaFicha">
-          <input type="checkbox" id="ordenLlevaFicha"> Crear sitio en Google Maps</label>
-        <div id="detalleFicha" hidden>
-          <p class="mini2 sin-aire">Su precio va con el de las piezas, al aceptar la orden.</p>
-          <label class="casilla"><input type="checkbox" id="ordenFichaHecha">
-            Ya está publicada</label>
-          <label class="mini sobre-buscador" for="ordenFichaNotas">Notas del sitio</label>
-          <input id="ordenFichaNotas" type="text" maxlength="200"
-                 placeholder="Faltan las fotos del local" autocomplete="off">
-        </div>
       </div>
 
       <div id="campoUna">
@@ -6370,9 +6363,10 @@ export function vistaAdmin(origen) {
         <div class="rango-resumen" id="rangoResumen">Escribe un rango válido: del menor al mayor.</div>
       </div>
 
-      <label class="paso" for="maps"><span class="n n2">2</span>A qué local apunta</label>
+      <label class="paso" for="maps" data-dueno><span class="n n2">2</span>A qué local apunta</label>
       <select id="localExistente" aria-label="Local ya registrado" hidden></select>
-      <input id="maps" placeholder="Pega aquí el link de Google Maps" autocomplete="off" required>
+      <input id="maps" placeholder="Pega aquí el link de Google Maps" autocomplete="off"
+             aria-label="Link de Google Maps del local" required>
 
       <div class="modal-acciones acciones-izq sin-aire">
         <button type="button" class="leer mini" id="analizar">Leer la URL</button>
@@ -6390,8 +6384,22 @@ export function vistaAdmin(origen) {
         <input id="fichaReview" type="hidden">
       </div>
 
-      <label class="paso" for="negocio"><span class="n n3">3</span>Nombre del negocio</label>
-      <input class="c3" id="negocio" placeholder="Mercacentro Av. Guabinal" autocomplete="off" required>
+      <label class="paso" for="negocio" data-dueno><span class="n n3">3</span>Nombre del negocio</label>
+      <input class="c3" id="negocio" placeholder="Mercacentro Av. Guabinal" autocomplete="off"
+             aria-label="Nombre del negocio" required>
+
+      <div id="bloqueFicha" hidden>
+        <label class="casilla" id="filaLlevaFicha">
+          <input type="checkbox" id="ordenLlevaFicha"> Crear sitio en Google Maps</label>
+        <div id="detalleFicha" hidden>
+          <p class="mini2 sin-aire">Su precio va con el de las piezas, al aceptar la orden.</p>
+          <label class="casilla"><input type="checkbox" id="ordenFichaHecha">
+            Ya está publicada</label>
+          <label class="mini sobre-buscador" for="ordenFichaNotas">Notas del sitio</label>
+          <input id="ordenFichaNotas" type="text" maxlength="200"
+                 placeholder="Faltan las fotos del local" autocomplete="off">
+        </div>
+      </div>
 
       <div id="campoCuantas" hidden>
         <label class="paso" for="codigoPieza"><span class="n n4">4</span>O añádela por código</label>

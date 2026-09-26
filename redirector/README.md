@@ -1283,6 +1283,19 @@ un vendedor no le parpadee antes de que el rol se conozca.
 | *O añádela por código* | sí | no: en la calle se escanea |
 | *Crear sitio en Google Maps* | casilla + «ya está publicada» + notas | **solo la casilla** |
 | Nombre del negocio | editable | **fijo si lo trajo el link** |
+| Los enunciados *1 · 2 · 3* | sí | **no: solo los campos** |
+
+Los enunciados se van con `data-dueno`, lo mismo que la gráfica. Los campos se
+quedan con su `aria-label`, que un rótulo que no se dibuja sigue haciendo falta
+para quien no lo ve. Y al vendedor el campo del nombre le dice *«Nombre del
+negocio»* en vez del ejemplo: sin el enunciado encima, un nombre de ejemplo en
+gris parece un valor ya puesto y no una pista. El superadmin conserva el
+enunciado, así que a él el ejemplo le sirve más.
+
+*Crear sitio en Google Maps* bajó a debajo del nombre del negocio, para los dos.
+Vivía dentro de `#campoPiezas`, que solo se enciende en modo orden, así que al
+sacarlo hubo que envolverlo en `#bloqueFicha` y apagarlo igual: si no, asomaría
+en *una tarjeta* y en *un rango*, donde no pinta nada.
 
 Activar una tarjeta suelta o tocar un rango entero es reponer plástico, y eso es
 de la casa. Si está publicada y qué le falta al sitio es seguimiento, no algo que
