@@ -959,6 +959,113 @@ const SOLO_DUENO = new Set(["gastos", "gasto", "gasto-borrar", "usuarios", "usua
     }
   }
 
+  // Abrir el panel costaba nueve o diez "list": uno por cada espacio de claves, y
+  // dos más por cada endpoint que, antes de enseñarle nada a un vendedor, tiene
+  // que averiguar cuáles son sus locales. El plan gratis da mil al día, o sea unas
+  // cien aperturas entre todos.
+  //
+  // Un list() **sin prefijo** trae las claves de todos los espacios de golpe, con
+  // su metadata, así que se pide una vez y se reparte aquí. De diez a uno. Esto
+  // solo cabe porque la metadata lleva el registro entero: si hubiera que leer
+  // cada clave, serían setecientas lecturas en vez de un list.
+  //
+  // list() devuelve hasta mil claves por página y sigue por el cursor; cada página
+  // cuenta como otro list. O sea que esto crece de uno en uno por cada mil claves,
+  // no de diez en diez.
+  if (accion === "todo" && request.method === "GET") {
+    const por = { "c:": [], "n:": [], "s:": [], "p:": [], "g:": [], "u:": [],
+      "l:": [], "r:": [], "b:": [] };
+    let cursor = "";
+    for (;;) {
+      const r = await env.TARJETAS.list(cursor ? { cursor: cursor } : {});
+      for (const k of r.keys) {
+        const grupo = por[k.name.slice(0, k.name.indexOf(":") + 1)];
+        if (grupo) grupo.push(k);
+      }
+      if (r.list_complete) break;
+      cursor = r.cursor;
+    }
+
+    // los locales de un vendedor, sin los dos list de negociosDe(): las claves
+    // que hacían falta ya están aquí
+    const suyos = new Set();
+    if (!quien.dueno) {
+      for (const k of por["c:"].concat(por["s:"])) {
+        const m = k.metadata || {};
+        if (m.negocio && m.vendedor === quien.usuario) suyos.add(m.negocio);
+      }
+    }
+
+    let tarjetas = por["c:"].map((k) =>
+      Object.assign({ codigo: k.name.slice(2) }, k.metadata || {}));
+    if (!quien.dueno) {
+      tarjetas = tarjetas.map((t) => (!t.negocio || t.vendedor === quien.usuario)
+        ? t
+        : { codigo: t.codigo, tipo: t.tipo, ajena: true });
+    }
+    tarjetas.sort((a, b) => a.codigo.localeCompare(b.codigo));
+
+    const nfc = por["n:"].map((k) => k.name.slice(2));
+
+    let servicios = por["s:"].map((k) =>
+      Object.assign({ id: k.name.slice(2) }, k.metadata || {}));
+    if (!quien.dueno) servicios = servicios.filter((x) => x.vendedor === quien.usuario);
+    servicios.sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+
+    const puntos = por["p:"].map((k) => {
+      const m = Object.assign({ id: k.name.slice(2) }, k.metadata || {});
+      const mio = m.vendedor === quien.usuario;
+      const visto = {
+        id: m.id, lat: m.lat, lng: m.lng, nombre: m.nombre, fecha: m.fecha,
+        estado: m.estado === "amarillo" && !mio ? "gris" : m.estado,
+        nota: mio ? m.nota : "",
+        mio: mio,
+      };
+      if (quien.dueno) visto.vendedor = m.vendedor;
+      return visto;
+    });
+    puntos.sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+
+    // lo del superadmin no se filtra para el vendedor: no se le manda
+    const gastos = quien.dueno
+      ? por["g:"].map((k) => Object.assign({ id: k.name.slice(2) }, k.metadata || {}))
+          .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""))
+      : [];
+    const usuarios = quien.dueno
+      ? por["u:"].map((k) => k.metadata || { usuario: k.name.slice(2) })
+          .sort((a, b) => String(a.usuario).localeCompare(String(b.usuario)))
+      : [];
+    const liquidaciones = quien.dueno
+      ? por["l:"].map((k) => Object.assign({ id: k.name.slice(2) }, k.metadata || {}))
+          .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""))
+      : [];
+
+    let comprobantes = por["r:"].map((k) =>
+      Object.assign({ negocio: k.name.slice(2) }, k.metadata || {}));
+    let compradores = por["b:"].map((k) =>
+      Object.assign({ negocio: k.name.slice(2) }, k.metadata || {}));
+    if (!quien.dueno) {
+      comprobantes = comprobantes.filter((x) => suyos.has(x.negocio));
+      compradores = compradores.filter((x) => suyos.has(x.negocio));
+    }
+
+    // dos claves sueltas que se traen en el mismo viaje: son get, no list
+    const mapaV = mapaDeVendedores(await env.TARJETAS.get(LLAVE_VENDEDOR, "json"));
+    let vendedores = mapaV;
+    if (!quien.dueno) {
+      vendedores = {};
+      vendedores[quien.jefe] = mapaV[quien.jefe] || null;
+      vendedores[quien.usuario] = { nombre: quien.nombre, cedula: quien.cedula,
+        telefono: quien.telefono, nota: quien.nota };
+    }
+    const prueba = (await env.TARJETAS.get(LLAVE_MODO)) === "1";
+
+    return json({ tarjetas: tarjetas, nfc: nfc, servicios: servicios, puntos: puntos,
+      gastos: gastos, usuarios: usuarios, liquidaciones: liquidaciones,
+      comprobantes: comprobantes, compradores: compradores, vendedores: vendedores,
+      prueba: prueba });
+  }
+
   if (accion === "ajustes" && request.method === "GET") {
     const guardado = await env.TARJETAS.get(LLAVE_VENDEDOR, "json");
     if (!quien.dueno) {

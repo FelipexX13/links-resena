@@ -1088,25 +1088,10 @@ function mostrar(dentro, quien) {
     // los botones de la barra los reparte pintarVista, y hasta ahora solo corría
     // al cambiar de pestaña: al entrar salían todos, en todas
     pintarVista(VISTA);
-    CARGANDO = true;
-    pintarTabla();
-    listar();
-    llamar("modo").then((r) => pintarPruebas(r.prueba)).catch(() => {});
-    cargarServicios();
-    cargarAjustes();
-    // Un vendedor no tiene gastos, ni gente que administrar, ni liquidaciones que
-    // mirar: pedirlos sería llenarle la consola de 403 para nada.
-    //
-    // Los puntos sí se cargan aunque no vea el mapa: sin ellos, aceptar una orden
-    // de un local que ya tenía punto crearía uno repetido en vez de actualizarlo.
-    cargarPuntos();
-    if (SESION.dueno) {
-      cargarGastos();
-      cargarUsuarios();
-      cargarLiquidaciones().then(repintarTodo);
-    } else {
-      repintarTodo();
-    }
+    // Un vendedor no recibe gastos, ni usuarios, ni liquidaciones: el Worker se
+    // los manda vacíos. Los puntos sí, aunque no vea el mapa: sin ellos, aceptar
+    // una orden de un local que ya tenía punto crearía uno repetido.
+    arrancarCarga();
   }
   else { cerrarQR(); cerrarTarjeta(); $("clave").focus(); }
 }
@@ -2450,6 +2435,57 @@ function sinTildes(s) {
   return String(s == null ? "" : s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
 
+// Todo lo que el panel pinta al entrar, en una sola llamada. Antes eran ocho, y
+// cada una se llevaba uno o tres "list" del bote de mil al dia que da el plan
+// gratis: unas cien aperturas entre los tres. Ahora es una.
+async function cargarTodo() {
+  const t = await llamar("todo");
+  TARJETAS = t.tarjetas || [];
+  NFC = {};
+  (t.nfc || []).forEach((c) => { NFC[c] = 1; });
+  SERVICIOS = t.servicios || [];
+  PUNTOS = t.puntos || [];
+  GASTOS = t.gastos || [];
+  USUARIOS = t.usuarios || [];
+  LIQUIDACIONES = t.liquidaciones || [];
+  COMPROBANTES = {};
+  (t.comprobantes || []).forEach((x) => { COMPROBANTES[x.negocio] = x; });
+  COMPRADORES = {};
+  (t.compradores || []).forEach((x) => { COMPRADORES[x.negocio] = x; });
+  VENDEDORES = t.vendedores || { felipe: null, nicolas: null };
+  CARGANDO = false;
+  pintarPruebas(t.prueba);
+  pintarListaUsuarios();
+  repintarTodo();
+  pintarPuntos();
+  pintarFaltan();
+  decirMapa(PUNTOS.length
+    ? plural(PUNTOS.length, "punto", "puntos") + " en el mapa"
+    : "Todavia no hay ninguno. Toca el mapa, o el boton de arriba.");
+}
+
+// Si "todo" falla, el panel no se queda en blanco: tira del camino de antes, que
+// gasta mas list pero funciona. La red de abajo se puede quitar el dia que esto
+// lleve meses sin usarse.
+function arrancarCarga() {
+  CARGANDO = true;
+  pintarTabla();
+  cargarTodo().catch((e) => {
+    avisar("avisoPanel", "Carga en una sola llamada no disponible (" + e.message +
+      "). Tirando del camino largo.", false);
+    listar();
+    cargarServicios();
+    cargarAjustes();
+    cargarPuntos();
+    llamar("modo").then((r) => pintarPruebas(r.prueba)).catch(() => {});
+    if (SESION.dueno) {
+      cargarGastos();
+      cargarUsuarios();
+      cargarLiquidaciones().then(repintarTodo);
+    }
+  });
+}
+
 async function listar() {
   try {
     const datos = await llamar("lista");
@@ -2607,9 +2643,7 @@ function paginacion(actual, total, que) {
 
 $("buscar").addEventListener("input", () => { PAGINA = 1; pintarTabla(); });
 $("limpiarBusca").onclick = () => { $("buscar").value = ""; PAGINA = 1; pintarTabla(); $("buscar").focus(); };
-$("recargar").onclick = () => {
-  CARGANDO = true; pintarTabla(); listar(); cargarGastos(); cargarServicios();
-};
+$("recargar").onclick = arrancarCarga;
 
 /* ---------- borrado en dos toques ---------- */
 

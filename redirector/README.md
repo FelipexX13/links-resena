@@ -948,10 +948,49 @@ agotarlas deja las tarjetas sin servicio hasta el día siguiente:
 | Peticiones a Workers | 100.000 | 1 |
 | Lecturas de KV | 100.000 | 1, **0 si la tarjeta está en caché** |
 | Escrituras de KV | 1.000 | solo al activar o borrar tarjetas |
+| **`list` de KV** | **1.000** | **0 — una visita no lista nada** |
 
 Por eso las tarjetas se leen a través de la caché del borde: un aluvión sobre el
 mismo código se resuelve sin tocar KV. Las peticiones al Worker no se pueden
 evitar — esas se cuentan igual.
+
+Un cliente escaneando un QR cuesta **1 petición y 1 lectura**, y nada más: son
+100.000 escaneos al día. Con las tarjetas que hay colocadas eso da unos 180
+escaneos por tarjeta, que no los alcanza ni de lejos un vinilo de mesa.
+
+### El bote pequeño es `list`, y lo gastaba el panel
+
+Mil al día contra cien mil de lecturas. Y el panel abría así:
+
+| | Superadmin | Vendedor |
+|---|---|---|
+| `lista` (tarjetas + NFC) | 2 | 2 |
+| `servicios` · `mapa` | 2 | 2 |
+| `comprobantes` · `compradores` | 2 | **6** |
+| `gastos` · `usuarios` · `liquidaciones` | 3 | — |
+| **Total** | **9** | **10** |
+
+El vendedor pagaba el triple en dos de ellos porque `negociosDe()` recorre `c:` y
+`s:` para saber cuáles son *sus* locales antes de enseñarle nada. Con tres
+personas eso daban **unas cien aperturas de panel al día**, y *Refrescar* se
+llevaba otras cuatro cada vez.
+
+**Un `list()` sin prefijo trae las claves de todos los espacios de una sola vez**,
+con su metadata. Así que ahora hay un endpoint `todo` que lo pide una vez y
+reparte en el Worker: de nueve o diez a **uno**, y los locales del vendedor salen
+gratis porque las claves ya están en memoria.
+
+Esto solo cabe porque **la metadata lleva el registro entero**. Si hubiera que
+leer cada clave serían 751 lecturas en vez de un `list`, y la decisión de meter el
+dato en la metadata —que se tomó para los gastos— es la que lo hace posible.
+
+`list()` devuelve hasta mil claves por página y sigue por el cursor; cada página
+cuenta como otro `list`. O sea que el coste crece de uno en uno por cada mil
+claves, no de diez en diez. La respuesta entera pesa **91 KB** con las 751 claves
+de hoy, así que armarla no se acerca a los 10 ms de CPU.
+
+Si `todo` fallara, el panel avisa y tira del camino de antes —más `list`, pero
+funciona—. Esa red se puede quitar cuando lleve meses sin saltar.
 
 Lo que **no** se puede montar aquí son las reglas de rate limiting y el WAF de
 Cloudflare: necesitan una zona, y `workers.dev` no lo es. Si algún día el
