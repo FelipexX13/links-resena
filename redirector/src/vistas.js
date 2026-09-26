@@ -1339,12 +1339,10 @@ function analizarMaps(crudo) {
     lat: lat, lng: lng, deDonde: deDonde, negocio: negocio };
 }
 
-// Un local que ya está en el sistema tiene su link guardado. Volver a pegar la
-// URL de Maps para añadirle mesas es trabajo repetido, y una oportunidad de
-// equivocarse de negocio.
-function llenarLocales(filtro) {
-  const busca = sinTildes(String(filtro || ""));
-  const lista = locales().filter((l) => !busca || sinTildes(l.negocio).includes(busca));
+// Llena los dos <select> de locales: el oculto con el que se edita una orden que
+// ya existe, y el de "de una orden" del modo rango.
+function llenarLocales() {
+  const lista = locales();
   let html = "<option value=''>Local nuevo — pego su URL abajo</option>";
   lista.forEach((l) => {
     html += "<option value='" + escHtml(l.negocio) + "'>" + escHtml(l.negocio) +
@@ -1367,38 +1365,10 @@ function llenarLocales(filtro) {
   $("ordenRango").value = antes;
 }
 
-$("buscarLocal").addEventListener("input", () => {
-  llenarLocales($("buscarLocal").value);
-  pintarSugerencias($("buscarLocal").value);
-});
-
-function pintarSugerencias(filtro) {
-  const busca = sinTildes(String(filtro || "").trim());
-  const caja = $("sugerenciasLocal");
-  if (!busca) { caja.hidden = true; caja.innerHTML = ""; return; }
-
-  const halla = locales().filter((l) => sinTildes(l.negocio).includes(busca)).slice(0, 6);
-  caja.hidden = false;
-  if (!halla.length) {
-    caja.innerHTML = "<div class='nada'>Ningún local con ese nombre. Pega su URL abajo.</div>";
-    return;
-  }
-  caja.innerHTML = halla.map((l) => "<button type='button' data-local-elegido='" +
-    escHtml(l.negocio) + "'>" + escHtml(l.negocio) +
-    "<span class='detalle'>" + plural(l.acrilico + l.sticker, "pieza", "piezas") +
-    (l.cobrado ? " · cobrado" : " · pendiente") + "</span></button>").join("");
-}
-
-$("sugerenciasLocal").addEventListener("click", (e) => {
-  const b = e.target.closest("[data-local-elegido]");
-  if (!b) return;
-  $("localExistente").value = b.dataset.localElegido;
-  $("localExistente").dispatchEvent(new Event("change"));
-  $("buscarLocal").value = "";
-  $("sugerenciasLocal").hidden = true;
-  $("sugerenciasLocal").innerHTML = "";
-});
-
+// El buscador de locales se quitó: el link de Maps ya identifica el local, y
+// escribir su nombre a mano era la forma de apuntarle a otro sin darse cuenta.
+// El <select> se queda, oculto: es por donde "abrirOrden" carga una orden que ya
+// existe cuando se va a editar.
 $("localExistente").addEventListener("change", () => {
   const elegido = $("localExistente").value;
   if (!elegido) return;
@@ -1473,6 +1443,10 @@ $("analizar").onclick = async () => {
     $("negocio").value = r.negocio;
     NOMBRE_AUTO = r.negocio;
   }
+  // Si el link trajo el nombre, el vendedor no lo reescribe: ese nombre es la
+  // llave con la que la orden se empareja con su punto del mapa y con su
+  // comprobante, y cambiarlo a mano los separa sin que se note.
+  $("negocio").readOnly = !SESION.dueno && Boolean($("negocio").value.trim());
 
   // El link de compartir no trae el sitio, pero el placeId lo consigue. Va al
   // final para que la ficha ya este puesta: esto tarda su medio segundo.
@@ -2254,19 +2228,51 @@ $("escanear").onclick = () => {
 $("cerrarCamara").onclick = cerrarCamara;
 
 function pintarEnlaceMaps() {
-  const nombre = $("negocio").value.trim() || $("buscarLocal").value.trim();
+  const nombre = $("negocio").value.trim();
   $("enlaceMaps").href = nombre
     ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(nombre)
     : "https://www.google.com/maps";
 }
 
 // Pegar es inequívoco: nadie pega media URL. Un botón menos en la calle.
-$("maps").addEventListener("paste", () => {
-  setTimeout(() => { if ($("maps").value.trim()) $("analizar").click(); }, 0);
+//
+// Y también al salir del campo: hay teclados de móvil y menús de compartir que
+// meten el texto sin lanzar un "paste", y entonces parecía que el campo no hacía
+// nada. "Leer la URL" se queda para cuando ninguno de los dos salte.
+function leerElLink() {
+  const hay = $("maps").value.trim();
+  if (hay && hay !== URL_LEIDA) $("analizar").click();
+}
+$("maps").addEventListener("paste", () => { setTimeout(leerElLink, 0); });
+$("maps").addEventListener("change", leerElLink);
+
+// Y tocar el campo pega solo lo que haya copiado. En la calle el link siempre
+// viene del portapapeles —se acaba de copiar de Maps—, así que el gesto normal
+// es: copiar allá, tocar aquí. Se ahorra el mantener pulsado y elegir "Pegar".
+//
+// Solo si el campo está vacío y solo si lo copiado parece un link de Maps o un
+// Place ID: el portapapeles puede traer cualquier cosa y pisarle lo escrito a
+// alguien sería peor que no hacer nada.
+//
+// El navegador manda: puede negar el permiso o enseñar su propio botón de pegar
+// —en iOS siempre—. Si no deja, no pasa nada y se pega a mano.
+const HUELE_A_MAPS = /^https?:\/\/[^\s]*(goo\.gl|google\.[a-z.]+\/maps|maps\.app)/i;
+const HUELE_A_PLACEID = /^Ch[A-Za-z0-9_-]{15,}$/;
+
+$("maps").addEventListener("click", async () => {
+  if ($("maps").value.trim()) return;
+  if (!navigator.clipboard || !navigator.clipboard.readText) return;
+  try {
+    const copiado = (await navigator.clipboard.readText()).trim();
+    if (!HUELE_A_MAPS.test(copiado) && !HUELE_A_PLACEID.test(copiado)) return;
+    $("maps").value = copiado;
+    leerElLink();
+  } catch (e) {
+    // sin permiso al portapapeles: se pega a mano, como siempre
+  }
 });
 
 $("negocio").addEventListener("input", pintarEnlaceMaps);
-$("buscarLocal").addEventListener("input", pintarEnlaceMaps);
 
 // Las libres, para que el campo del código sugiera mientras se escribe.
 function pintarPiezasLibres() {
@@ -2278,12 +2284,17 @@ function pintarPiezasLibres() {
 }
 
 function pintarModo(valor) {
-  MODO = valor === "rango" || valor === "local" ? valor : "una";
+  // Un vendedor solo hace órdenes: ni activar una tarjeta suelta ni tocar un
+  // rango entero, que es reponer plástico y eso es de la casa.
+  MODO = !SESION.dueno ? "local"
+    : (valor === "rango" || valor === "local" ? valor : "una");
   marcarSegmento("modoTarjeta", MODO);
+  $("modoTarjeta").hidden = !SESION.dueno;
   $("campoUna").hidden = MODO !== "una";
   $("campoRango").hidden = MODO !== "rango";
   $("campoPiezas").hidden = MODO !== "local";
-  $("campoCuantas").hidden = MODO !== "local";
+  // añadir por código es para cuando no se puede escanear; en la calle se escanea
+  $("campoCuantas").hidden = MODO !== "local" || !SESION.dueno;
   $("guardar").textContent = MODO === "rango" ? "Aplicar al rango"
     : MODO === "local" ? "Crear la orden"
     : (EDITANDO_CODIGO ? "Guardar cambios" : "Activar tarjeta");
@@ -2294,8 +2305,10 @@ function pintarModo(valor) {
   pintarEnlaceMaps();
 }
 
+// El vendedor marca la casilla y ya: si está publicada y qué le falta es
+// seguimiento de la casa, no algo que se decida en la puerta del local.
 $("ordenLlevaFicha").addEventListener("change", () => {
-  $("detalleFicha").hidden = !$("ordenLlevaFicha").checked;
+  $("detalleFicha").hidden = !$("ordenLlevaFicha").checked || !SESION.dueno;
 });
 
 $("origenRango").addEventListener("click", (e) => {
@@ -2331,8 +2344,8 @@ function salirDeEdicion() {
   URL_LEIDA = "";
   $("numeroTarjeta").textContent = "";
   $("desde").value = $("hasta").value = "";
-  $("buscarLocal").value = "";
   $("codigoPieza").value = "";
+  $("negocio").readOnly = false;
   decirCodigo("");
   if ($("localExistente").options.length) $("localExistente").value = "";
   if ($("ordenRango").options.length) $("ordenRango").value = "";
@@ -2405,7 +2418,7 @@ function ponerFichaEnOrden(ficha) {
   $("ordenLlevaFicha").checked = Boolean(ficha);
   $("ordenFichaHecha").checked = Boolean(ficha && ficha.hecha);
   $("ordenFichaNotas").value = ficha ? ficha.notas || "" : "";
-  $("detalleFicha").hidden = !ficha;
+  $("detalleFicha").hidden = !ficha || !SESION.dueno;
 }
 
 $("abrirLocal").onclick = () => {
@@ -6329,11 +6342,7 @@ export function vistaAdmin(origen) {
         <div class="rango-resumen" id="rangoResumen">Escribe un rango válido: del menor al mayor.</div>
       </div>
 
-      <label class="paso" for="buscarLocal"><span class="n n2">2</span>A qué local apunta</label>
-      <input id="buscarLocal" type="search" placeholder="Busca un local ya registrado"
-             autocomplete="off" aria-label="Buscar entre los locales registrados">
-      <div class="sugerencias" id="sugerenciasLocal" hidden role="listbox"
-           aria-label="Locales que coinciden"></div>
+      <label class="paso" for="maps"><span class="n n2">2</span>A qué local apunta</label>
       <select id="localExistente" aria-label="Local ya registrado" hidden></select>
       <input id="maps" placeholder="Pega aquí el link de Google Maps" autocomplete="off" required>
 

@@ -1245,6 +1245,47 @@ La gráfica se esconde con `data-dueno` en el div, que `pintarRol()` ya recorrí
 no hizo falta una línea de JavaScript nueva. Nace con `hidden` puesto para que a
 un vendedor no le parpadee antes de que el rol se conozca.
 
+### El formulario de una orden, visto por un vendedor
+
+| | Superadmin | Vendedor |
+|---|---|---|
+| *Una tarjeta · Una orden · Un rango* | los tres | **solo órdenes**, y el selector ni sale |
+| *O añádela por código* | sí | no: en la calle se escanea |
+| *Crear sitio en Google Maps* | casilla + «ya está publicada» + notas | **solo la casilla** |
+| Nombre del negocio | editable | **fijo si lo trajo el link** |
+
+Activar una tarjeta suelta o tocar un rango entero es reponer plástico, y eso es
+de la casa. Si está publicada y qué le falta al sitio es seguimiento, no algo que
+se decida en la puerta del local.
+
+El nombre se bloquea porque **es la llave**: con él se empareja la orden con su
+punto del mapa y con su comprobante. Cambiarlo a mano los separa sin que se note
+—ya hay locales en la base con el nombre a medio descodificar por haberse tocado
+por caminos distintos—. El superadmin sí puede editarlo, justamente para arreglar
+esos.
+
+### El campo del link
+
+Se quitó el buscador *«busca un local ya registrado»*, para los dos roles: el link
+de Maps ya identifica el local, y escribir el nombre a mano era la manera de
+apuntarle a otro sin darse cuenta. El `<select>` oculto se queda, que es por donde
+`abrirOrden()` carga una orden que ya existe.
+
+Queda un solo camino, y se dispara solo por tres vías:
+
+1. **Tocar el campo pega lo copiado.** En la calle el link viene siempre del
+   portapapeles, recién copiado de Maps. Solo si el campo está vacío y solo si lo
+   copiado parece un link de Maps o un Place ID: el portapapeles puede traer
+   cualquier cosa. El navegador manda —puede negar el permiso o enseñar su propio
+   botón de pegar, en iOS siempre—, y si no deja, no pasa nada.
+2. **Pegar a mano** lo lee igual, como siempre.
+3. **Salir del campo** también: hay teclados de móvil y menús de compartir que
+   meten el texto sin lanzar un `paste`, y entonces parecía que el campo no hacía
+   nada.
+
+*Leer la URL* se queda para cuando ninguna de las tres salte. Las tres pasan por
+`leerElLink()`, que no vuelve a leer lo que ya se leyó.
+
 No basta con esconder el botón —`pintarVista()` devuelve cualquier otra vista a
 Órdenes, y `liquidaciones` responde 403 a quien no sea el superadmin—. Esconder
 la pestaña y seguir sirviendo el dato no esconde nada.
