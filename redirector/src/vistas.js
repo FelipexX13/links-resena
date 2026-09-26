@@ -1963,6 +1963,10 @@ function editar(codigo) {
 // de una: apunta al cartel y deja puesto el número de esa pieza.
 let flujoCamara = null;
 let leyendoQR = false;
+// Cada apertura pide turno. Si se reabre la cámara mientras la anterior estaba a
+// mitad de un fotograma, la vieja se da cuenta de que ya no es la suya y se va:
+// dos bucles leyendo el mismo vídeo se pisarían el "ya leí este".
+let TURNO_CAMARA = 0;
 // Cuando el montón está revuelto no hay rangos que valgan: se escanea pieza por
 // pieza y la orden es exactamente esa lista.
 let PIEZAS_SUELTAS = [];
@@ -2158,6 +2162,7 @@ async function lectorDeQR() {
 
 async function abrirCamara(conf) {
   cerrarCamara();
+  const miTurno = ++TURNO_CAMARA;
   CAMARA = conf || { caja: "camara", video: "video", alLeer: null };
   const decir = CAMARA.decir || decirEscaneo;
   if (!puedeLeerQR()) {
@@ -2177,6 +2182,11 @@ async function abrirCamara(conf) {
     return;
   }
 
+  // si otra app se lleva la cámara sin que esta página llegue a esconderse
+  flujoCamara.getVideoTracks().forEach((pista) => {
+    pista.addEventListener("ended", reabrirCamara);
+  });
+
   let leerFotograma;
   try {
     leerFotograma = await lectorDeQR();
@@ -2194,7 +2204,7 @@ async function abrirCamara(conf) {
 
   leyendoQR = true;
   let anterior = "";
-  while (leyendoQR) {
+  while (leyendoQR && miTurno === TURNO_CAMARA) {
     let crudo = "";
     try {
       crudo = await leerFotograma(v);
@@ -2210,6 +2220,24 @@ async function abrirCamara(conf) {
     await new Promise((r) => setTimeout(r, 200));
   }
 }
+
+// Al bloquear el teléfono —o al cambiar de app— el sistema le quita la cámara a
+// la página. Al volver, las pistas del flujo vienen muertas y el <video> se queda
+// con el último fotograma congelado: **la cámara se ve, pero se está leyendo una
+// foto fija una y otra vez**. Se apunta y se apunta y no lee nunca, y no hay
+// nada en pantalla que lo delate.
+//
+// El bucle no puede darse cuenta solo: para él, un fotograma sin QR y un
+// fotograma congelado sin QR son lo mismo. Así que se reabre al volver, que es
+// justo lo que hacía recargar la página a mano —pero sin perder lo que lleve
+// escrito el formulario—.
+function reabrirCamara() {
+  if (document.hidden) return;
+  if (!CAMARA || !$(CAMARA.caja) || $(CAMARA.caja).hidden) return;
+  abrirCamara(CAMARA);
+}
+
+document.addEventListener("visibilitychange", reabrirCamara);
 
 function puedeLeerQR() {
   return Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);

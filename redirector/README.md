@@ -568,6 +568,36 @@ Tres detalles que hacen que funcione en el iPhone:
 - **`inversionAttempts: "dontInvert"`.** Los nuestros son negros sobre claro;
   buscar también el negativo sería el doble de trabajo para nada.
 
+### Bloquear el teléfono mataba el escaneo
+
+Se bloqueaba el móvil un momento, se volvía, y la cámara seguía ahí: se veía la
+imagen, pero **no leía nunca**. Apuntabas y apuntabas. Recargar la página lo
+arreglaba de una, y con ello se perdía lo que llevara escrito el formulario.
+
+Lo que pasa: al bloquear —o al cambiar de app— el sistema le quita la cámara a la
+página. Las pistas del flujo se mueren y el `<video>` se queda **con el último
+fotograma congelado**. El bucle de lectura sigue vivo y sigue trabajando, solo que
+lee la misma foto fija cinco veces por segundo.
+
+Y no podía darse cuenta solo: para él, un fotograma sin QR y un fotograma
+congelado sin QR son exactamente lo mismo. **Un fallo que desde dentro no se
+distingue del funcionamiento normal necesita que alguien de fuera lo avise**, y
+aquí ese alguien es el navegador:
+
+- `visibilitychange` al volver a primer plano → se reabre la cámara.
+- El evento `ended` de la pista → por si otra app se la lleva sin que esta
+  página llegue a esconderse.
+
+Es lo mismo que hacía el refresco a mano, pero sin tirar el formulario.
+
+Reabrir trae su propio riesgo: **dos bucles leyendo el mismo vídeo**, que se
+pisarían el «este ya lo leí». Así que cada apertura pide turno (`TURNO_CAMARA`) y
+el bucle se retira en cuanto deja de ser el suyo. Medido: cinco lecturas por
+segundo antes y después de tres bloqueos seguidos, o sea un solo bucle.
+
+Mientras la página está oculta no se reabre nada —pedir la cámara en segundo plano
+no tiene sentido—, y si la cámara estaba cerrada no resucita sola.
+
 **La cámara se abre sola solo donde se trabaja de pie.** Antes el gatillo era
 «¿hay `BarcodeDetector`?», que de paso dejaba fuera el escritorio. Ahora que
 cualquier navegador lee QR, el gatillo es `(pointer:coarse)`: en el computador no
