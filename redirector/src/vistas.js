@@ -6205,7 +6205,7 @@ export function vistaAdmin(origen) {
       </div>
 
       <div id="vistaLocales" hidden>
-      <div class="grafica" aria-label="Ventas por día">
+      <div class="grafica" aria-label="Ventas por día" data-dueno hidden>
         <div class="grafica-alto">
           <div>
             <p class="cejilla">Ventas por día</p>

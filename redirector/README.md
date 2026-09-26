@@ -1238,7 +1238,12 @@ vinilo**. El 50% no es la mitad de la ganancia, es la mitad de la venta.
 se lleva y lo que queda para la casa.
 
 **El vendedor: solo Órdenes.** Ni Cuentas, ni Inventario, ni el mapa, ni sus
-propios ingresos. Lo que se le debe se lo dice quien le paga.
+propios ingresos, ni la gráfica de unidades e ingresos que va encima de la tabla.
+Lo que se le debe se lo dice quien le paga.
+
+La gráfica se esconde con `data-dueno` en el div, que `pintarRol()` ya recorría:
+no hizo falta una línea de JavaScript nueva. Nace con `hidden` puesto para que a
+un vendedor no le parpadee antes de que el rol se conozca.
 
 No basta con esconder el botón —`pintarVista()` devuelve cualquier otra vista a
 Órdenes, y `liquidaciones` responde 403 a quien no sea el superadmin—. Esconder
