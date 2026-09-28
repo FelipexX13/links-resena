@@ -1362,6 +1362,32 @@ doce casillas paran exactamente bajo la aguja cuando les toca, la rueda siempre
 gira hacia adelante con cinco vueltas mínimo, y sobre 12.000 giros el reparto sale
 en 41,2 / 42,3 / 8,3 / 8,2 % contra el 41,7 / 41,7 / 8,3 / 8,3 esperado.
 
+### Por qué se rehizo la primera versión
+
+Salía «genérica», y no por falta de efectos: **se había salido del sistema que ya
+tenía el panel.**
+
+| Lo que hacía | Lo que hace |
+|---|---|
+| Paleta del **logo** en crudo (`#EA4335`…) | paleta de **producto** (`--rojo`, `--ambar`, `--verde`, `--azul`) |
+| Doce cuñas planas, sin objeto alrededor | aro oscuro con clavos en cada junta y sombra interior en el canto |
+| Todos los resultados con el mismo peso | el «Nada» baja a 0.66 de opacidad; el de dos stickers va más grande |
+| Centro: botón blanco con texto normal | disco `--tinta`, versal espaciada, se hunde al pulsar |
+| Aguja: un triángulo de bordes CSS | un perno dibujado, blanco, con la punta dentro de las cuñas |
+| Resultado: otra tarjeta tintada | tipografía —la cifra a 54px con tracking cerrado— |
+| Leyenda de fichas en fila | lista de probabilidades con cifras tabulares |
+
+La franja de cuatro colores de la cabecera es **el** momento de marca de la página.
+Si la rueda grita con los mismos tonos saturados, las dos pierden; con la paleta de
+producto la jerarquía vuelve a su sitio.
+
+Los rojos y los ámbares alternan dos valores muy próximos del mismo tono. No es
+un color nuevo: es lo que evita que doce cuñas parezcan un gráfico de tarta.
+
+**La aguja es blanca a propósito.** La primera iba en `--tinta`, igual que el aro,
+y desaparecía encima de él. Oscuro sobre oscuro no se ve por muy bien dibujado que
+esté.
+
 **El rótulo se lee derecho cuando su casilla está bajo la aguja.** Los de abajo
 quedan del revés, y es a propósito: el único que alguien mira es el que gana, y
 ese siempre está arriba. Van en dos lineas —«+1» / «sticker»— porque en treinta

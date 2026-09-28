@@ -348,50 +348,88 @@ const ESTILOS = `
   #puntoLink{background:var(--azul-piel);border-color:var(--azul);font-weight:500}
   #puntoLink::placeholder{color:var(--tinta-2);font-weight:400}
   /* ---------- ruleta ---------- */
-  .ruleta-caja{display:flex;flex-direction:column;align-items:center;gap:22px;
-    padding:26px 18px 30px}
-  .ruleta-tablero{position:relative;width:min(100%,380px);aspect-ratio:1}
-  .ruleta-disco{width:100%;height:100%;border-radius:50%;
-    box-shadow:var(--sombra-2),0 0 0 8px var(--papel),0 0 0 10px var(--linea);
+  /* Se juega con la paleta de PRODUCTO, no con la del logo. La franja de cuatro
+     colores de arriba es el momento de marca de la pagina; si la rueda tambien
+     grita con los mismos tonos saturados, se pelean y las dos pierden. */
+  .ruleta-caja{display:flex;flex-direction:column;align-items:center;
+    gap:clamp(20px,5vw,30px);padding:clamp(18px,5vw,34px) 16px clamp(26px,6vw,38px)}
+
+  .ruleta-tablero{position:relative;width:min(92vw,400px);aspect-ratio:1;
+    display:grid;place-items:center}
+  /* el aro exterior es el objeto: sin el, doce cunas de color son un grafico de
+     tarta. Con el, la rueda se apoya en algo */
+  .ruleta-disco{grid-area:1/1;width:100%;height:100%;border-radius:50%;
+    box-shadow:0 2px 4px rgba(22,32,46,.10),0 26px 50px -22px rgba(22,32,46,.42);
     transition:transform 4.6s cubic-bezier(.12,.72,.12,1)}
-  .ruleta-disco svg{display:block;width:100%;height:100%;border-radius:50%}
-  /* la aguja va encima del disco y marca las doce */
-  .ruleta-aguja{position:absolute;top:-13px;left:50%;translate:-50% 0;z-index:2;
-    width:0;height:0;border-left:13px solid transparent;border-right:13px solid transparent;
-    border-top:24px solid var(--tinta);filter:drop-shadow(0 2px 3px rgba(22,32,46,.35))}
-  .ruleta-boton{position:absolute;top:50%;left:50%;translate:-50% -50%;z-index:2;
-    width:24%;aspect-ratio:1;border-radius:50%;border:0;cursor:pointer;
-    background:var(--papel);color:var(--tinta);font:600 15px/1 inherit;letter-spacing:.2px;
-    box-shadow:var(--sombra-2),var(--filo);transition:scale .15s ease, box-shadow .15s ease}
-  .ruleta-boton:hover:not(:disabled){scale:1.06}
-  .ruleta-boton:active:not(:disabled){scale:.96}
-  .ruleta-boton:disabled{cursor:default;color:var(--tinta-3)}
-  .ruleta-salida{min-height:82px;display:flex;align-items:center;justify-content:center;
-    text-align:center;width:min(100%,380px)}
-  .ruleta-dicho{margin:0;color:var(--tinta-2);font-size:14px}
-  .ruleta-premio{margin:0;display:flex;flex-direction:column;gap:4px;
-    padding:14px 22px;border-radius:var(--r-l);width:100%;
-    animation:ruleta-entra .42s cubic-bezier(.2,1.1,.3,1) both}
-  .ruleta-premio b{font-size:26px;letter-spacing:-.4px}
-  .ruleta-premio span{font-size:13px;opacity:.85}
-  .ruleta-premio.gana{background:var(--verde-piel);color:var(--verde-fuerte);
-    box-shadow:0 0 0 1px var(--verde-borde)}
-  .ruleta-premio.flojo{background:var(--ambar-piel);color:var(--ambar-tinta);
-    box-shadow:0 0 0 1px var(--ambar-borde)}
-  .ruleta-premio.nada{background:var(--papel-2);color:var(--tinta-2);
-    box-shadow:0 0 0 1px var(--linea)}
-  .ruleta-premio.otra{background:var(--azul-piel);color:var(--azul-fuerte);
-    box-shadow:0 0 0 1px var(--azul-borde)}
-  @keyframes ruleta-entra{from{opacity:0;transform:translateY(8px) scale(.97)}}
-  .ruleta-leyenda{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;
-    justify-content:center;gap:8px 16px;font-size:13px;color:var(--tinta-2)}
-  .ruleta-leyenda li{display:flex;align-items:center;gap:7px}
-  .ruleta-leyenda i{width:11px;height:11px;border-radius:3px;flex:none}
-  .ruleta-leyenda b{font-weight:600;color:var(--tinta-3)}
-  /* a quien le molesta el movimiento se le da el resultado y ya */
+  .ruleta-disco svg{display:block;width:100%;height:100%}
+
+  /* el destello del color que gano: el unico momento de motion aparte del giro */
+  .ruleta-tablero::after{content:"";position:absolute;inset:0;border-radius:50%;
+    pointer-events:none;opacity:0;box-shadow:0 0 0 0 var(--brillo,transparent)}
+  .ruleta-tablero.canta::after{animation:ruleta-canta .9s cubic-bezier(.2,.8,.3,1)}
+  @keyframes ruleta-canta{
+    0%{opacity:.85;box-shadow:0 0 0 0 var(--brillo)}
+    100%{opacity:0;box-shadow:0 0 0 26px var(--brillo)}
+  }
+
+  /* blanca, no oscura: el aro tambien es --tinta y una aguja del mismo color
+     desaparece encima. La punta entra en las cunas, que es donde tiene que leerse */
+  .ruleta-aguja{position:absolute;top:calc(-1 * clamp(10px,2.6vw,14px));left:50%;
+    translate:-50% 0;z-index:3;width:clamp(30px,8vw,40px);height:auto;
+    filter:drop-shadow(0 2px 3px rgba(22,32,46,.30)) drop-shadow(0 6px 12px rgba(22,32,46,.22))}
+
+  .ruleta-eje{grid-area:1/1;z-index:2;position:relative;
+    width:26%;aspect-ratio:1;border-radius:50%;border:0;cursor:pointer;
+    background:var(--tinta);color:#fff;
+    font:700 clamp(11px,2.8vw,13px)/1 inherit;letter-spacing:.14em;text-transform:uppercase;
+    box-shadow:0 0 0 clamp(5px,1.4vw,7px) var(--papel),
+      0 3px 6px rgba(22,32,46,.22),0 14px 26px -12px rgba(22,32,46,.5),
+      inset 0 1px 0 rgba(255,255,255,.22);
+    transition:scale .14s cubic-bezier(.2,.9,.3,1),background .2s ease}
+  .ruleta-eje:hover:not(:disabled){scale:1.05}
+  .ruleta-eje:active:not(:disabled){scale:.94}
+  .ruleta-eje:disabled{cursor:default;background:var(--tinta-2)}
+  /* mientras gira, tres puntos en vez de una palabra que nadie va a leer */
+  .ruleta-eje.gira span{display:inline-block;width:4px;height:4px;border-radius:50%;
+    background:#fff;box-shadow:9px 0 0 #fff,-9px 0 0 #fff;text-indent:-9999px;overflow:hidden;
+    animation:ruleta-late 1s ease-in-out infinite}
+  @keyframes ruleta-late{50%{opacity:.35}}
+
+  /* El resultado es tipografia, no otra tarjeta tintada. El panel ya usa esa
+     caja para todo; aqui el numero ES el mensaje. */
+  .ruleta-salida{min-height:96px;display:grid;place-items:center;text-align:center;
+    width:min(100%,400px)}
+  .ruleta-espera{margin:0;font-size:14px;color:var(--tinta-3)}
+  .ruleta-premio{margin:0;display:grid;gap:2px;
+    animation:ruleta-entra .5s cubic-bezier(.16,1,.3,1) both}
+  .ruleta-premio b{display:block;font-size:clamp(38px,11vw,54px);font-weight:700;
+    letter-spacing:-.045em;line-height:.94}
+  .ruleta-premio i{display:block;font-style:normal;font-size:clamp(14px,3.6vw,16px);
+    font-weight:600;letter-spacing:-.01em;margin-top:6px}
+  .ruleta-premio span{display:block;font-size:13.5px;color:var(--tinta-3);margin-top:7px}
+  .ruleta-premio.gana b,.ruleta-premio.gana i{color:var(--verde-fuerte)}
+  .ruleta-premio.flojo b,.ruleta-premio.flojo i{color:var(--ambar-tinta)}
+  .ruleta-premio.otra b,.ruleta-premio.otra i{color:var(--azul-fuerte)}
+  .ruleta-premio.nada b,.ruleta-premio.nada i{color:var(--tinta-2)}
+  @keyframes ruleta-entra{from{opacity:0;transform:translateY(10px) scale(.96)}}
+
+  /* las probabilidades son un dato, asi que se leen como un dato */
+  .ruleta-odds{margin:0;padding:0;width:min(100%,290px);display:grid;gap:0}
+  .ruleta-odds>div{display:flex;align-items:baseline;justify-content:space-between;
+    gap:12px;padding:9px 2px;border-top:1px solid var(--linea-suave)}
+  .ruleta-odds>div:first-child{border-top:0}
+  .ruleta-odds dt{display:flex;align-items:center;gap:9px;
+    font-size:13.5px;color:var(--tinta-2)}
+  .ruleta-odds dd{margin:0;font-size:13.5px;font-weight:600;color:var(--tinta);
+    font-variant-numeric:tabular-nums}
+  .ruleta-odds dd span{font-weight:400;color:var(--tinta-3)}
+  .ruleta-odds i{width:9px;height:9px;border-radius:50%;flex:none}
+  .pip-verde{background:var(--verde)} .pip-ambar{background:var(--ambar)}
+  .pip-azul{background:var(--azul)}  .pip-rojo{background:var(--rojo)}
+
   @media (prefers-reduced-motion:reduce){
     .ruleta-disco{transition-duration:.01s}
-    .ruleta-premio{animation:none}
+    .ruleta-premio,.ruleta-tablero.canta::after,.ruleta-eje.gira span{animation:none}
   }
 
   #maps{background:var(--azul-piel);border-color:var(--azul);font-weight:500}
@@ -4016,35 +4054,54 @@ async function dejarEnElMapa(l, estado) {
 /* ---------- la ruleta ---------- */
 
 // Doce casillas: cinco de nada, cinco de un sticker, una de dos y una de repetir.
-// No van agrupadas por color aposta —cinco rojos seguidos parecen trampa aunque
-// no lo sean—: se alternan, y el verde y el azul quedan enfrentados.
+//
+// Los colores son los de PRODUCTO, no los del logo. La franja de cuatro colores
+// de la cabecera es el momento de marca; si la rueda grita con los mismos tonos,
+// las dos pierden.
+//
+// Y no van agrupadas por color aposta: cinco rojos seguidos parecen trampa aunque
+// el sorteo sea limpio, y el cliente la mira de cerca.
 const RULETA = [
-  { color: "#EA4335", clase: "nada",  texto: "Nada", rotulo: ["Nada"], dice: "Esta vez no hay premio." },
-  { color: "#FBBC05", clase: "flojo", texto: "+1 sticker", rotulo: ["+1", "sticker"], dice: "Un sticker de regalo." },
-  { color: "#EA4335", clase: "nada",  texto: "Nada", rotulo: ["Nada"], dice: "Esta vez no hay premio." },
-  { color: "#34A853", clase: "gana",  texto: "+2 stickers", rotulo: ["+2", "stickers"], dice: "La buena: dos stickers de regalo." },
-  { color: "#FBBC05", clase: "flojo", texto: "+1 sticker", rotulo: ["+1", "sticker"], dice: "Un sticker de regalo." },
-  { color: "#EA4335", clase: "nada",  texto: "Nada", rotulo: ["Nada"], dice: "Esta vez no hay premio." },
-  { color: "#FBBC05", clase: "flojo", texto: "+1 sticker", rotulo: ["+1", "sticker"], dice: "Un sticker de regalo." },
-  { color: "#EA4335", clase: "nada",  texto: "Nada", rotulo: ["Nada"], dice: "Esta vez no hay premio." },
-  { color: "#FBBC05", clase: "flojo", texto: "+1 sticker", rotulo: ["+1", "sticker"], dice: "Un sticker de regalo." },
-  { color: "#4285F4", clase: "otra",  texto: "Otra vez", rotulo: ["Otra", "vez"], dice: "Que la vuelva a girar." },
-  { color: "#EA4335", clase: "nada",  texto: "Nada", rotulo: ["Nada"], dice: "Esta vez no hay premio." },
-  { color: "#FBBC05", clase: "flojo", texto: "+1 sticker", rotulo: ["+1", "sticker"], dice: "Un sticker de regalo." },
+  { tono: "#d93025", clase: "nada",  cifra: "Nada",  unidad: "",          peso: "flojo",
+    dice: "Esta vez no cay\u00f3 nada." },
+  { tono: "#f9ab00", clase: "flojo", cifra: "+1",    unidad: "sticker",   peso: "medio",
+    dice: "Un sticker de regalo en su orden." },
+  { tono: "#c9291f", clase: "nada",  cifra: "Nada",  unidad: "",          peso: "flojo",
+    dice: "Esta vez no cay\u00f3 nada." },
+  { tono: "#1e8e3e", clase: "gana",  cifra: "+2",    unidad: "stickers",  peso: "fuerte",
+    dice: "La buena. Una entre doce." },
+  { tono: "#eda200", clase: "flojo", cifra: "+1",    unidad: "sticker",   peso: "medio",
+    dice: "Un sticker de regalo en su orden." },
+  { tono: "#d93025", clase: "nada",  cifra: "Nada",  unidad: "",          peso: "flojo",
+    dice: "Esta vez no cay\u00f3 nada." },
+  { tono: "#f9ab00", clase: "flojo", cifra: "+1",    unidad: "sticker",   peso: "medio",
+    dice: "Un sticker de regalo en su orden." },
+  { tono: "#c9291f", clase: "nada",  cifra: "Nada",  unidad: "",          peso: "flojo",
+    dice: "Esta vez no cay\u00f3 nada." },
+  { tono: "#eda200", clase: "flojo", cifra: "+1",    unidad: "sticker",   peso: "medio",
+    dice: "Un sticker de regalo en su orden." },
+  { tono: "#1a73e8", clase: "otra",  cifra: "Otra",  unidad: "vez",       peso: "medio",
+    dice: "Que la vuelva a girar." },
+  { tono: "#d93025", clase: "nada",  cifra: "Nada",  unidad: "",          peso: "flojo",
+    dice: "Esta vez no cay\u00f3 nada." },
+  { tono: "#f9ab00", clase: "flojo", cifra: "+1",    unidad: "sticker",   peso: "medio",
+    dice: "Un sticker de regalo en su orden." },
 ];
+
+const RULETA_BRILLO = { gana: "rgba(30,142,62,.55)", flojo: "rgba(249,171,0,.55)",
+  otra: "rgba(26,115,232,.5)", nada: "rgba(91,103,121,.32)" };
 
 let RULETA_ANGULO = 0;
 let RULETA_GIRANDO = false;
 
 // Un sector va de -15 a +15 grados respecto a su centro, contado desde las doce
 // y en el sentido del reloj, que es hacia donde gira.
-function sectorRuleta(i) {
-  const r = 96, c = 100, paso = 360 / RULETA.length;
+function sectorRuleta(i, r) {
+  const c = 100, paso = 360 / RULETA.length;
   const a0 = (i * paso - paso / 2) * Math.PI / 180;
   const a1 = (i * paso + paso / 2) * Math.PI / 180;
   const punto = (a) => (c + Math.sin(a) * r).toFixed(2) + " " + (c - Math.cos(a) * r).toFixed(2);
-  return '<path d="M' + c + ' ' + c + 'L' + punto(a0) + 'A' + r + ' ' + r +
-    ' 0 0 1 ' + punto(a1) + 'Z" fill="' + RULETA[i].color + '"/>';
+  return "M" + c + " " + c + "L" + punto(a0) + "A" + r + " " + r + " 0 0 1 " + punto(a1) + "Z";
 }
 
 function armarRuleta() {
@@ -4052,21 +4109,41 @@ function armarRuleta() {
   if (disco.dataset.hecho) return;
   disco.dataset.hecho = "1";
   const paso = 360 / RULETA.length;
-  let d = "";
-  RULETA.forEach((_, i) => { d += sectorRuleta(i); });
-  // el rotulo se lee derecho cuando su casilla está bajo la aguja, que es el
-  // momento en que alguien lo mira
+  const R = 88;
+
+  let cunas = "", clavos = "", rotulos = "";
   RULETA.forEach((s, i) => {
-    // dos lineas cuando hace falta: en 30 grados no cabe una frase de una tirada
-    const alto = s.rotulo.length > 1 ? 21 : 26;
-    const lineas = s.rotulo.map((t, k) =>
-      '<text x="100" y="' + (alto + k * 9.4) + '" text-anchor="middle" fill="#fff" ' +
-      'font-family="inherit" font-size="8" font-weight="700">' + escHtml(t) + '</text>').join("");
-    d += '<g transform="rotate(' + (i * paso) + ' 100 100)">' + lineas + '</g>';
+    cunas += '<path d="' + sectorRuleta(i, R) + '" fill="' + s.tono + '"/>';
+
+    // un clavo en cada junta, como los tiene una rueda de verdad. Es el detalle
+    // que separa "objeto" de "grafico de tarta"
+    const a = (i * paso + paso / 2) * Math.PI / 180;
+    clavos += '<circle cx="' + (100 + Math.sin(a) * (R + 4.4)).toFixed(2) +
+      '" cy="' + (100 - Math.cos(a) * (R + 4.4)).toFixed(2) +
+      '" r="1.5" fill="rgba(255,255,255,.55)"/>';
+
+    // El "Nada" se aparta: es el relleno, y bajarlo hace que las buenas resalten
+    // sin anadir nada. La de dos stickers es una entre doce y se nota.
+    const tenue = s.peso === "flojo" ? 0.66 : 1;
+    const cuerpo = s.peso === "fuerte" ? 8.8 : 7.9;
+    const lineas = s.unidad
+      ? '<text x="100" y="21" font-size="' + cuerpo + '" font-weight="800">' + escHtml(s.cifra) + '</text>' +
+        '<text x="100" y="30" font-size="' + (cuerpo - 1.4).toFixed(1) + '" font-weight="600">' + escHtml(s.unidad) + '</text>'
+      : '<text x="100" y="26" font-size="7.4" font-weight="600">' + escHtml(s.cifra) + '</text>';
+    rotulos += '<g transform="rotate(' + (i * paso) + ' 100 100)" fill="#fff" ' +
+      'fill-opacity="' + tenue + '" text-anchor="middle" letter-spacing="-.2">' + lineas + '</g>';
   });
+
   disco.innerHTML = '<svg viewBox="0 0 200 200" role="img" ' +
-    'aria-label="Ruleta de doce casillas">' + d +
-    '<circle cx="100" cy="100" r="96" fill="none" stroke="rgba(0,0,0,.10)" stroke-width="1.5"/></svg>';
+    'aria-label="Ruleta de doce casillas">' +
+    '<circle cx="100" cy="100" r="99" fill="var(--tinta)"/>' +
+    '<circle cx="100" cy="100" r="93.5" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="1"/>' +
+    cunas +
+    // sombra fina por dentro del aro: da el canto, y es lo unico que insinua bulto
+    '<circle cx="100" cy="100" r="86.6" fill="none" stroke="rgba(0,0,0,.16)" stroke-width="2.8"/>' +
+    clavos + rotulos +
+    '<circle cx="100" cy="100" r="25" fill="var(--papel)"/>' +
+    '</svg>';
 }
 
 $("girar").onclick = () => {
@@ -4074,11 +4151,13 @@ $("girar").onclick = () => {
   RULETA_GIRANDO = true;
   const boton = $("girar");
   boton.disabled = true;
-  boton.textContent = "…";
-  $("ruletaSalida").innerHTML = "<p class='ruleta-dicho'>Girando…</p>";
+  boton.classList.add("gira");
+  $("girarTexto").textContent = "Girando";
+  $("ruletaTablero").classList.remove("canta");
+  $("ruletaSalida").innerHTML = "<p class='ruleta-espera'>\u2026</p>";
 
-  // Se elige primero y se calcula el giro para caer ahí. Al revés —girar y ver
-  // dónde para— el reparto dependeria del redondeo del angulo.
+  // Se elige primero y se calcula el giro para caer ahi. Al reves --girar y ver
+  // donde para-- el reparto dependeria del redondeo del angulo.
   const i = Math.floor(Math.random() * RULETA.length);
   const paso = 360 / RULETA.length;
   // un pelo de desvio para que no pare siempre clavada en el centro
@@ -4091,9 +4170,14 @@ $("girar").onclick = () => {
   const acabar = () => {
     RULETA_GIRANDO = false;
     boton.disabled = false;
-    boton.textContent = premio.clase === "otra" ? "Otra" : "Girar";
+    boton.classList.remove("gira");
+    $("girarTexto").textContent = premio.clase === "otra" ? "Otra" : "Girar";
+    $("ruletaTablero").style.setProperty("--brillo", RULETA_BRILLO[premio.clase]);
+    $("ruletaTablero").classList.add("canta");
     $("ruletaSalida").innerHTML = "<p class='ruleta-premio " + premio.clase + "'>" +
-      "<b>" + escHtml(premio.texto) + "</b><span>" + escHtml(premio.dice) + "</span></p>";
+      "<b>" + escHtml(premio.cifra) + "</b>" +
+      (premio.unidad ? "<i>" + escHtml(premio.unidad) + "</i>" : "") +
+      "<span>" + escHtml(premio.dice) + "</span></p>";
   };
   const quieto = window.matchMedia && window.matchMedia("(prefers-reduced-motion:reduce)").matches;
   setTimeout(acabar, quieto ? 60 : 4700);
@@ -6428,21 +6512,27 @@ export function vistaAdmin(origen) {
 
       <div id="vistaRuleta" hidden>
         <div class="ruleta-caja">
-          <p class="cejilla">La ruleta del cliente</p>
-          <div class="ruleta-tablero">
-            <div class="ruleta-aguja" aria-hidden="true"></div>
+          <div class="ruleta-tablero" id="ruletaTablero">
             <div class="ruleta-disco" id="ruletaDisco"></div>
-            <button type="button" class="ruleta-boton" id="girar">Girar</button>
+            <svg class="ruleta-aguja" viewBox="0 0 34 46" aria-hidden="true">
+              <path d="M17 45 4.4 18.2A13.9 13.9 0 1 1 29.6 18.2Z" fill="var(--papel)"/>
+              <circle cx="17" cy="14.2" r="4.6" fill="var(--tinta)"/>
+            </svg>
+            <button type="button" class="ruleta-eje" id="girar">
+              <span id="girarTexto">Girar</span>
+            </button>
           </div>
+
           <div class="ruleta-salida" id="ruletaSalida" role="status" aria-live="polite">
-            <p class="ruleta-dicho">Dale a girar y que la gire el cliente.</p>
+            <p class="ruleta-espera">Dale, y que la gire el cliente.</p>
           </div>
-          <ul class="ruleta-leyenda" aria-label="Qué puede salir">
-            <li><i style="background:var(--logo-rojo)"></i>Nada <b>×5</b></li>
-            <li><i style="background:var(--logo-amarillo)"></i>+1 sticker <b>×5</b></li>
-            <li><i style="background:var(--logo-verde)"></i>+2 stickers <b>×1</b></li>
-            <li><i style="background:var(--logo-azul)"></i>Otra vez <b>×1</b></li>
-          </ul>
+
+          <dl class="ruleta-odds" aria-label="Probabilidades">
+            <div><dt><i class="pip-verde"></i>+2 stickers</dt><dd>1<span>/12</span></dd></div>
+            <div><dt><i class="pip-ambar"></i>+1 sticker</dt><dd>5<span>/12</span></dd></div>
+            <div><dt><i class="pip-azul"></i>Otra vez</dt><dd>1<span>/12</span></dd></div>
+            <div><dt><i class="pip-rojo"></i>Nada</dt><dd>5<span>/12</span></dd></div>
+          </dl>
         </div>
       </div>
 
