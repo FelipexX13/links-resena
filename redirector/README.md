@@ -1339,6 +1339,36 @@ vendedor en blanco dejaría de servir para eso. Por eso el panel de un vendedor
 carga los puntos aunque no los pinte: sin ellos, aceptar una orden de un local que
 ya tenía punto crearía uno repetido en vez de actualizarlo.
 
+## La ruleta
+
+Una pestaña con una rueda de doce casillas para que la gire el cliente en el
+mostrador: **cinco de nada, cinco de +1 sticker, una de +2 y una de repetir**.
+La ven el superadmin y los vendedores —es lo único, aparte de Órdenes, que tiene
+un vendedor—.
+
+**No apunta nada.** Es un gancho de venta, no un premio contable: si sale +1, el
+vendedor le suma el sticker a la orden a mano, que es donde vive esa cuenta.
+Guardar giros necesitaría escrituras de KV —de las mil al día— para un dato que
+nadie ha pedido mirar.
+
+**Los colores no van agrupados.** Cinco rojos seguidos parecen trampa aunque el
+sorteo sea limpio, así que se alternan rojo y amarillo, y el verde y el azul
+quedan enfrentados.
+
+**Se elige la casilla primero y luego se calcula el giro para caer ahí.** Al
+revés —girar un ángulo cualquiera y ver dónde para— el reparto dependeria del
+redondeo, y nadie se daría cuenta de que la rueda está sesgada. Comprobado: las
+doce casillas paran exactamente bajo la aguja cuando les toca, la rueda siempre
+gira hacia adelante con cinco vueltas mínimo, y sobre 12.000 giros el reparto sale
+en 41,2 / 42,3 / 8,3 / 8,2 % contra el 41,7 / 41,7 / 8,3 / 8,3 esperado.
+
+**El rótulo se lee derecho cuando su casilla está bajo la aguja.** Los de abajo
+quedan del revés, y es a propósito: el único que alguien mira es el que gana, y
+ese siempre está arriba. Van en dos lineas —«+1» / «sticker»— porque en treinta
+grados una frase de una tirada se pisa con la de al lado.
+
+Quien tenga puesto *reducir movimiento* se salta la animación y ve el resultado.
+
 ## Cómo pagó, y quién le debe a quién
 
 Al aceptar una orden se marca **Efectivo · Transferencia · Otro**. Va escrito en

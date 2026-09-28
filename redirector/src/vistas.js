@@ -347,6 +347,53 @@ const ESTILOS = `
      y no se confunde con el buscador de locales que tiene encima. */
   #puntoLink{background:var(--azul-piel);border-color:var(--azul);font-weight:500}
   #puntoLink::placeholder{color:var(--tinta-2);font-weight:400}
+  /* ---------- ruleta ---------- */
+  .ruleta-caja{display:flex;flex-direction:column;align-items:center;gap:22px;
+    padding:26px 18px 30px}
+  .ruleta-tablero{position:relative;width:min(100%,380px);aspect-ratio:1}
+  .ruleta-disco{width:100%;height:100%;border-radius:50%;
+    box-shadow:var(--sombra-2),0 0 0 8px var(--papel),0 0 0 10px var(--linea);
+    transition:transform 4.6s cubic-bezier(.12,.72,.12,1)}
+  .ruleta-disco svg{display:block;width:100%;height:100%;border-radius:50%}
+  /* la aguja va encima del disco y marca las doce */
+  .ruleta-aguja{position:absolute;top:-13px;left:50%;translate:-50% 0;z-index:2;
+    width:0;height:0;border-left:13px solid transparent;border-right:13px solid transparent;
+    border-top:24px solid var(--tinta);filter:drop-shadow(0 2px 3px rgba(22,32,46,.35))}
+  .ruleta-boton{position:absolute;top:50%;left:50%;translate:-50% -50%;z-index:2;
+    width:24%;aspect-ratio:1;border-radius:50%;border:0;cursor:pointer;
+    background:var(--papel);color:var(--tinta);font:600 15px/1 inherit;letter-spacing:.2px;
+    box-shadow:var(--sombra-2),var(--filo);transition:scale .15s ease, box-shadow .15s ease}
+  .ruleta-boton:hover:not(:disabled){scale:1.06}
+  .ruleta-boton:active:not(:disabled){scale:.96}
+  .ruleta-boton:disabled{cursor:default;color:var(--tinta-3)}
+  .ruleta-salida{min-height:82px;display:flex;align-items:center;justify-content:center;
+    text-align:center;width:min(100%,380px)}
+  .ruleta-dicho{margin:0;color:var(--tinta-2);font-size:14px}
+  .ruleta-premio{margin:0;display:flex;flex-direction:column;gap:4px;
+    padding:14px 22px;border-radius:var(--r-l);width:100%;
+    animation:ruleta-entra .42s cubic-bezier(.2,1.1,.3,1) both}
+  .ruleta-premio b{font-size:26px;letter-spacing:-.4px}
+  .ruleta-premio span{font-size:13px;opacity:.85}
+  .ruleta-premio.gana{background:var(--verde-piel);color:var(--verde-fuerte);
+    box-shadow:0 0 0 1px var(--verde-borde)}
+  .ruleta-premio.flojo{background:var(--ambar-piel);color:var(--ambar-tinta);
+    box-shadow:0 0 0 1px var(--ambar-borde)}
+  .ruleta-premio.nada{background:var(--papel-2);color:var(--tinta-2);
+    box-shadow:0 0 0 1px var(--linea)}
+  .ruleta-premio.otra{background:var(--azul-piel);color:var(--azul-fuerte);
+    box-shadow:0 0 0 1px var(--azul-borde)}
+  @keyframes ruleta-entra{from{opacity:0;transform:translateY(8px) scale(.97)}}
+  .ruleta-leyenda{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;
+    justify-content:center;gap:8px 16px;font-size:13px;color:var(--tinta-2)}
+  .ruleta-leyenda li{display:flex;align-items:center;gap:7px}
+  .ruleta-leyenda i{width:11px;height:11px;border-radius:3px;flex:none}
+  .ruleta-leyenda b{font-weight:600;color:var(--tinta-3)}
+  /* a quien le molesta el movimiento se le da el resultado y ya */
+  @media (prefers-reduced-motion:reduce){
+    .ruleta-disco{transition-duration:.01s}
+    .ruleta-premio{animation:none}
+  }
+
   #maps{background:var(--azul-piel);border-color:var(--azul);font-weight:500}
   #maps::placeholder{color:var(--tinta-2);font-weight:400}
   #maps:focus{background:var(--papel);border-color:var(--azul);
@@ -3645,7 +3692,7 @@ function pintarRol() {
   document.querySelectorAll("[data-dueno]").forEach((e) => { e.hidden = !dueno; });
   // Un vendedor solo tiene Órdenes. Ni el mapa ni sus ingresos: lo que se le debe
   // se lo dice quien le paga, y el mapa es de la casa.
-  const SUYAS = { locales: 1 };
+  const SUYAS = { locales: 1, ruleta: 1 };
   document.querySelectorAll("#vistaPanel [data-valor]").forEach((b) => {
     b.hidden = dueno ? b.dataset.valor === "mio" : !SUYAS[b.dataset.valor];
   });
@@ -3695,10 +3742,11 @@ function pintarMio() {
 }
 
 function pintarVista(valor) {
-  const conocidas = { locales: 1, cuentas: 1, inventario: 1, mio: 1, mapa: 1 };
+  const conocidas = { locales: 1, cuentas: 1, inventario: 1, mio: 1, mapa: 1, ruleta: 1 };
   VISTA = conocidas[valor] ? valor : "tarjetas";
   // no basta con esconder el botón: la vista tampoco se abre por otro camino
-  if (!SESION.dueno && VISTA !== "locales") VISTA = "locales";
+  const SUYAS = { locales: 1, ruleta: 1 };
+  if (!SESION.dueno && !SUYAS[VISTA]) VISTA = "locales";
   marcarSegmento("vistaPanel", VISTA);
   $("vistaTarjetas").hidden = VISTA !== "tarjetas";
   $("vistaLocales").hidden = VISTA !== "locales";
@@ -3706,6 +3754,7 @@ function pintarVista(valor) {
   $("vistaInventario").hidden = VISTA !== "inventario";
   $("vistaMio").hidden = VISTA !== "mio";
   $("vistaMapa").hidden = VISTA !== "mapa";
+  $("vistaRuleta").hidden = VISTA !== "ruleta";
   // activar tarjetas es reponer plástico: va con el inventario, no con la lista
   $("abrirActivar").hidden = !SESION.dueno || VISTA !== "inventario";
   $("togglePruebas").hidden = !SESION.dueno || VISTA !== "inventario";
@@ -3715,6 +3764,7 @@ function pintarVista(valor) {
   if (VISTA === "locales") pintarVentas();
   if (VISTA === "cuentas" || VISTA === "inventario") pintarCuentas();
   if (VISTA === "mio") pintarMio();
+  if (VISTA === "ruleta") armarRuleta();
   if (VISTA === "mapa") {
     // ya está a la vista: ahora sí tiene tamaño que medir
     armarMapa();
@@ -3962,6 +4012,92 @@ async function dejarEnElMapa(l, estado) {
     return false;
   }
 }
+
+/* ---------- la ruleta ---------- */
+
+// Doce casillas: cinco de nada, cinco de un sticker, una de dos y una de repetir.
+// No van agrupadas por color aposta —cinco rojos seguidos parecen trampa aunque
+// no lo sean—: se alternan, y el verde y el azul quedan enfrentados.
+const RULETA = [
+  { color: "#EA4335", clase: "nada",  texto: "Nada", rotulo: ["Nada"], dice: "Esta vez no hay premio." },
+  { color: "#FBBC05", clase: "flojo", texto: "+1 sticker", rotulo: ["+1", "sticker"], dice: "Un sticker de regalo." },
+  { color: "#EA4335", clase: "nada",  texto: "Nada", rotulo: ["Nada"], dice: "Esta vez no hay premio." },
+  { color: "#34A853", clase: "gana",  texto: "+2 stickers", rotulo: ["+2", "stickers"], dice: "La buena: dos stickers de regalo." },
+  { color: "#FBBC05", clase: "flojo", texto: "+1 sticker", rotulo: ["+1", "sticker"], dice: "Un sticker de regalo." },
+  { color: "#EA4335", clase: "nada",  texto: "Nada", rotulo: ["Nada"], dice: "Esta vez no hay premio." },
+  { color: "#FBBC05", clase: "flojo", texto: "+1 sticker", rotulo: ["+1", "sticker"], dice: "Un sticker de regalo." },
+  { color: "#EA4335", clase: "nada",  texto: "Nada", rotulo: ["Nada"], dice: "Esta vez no hay premio." },
+  { color: "#FBBC05", clase: "flojo", texto: "+1 sticker", rotulo: ["+1", "sticker"], dice: "Un sticker de regalo." },
+  { color: "#4285F4", clase: "otra",  texto: "Otra vez", rotulo: ["Otra", "vez"], dice: "Que la vuelva a girar." },
+  { color: "#EA4335", clase: "nada",  texto: "Nada", rotulo: ["Nada"], dice: "Esta vez no hay premio." },
+  { color: "#FBBC05", clase: "flojo", texto: "+1 sticker", rotulo: ["+1", "sticker"], dice: "Un sticker de regalo." },
+];
+
+let RULETA_ANGULO = 0;
+let RULETA_GIRANDO = false;
+
+// Un sector va de -15 a +15 grados respecto a su centro, contado desde las doce
+// y en el sentido del reloj, que es hacia donde gira.
+function sectorRuleta(i) {
+  const r = 96, c = 100, paso = 360 / RULETA.length;
+  const a0 = (i * paso - paso / 2) * Math.PI / 180;
+  const a1 = (i * paso + paso / 2) * Math.PI / 180;
+  const punto = (a) => (c + Math.sin(a) * r).toFixed(2) + " " + (c - Math.cos(a) * r).toFixed(2);
+  return '<path d="M' + c + ' ' + c + 'L' + punto(a0) + 'A' + r + ' ' + r +
+    ' 0 0 1 ' + punto(a1) + 'Z" fill="' + RULETA[i].color + '"/>';
+}
+
+function armarRuleta() {
+  const disco = $("ruletaDisco");
+  if (disco.dataset.hecho) return;
+  disco.dataset.hecho = "1";
+  const paso = 360 / RULETA.length;
+  let d = "";
+  RULETA.forEach((_, i) => { d += sectorRuleta(i); });
+  // el rotulo se lee derecho cuando su casilla está bajo la aguja, que es el
+  // momento en que alguien lo mira
+  RULETA.forEach((s, i) => {
+    // dos lineas cuando hace falta: en 30 grados no cabe una frase de una tirada
+    const alto = s.rotulo.length > 1 ? 21 : 26;
+    const lineas = s.rotulo.map((t, k) =>
+      '<text x="100" y="' + (alto + k * 9.4) + '" text-anchor="middle" fill="#fff" ' +
+      'font-family="inherit" font-size="8" font-weight="700">' + escHtml(t) + '</text>').join("");
+    d += '<g transform="rotate(' + (i * paso) + ' 100 100)">' + lineas + '</g>';
+  });
+  disco.innerHTML = '<svg viewBox="0 0 200 200" role="img" ' +
+    'aria-label="Ruleta de doce casillas">' + d +
+    '<circle cx="100" cy="100" r="96" fill="none" stroke="rgba(0,0,0,.10)" stroke-width="1.5"/></svg>';
+}
+
+$("girar").onclick = () => {
+  if (RULETA_GIRANDO) return;
+  RULETA_GIRANDO = true;
+  const boton = $("girar");
+  boton.disabled = true;
+  boton.textContent = "…";
+  $("ruletaSalida").innerHTML = "<p class='ruleta-dicho'>Girando…</p>";
+
+  // Se elige primero y se calcula el giro para caer ahí. Al revés —girar y ver
+  // dónde para— el reparto dependeria del redondeo del angulo.
+  const i = Math.floor(Math.random() * RULETA.length);
+  const paso = 360 / RULETA.length;
+  // un pelo de desvio para que no pare siempre clavada en el centro
+  const desvio = (Math.random() - 0.5) * (paso - 8);
+  RULETA_ANGULO += 360 * (5 + Math.floor(Math.random() * 3)) - i * paso + desvio
+    - (RULETA_ANGULO % 360);
+  $("ruletaDisco").style.transform = "rotate(" + RULETA_ANGULO.toFixed(2) + "deg)";
+
+  const premio = RULETA[i];
+  const acabar = () => {
+    RULETA_GIRANDO = false;
+    boton.disabled = false;
+    boton.textContent = premio.clase === "otra" ? "Otra" : "Girar";
+    $("ruletaSalida").innerHTML = "<p class='ruleta-premio " + premio.clase + "'>" +
+      "<b>" + escHtml(premio.texto) + "</b><span>" + escHtml(premio.dice) + "</span></p>";
+  };
+  const quieto = window.matchMedia && window.matchMedia("(prefers-reduced-motion:reduce)").matches;
+  setTimeout(acabar, quieto ? 60 : 4700);
+};
 
 /* ---------- comprobante de venta ---------- */
 
@@ -6182,6 +6318,7 @@ export function vistaAdmin(origen) {
           <button type="button" data-valor="tarjetas">Tarjetas</button>
           <button type="button" data-valor="inventario">Inventario</button>
           <button type="button" data-valor="mapa">Mapa</button>
+          <button type="button" data-valor="ruleta">Ruleta</button>
           <button type="button" data-valor="mio">Lo mío</button>
         </div>
         <div class="cabecera-acciones">
@@ -6286,6 +6423,26 @@ export function vistaAdmin(origen) {
           <span><i class="bolita verde"></i>Compraron</span>
           <span><i class="bolita amarillo"></i>Hablando</span>
           <span><i class="bolita gris"></i>Ya se pasó por ahí</span>
+        </div>
+      </div>
+
+      <div id="vistaRuleta" hidden>
+        <div class="ruleta-caja">
+          <p class="cejilla">La ruleta del cliente</p>
+          <div class="ruleta-tablero">
+            <div class="ruleta-aguja" aria-hidden="true"></div>
+            <div class="ruleta-disco" id="ruletaDisco"></div>
+            <button type="button" class="ruleta-boton" id="girar">Girar</button>
+          </div>
+          <div class="ruleta-salida" id="ruletaSalida" role="status" aria-live="polite">
+            <p class="ruleta-dicho">Dale a girar y que la gire el cliente.</p>
+          </div>
+          <ul class="ruleta-leyenda" aria-label="Qué puede salir">
+            <li><i style="background:var(--logo-rojo)"></i>Nada <b>×5</b></li>
+            <li><i style="background:var(--logo-amarillo)"></i>+1 sticker <b>×5</b></li>
+            <li><i style="background:var(--logo-verde)"></i>+2 stickers <b>×1</b></li>
+            <li><i style="background:var(--logo-azul)"></i>Otra vez <b>×1</b></li>
+          </ul>
         </div>
       </div>
 
