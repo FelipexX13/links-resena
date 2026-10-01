@@ -4577,6 +4577,12 @@ async function operacionNFC(id, esperando, hacer) {
   const mio = new AbortController();
   cortarNFC = mio;
   NFC_OCUPADO = true;
+
+  // Web NFC espera al chip sin limite: si no aparece, write() ni resuelve ni
+  // falla, y desde fuera eso se ve como "el boton no hace nada". Se le pone un
+  // tope para que el silencio se convierta en una frase.
+  let porTiempo = false;
+  const reloj = setTimeout(() => { porTiempo = true; mio.abort(); }, ESPERA_NFC);
   // El cerrojo se coge JUSTO antes del try, y todo lo demas va dentro. Estaba
   // fuera, y cualquier fallo entre cogerlo y entrar lo dejaba cogido para
   // siempre: los botones pintados como activos y cada toque entrando por el
@@ -4590,13 +4596,43 @@ async function operacionNFC(id, esperando, hacer) {
   } catch (e) {
     // si a esta la abortaron para dar paso a otra, manda la otra: no se le pisa
     // el mensaje con el error de esta
-    if (cortarNFC === mio) decirPaso(id, "No se pudo: " + e.message, "mal");
+    if (cortarNFC === mio) {
+      if (porTiempo) decirPaso(id, await porQueNoAparecio(), "mal");
+      else decirPaso(id, "No se pudo: " + e.message, "mal");
+    }
     return false;
   } finally {
+    clearTimeout(reloj);
     // solo se limpia lo propio. Limpiar a ciegas era el bug
     if (cortarNFC === mio) { cortarNFC = null; NFC_OCUPADO = false; }
     pintarPasosNFC();
   }
+}
+
+const ESPERA_NFC = 25000;
+
+// Cuando se agota la espera, lo util no es decir "se acabo el tiempo" sino por
+// que. El permiso lo sabe el navegador; lo demas son las tres causas que se dan
+// de verdad, en el orden en que conviene probarlas.
+async function porQueNoAparecio() {
+  let permiso = "";
+  try {
+    if (navigator.permissions) {
+      const p = await navigator.permissions.query({ name: "nfc" });
+      permiso = p.state;
+    }
+  } catch (e) {
+    // el navegador no sabe de este permiso: se sigue sin el
+  }
+  if (permiso === "denied") {
+    return "Le negaste el NFC a esta página. Entra al candado de la barra de " +
+      "direcciones y vuelve a darle permiso.";
+  }
+  return "Pasaron 25 segundos sin ver ningún chip. Tres cosas, en este orden: " +
+    "que el NFC del teléfono esté encendido en los ajustes de Android; que el " +
+    "chip NO esté ya sellado —uno sellado no se deja reescribir nunca más—; y " +
+    "que lo muevas despacio por la parte de atrás del teléfono, que la antena no " +
+    "está en el centro.";
 }
 
 function sinWebNFC(id) {
@@ -4605,7 +4641,7 @@ function sinWebNFC(id) {
 
 $("grabarNFC").onclick = async () => {
   const url = NFC_PIEZA && NFC_PIEZA.url;
-  const bien = await operacionNFC("diceGrabar", "Acerca el chip…", async (signal) => {
+  const bien = await operacionNFC("diceGrabar", "Acerca el chip por detrás… (para salir, «Siguiente pieza»)", async (signal) => {
     await new window.NDEFReader().write(
       { records: [{ recordType: "url", data: url }] }, { signal: signal });
   });
@@ -4620,7 +4656,7 @@ $("grabarNFC").onclick = async () => {
 $("leerNFC").onclick = async () => {
   const url = NFC_PIEZA && NFC_PIEZA.url;
   let leido = null;
-  const bien = await operacionNFC("diceLeer", "Acerca el chip para leerlo…",
+  const bien = await operacionNFC("diceLeer", "Acerca el chip para leerlo… (para salir, «Siguiente pieza»)",
     async (signal) => {
       const nfc = new window.NDEFReader();
       leido = await new Promise((listo, falla) => {
@@ -4661,7 +4697,7 @@ $("sellarNFC").onclick = async () => {
   }
   olvidarConfirmacion();
 
-  const bien = await operacionNFC("diceSellar", "Acerca el chip para sellarlo…",
+  const bien = await operacionNFC("diceSellar", "Acerca el chip para sellarlo… (para salir, «Siguiente pieza»)",
     async (signal) => { await new window.NDEFReader().makeReadOnly({ signal: signal }); });
   if (!bien || !NFC_PIEZA) return;
 

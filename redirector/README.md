@@ -282,6 +282,20 @@ acaba filtrando.
 Y las tres guardas hablan. Un `return` mudo en un manejador se ve exactamente
 igual que un botón muerto, que fue justo como se vio.
 
+**La espera tiene tope.** `write()` de Web NFC espera un chip **sin límite**: si no
+aparece, ni resuelve ni falla. Desde fuera eso se ve exactamente igual que un
+botón roto —sale «Acerca el chip» y de ahí no pasa nada más, para siempre—, y es lo
+que llevaba a machacar el botón, que es de donde salió el
+`make read only is cancelled` del principio.
+
+A los 25 segundos se aborta y se dice **por qué**, en el orden en que conviene
+probarlo: el NFC de Android apagado, el chip ya sellado —uno sellado no se
+reescribe nunca más—, o la antena, que no está en el centro del teléfono. Si el
+navegador dice que el permiso está `denied`, se dice eso en su lugar.
+
+La pieza escaneada se conserva, así que reintentar es un toque y no hay que
+volver a pasar el QR.
+
 **Un chip sellado se marca como tal.** Antes se quedaba con *Bloquear* encendido,
 y `makeReadOnly` sobre un chip que ya es de solo lectura es otro error. Ahora
 *Grabar* y *Bloquear* se apagan y lo único que queda vivo es *Siguiente pieza*.
