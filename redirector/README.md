@@ -1538,8 +1538,12 @@ Al entrar, un vendedor ve lo suyo antes que nada:
 ```
 Has vendido
 $89.820
-6 piezas vendidas · debes entregar $209.580
+6 piezas vendidas
 ```
+
+**En el cartel no va la deuda.** Llegó a ir y se quitó: es lo primero que ve un
+vendedor al abrir, y lo que tenía que decir era lo que ha ganado, no lo que debe.
+Esa cuenta la sigue llevando la casa en Cuentas, intacta.
 
 Suma los dos caminos por los que le entra dinero: lo que vende él y el 20% de lo
 que venda quien cuelgue de él. Alexander, que en este ejemplo no vendió nada,

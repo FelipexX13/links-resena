@@ -3799,8 +3799,9 @@ function pintarCartel() {
   const m = ventasPorVendedor()[SESION.usuario] ||
     { piezas: 0, facturado: 0, comision: 0, deAbajo: 0 };
   const suyo = (m.comision || 0) + (m.deAbajo || 0);
-  const d = deudaDe(SESION.usuario, m);
 
+  // Aqui solo va lo que ha ganado. La deuda con la casa no: esto es un cartel
+  // para que vea lo suyo al entrar, no un cobro, y esa cuenta la lleva la casa.
   const trozos = [];
   if (m.piezas) trozos.push(plural(m.piezas, "pieza vendida", "piezas vendidas"));
   // repetir la cifra cuando todo viene de abajo quedaba raro: "59.880 · 59.880
@@ -3810,8 +3811,6 @@ function pintarCartel() {
   } else if (m.deAbajo) {
     trozos.push("todo de lo que vendió tu gente");
   }
-  if (d.debe > 0) trozos.push("debes entregar <b>" + dinero(d.debe) + "</b>");
-  else if (m.facturado) trozos.push("al d\u00eda con la casa");
 
   caja.hidden = false;
   caja.innerHTML = "<span class='rotulo'>Has vendido</span>" +
