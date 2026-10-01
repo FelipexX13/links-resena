@@ -1531,6 +1531,20 @@ congelado, así que reeditarla no la reescribe con el organigrama de hoy.
 (`deAbajo`) y no se suma ni a sus piezas ni a su facturado: la venta no es suya.
 Sumarla sería contar el mismo dinero dos veces.
 
+### Las comisiones, en la gráfica
+
+El «dinero por día» tenía verde arriba —lo que entra— y rojo abajo —lo que sale—,
+y las comisiones no salían por ningún lado aunque fueran el gasto más grande de
+casi cualquier día con ventas. Ahora van en **azul, apiladas bajo el rojo**:
+también salen de la casa, así que no pueden ir arriba.
+
+El número grande pasó a restarlas. Antes decía *entra menos sale* y el pie de la
+misma gráfica decía otra cosa; ahora los dos dicen lo mismo.
+
+De paso se arregló ahí el mismo doble conteo que en `cuentas()`: la serie sumaba
+**todas** las tarjetas vendidas, incluidas las que un sub coloca de un surtido ya
+cobrado.
+
 ### Surtir es la venta de la casa
 
 Esto se construyó al revés la primera vez y vale la pena dejar escrito por qué.
