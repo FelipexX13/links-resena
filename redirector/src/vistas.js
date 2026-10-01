@@ -2983,19 +2983,24 @@ function ventasPorVendedor() {
   // Lo que se lleva alguien por haber enganchado a otro. No es facturacion suya
   // —la venta no es suya—, así que va en su propia cuenta y no se suma a piezas
   // ni a facturado, que si no la casa se contaria el dinero dos veces.
-  const meterArriba = (padrino, precio, pctPadrino) => {
+  const meterArriba = (quien, padrino, precio, pctPadrino) => {
     if (!padrino || !pctPadrino) return;
+    const corte = comisionDe(precio, pctPadrino);
+    // el de abajo le paga directo, asi que esto no pasa por la casa: se le apunta
+    // al vendedor lo que debe arriba, y al de arriba lo que le deben
+    if (mapa[quien]) mapa[quien].aPadrino += corte;
     if (!mapa[padrino]) {
       mapa[padrino] = { quien: padrino, piezas: 0, facturado: 0, comision: 0,
-        deAbajo: 0, porPago: {}, lineas: {} };
+        deAbajo: 0, aPadrino: 0, deQuien: {}, porPago: {}, lineas: {} };
     }
-    mapa[padrino].deAbajo += comisionDe(precio, pctPadrino);
+    mapa[padrino].deAbajo += corte;
+    mapa[padrino].deQuien[quien] = (mapa[padrino].deQuien[quien] || 0) + corte;
   };
   const meter = (quien, precio, pct, fecha, negocio, cuantas, pago) => {
     if (!quien || !fecha) return;
     if (!mapa[quien]) {
       mapa[quien] = { quien: quien, piezas: 0, facturado: 0, comision: 0,
-        deAbajo: 0, porPago: {}, lineas: {} };
+        deAbajo: 0, aPadrino: 0, deQuien: {}, porPago: {}, lineas: {} };
     }
     const m = mapa[quien];
     const com = comisionDe(precio, pct);
@@ -3017,13 +3022,13 @@ function ventasPorVendedor() {
     if (!t.vendida) return;
     meter(t.vendedor, Number(t.precio) || 0, t.pct, t.vendida, t.negocio || "", 1,
       t.pago || "efectivo");
-    meterArriba(t.padrino, Number(t.precio) || 0, t.pctPadrino);
+    meterArriba(t.vendedor, t.padrino, Number(t.precio) || 0, t.pctPadrino);
   });
   SERVICIOS.forEach((x) => {
     if (!x.fecha) return;
     meter(x.vendedor, Number(x.precio) || 0, x.pct, x.fecha, x.negocio || "", 0,
       x.pago || "efectivo");
-    meterArriba(x.padrino, Number(x.precio) || 0, x.pctPadrino);
+    meterArriba(x.vendedor, x.padrino, Number(x.precio) || 0, x.pctPadrino);
   });
   return mapa;
 }
@@ -3032,12 +3037,17 @@ function ventasPorVendedor() {
 // parte, así que debe el resto, menos lo que ya haya entregado.
 function deudaDe(quien, resumen) {
   const m = resumen || ventasPorVendedor()[quien];
-  if (!m) return { dela: 0, entregado: 0, debe: 0 };
+  if (!m) return { dela: 0, entregado: 0, debe: 0, aPadrino: 0 };
+  // Lo que sale del bolsillo del vendedor: todo lo que cobro menos lo suyo. A
+  // quien se lo entrega —a la casa, o directo al que lo enganchó— cambia segun
+  // el trato de cada quien, y eso se arregla fuera. Una sola cifra vale para los
+  // dos arreglos; dos cifras obligarian a elegir uno.
   const dela = m.facturado - m.comision;
   const entregado = LIQUIDACIONES
     .filter((x) => x.vendedor === quien)
     .reduce((a, x) => a + (Number(x.monto) || 0), 0);
-  return { dela: dela, entregado: entregado, debe: dela - entregado };
+  return { dela: dela, entregado: entregado, debe: dela - entregado,
+    aPadrino: m.aPadrino || 0 };
 }
 
 async function cargarLiquidaciones() {

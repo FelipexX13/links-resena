@@ -1547,6 +1547,12 @@ ve *«$59.880 · todo de lo que vendió tu gente»*.
 
 El superadmin no lo ve: para él la cifra está en Cuentas, desglosada.
 
+**Una sola deuda, no dos.** Se llegó a partir —tanto a la casa, tanto al que te
+enganchó— y se deshizo: a quién le entrega el dinero cada uno cambia según el
+trato, y a veces lo salda la casa por fuera. Una cifra —*lo que sale de tu
+bolsillo*— vale para cualquier arreglo; dos obligan a elegir uno y a mantenerlo
+sincronizado con la realidad.
+
 ## Cómo pagó, y quién le debe a quién
 
 Al aceptar una orden se marca **Efectivo · Transferencia · Otro**. Va escrito en
