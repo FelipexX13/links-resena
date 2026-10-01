@@ -1531,6 +1531,30 @@ congelado, así que reeditarla no la reescribe con el organigrama de hoy.
 (`deAbajo`) y no se suma ni a sus piezas ni a su facturado: la venta no es suya.
 Sumarla sería contar el mismo dinero dos veces.
 
+### Los sub pagan por adelantado
+
+Harrison no debe: **compra**. Paga los seis acrílicos antes de salir a venderlos,
+y lo que cobre en la calle es suyo.
+
+No hace falta un flujo nuevo para eso: el libro de entregas que ya existía sirve
+tal cual, solo que al revés. Se apunta lo que pagó como una entrega normal
+—*Cuentas → Recibí*— y el saldo arranca **a favor**, no en contra:
+
+| | Fila en Cuentas |
+|---|---|
+| Pagó 209.580, no ha colocado nada | 0 piezas · **209.580 a favor** |
+| Colocó tres | 3 piezas · **104.790 a favor** |
+| Colocó los seis | 6 piezas · **al día** |
+
+El saldo a favor **es el inventario surtido, en plata**: dice cuánto plástico
+pagado le queda por colocar sin necesidad de contar acrílicos.
+
+Dos cosas se escondían y se arreglaron para esto. `deudaDe()` se salía por un
+atajo cuando alguien no tenía ventas, y se comía lo que hubiera pagado. Y la
+tabla solo listaba a quien hubiera vendido, así que un sub recién surtido no
+salía en ninguna pantalla —justo el momento en que más dinero suyo hay en juego—.
+Un saldo negativo, además, se pintaba como *«al día»*.
+
 ### El cartel
 
 Al entrar, un vendedor ve lo suyo antes que nada:

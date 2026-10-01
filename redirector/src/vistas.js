@@ -726,6 +726,8 @@ const ESTILOS = `
   #estadoPunto .activa[data-valor=gris]{background:var(--tinta-3);color:#fff}
   .sobre-tabla{margin:26px 0 2px}
   .importe.debe,b.debe{color:var(--rojo-fuerte)}
+  /* lo contrario de una deuda: pagó por adelantado y le quedan piezas */
+  .importe.a-favor b{color:var(--verde-fuerte)}
   .inv{font-family:"Geist Mono",ui-monospace,monospace;font-size:13px}
   .inv-malos{color:var(--rojo-fuerte)}
   .rot{display:none}
@@ -3036,8 +3038,10 @@ function ventasPorVendedor() {
 // Lo que un vendedor le debe a la casa: cobró la venta entera y se queda su
 // parte, así que debe el resto, menos lo que ya haya entregado.
 function deudaDe(quien, resumen) {
-  const m = resumen || ventasPorVendedor()[quien];
-  if (!m) return { dela: 0, entregado: 0, debe: 0, aPadrino: 0 };
+  // Un sub paga por adelantado, asi que puede haber entregas antes de la primera
+  // venta. Salir por aqui sin mirar las liquidaciones borraba justo ese dinero.
+  const m = resumen || ventasPorVendedor()[quien] ||
+    { facturado: 0, comision: 0, aPadrino: 0 };
   // Lo que sale del bolsillo del vendedor: todo lo que cobro menos lo suyo. A
   // quien se lo entrega —a la casa, o directo al que lo enganchó— cambia segun
   // el trato de cada quien, y eso se arregla fuera. Una sola cifra vale para los
@@ -3624,9 +3628,16 @@ function pintarTope() {
 // mientras vendan los dos socios, esta tabla no tiene nada que contar.
 function pintarComisiones() {
   const porQuien = ventasPorVendedor();
-  const gente = Object.keys(porQuien)
-    .filter((k) => porQuien[k].comision > 0)
-    .sort((a, b) => porQuien[b].comision - porQuien[a].comision);
+  // Tambien los que pagaron por adelantado y todavia no han colocado nada: si
+  // solo salen los que vendieron, el dinero de un sub recien surtido no aparece
+  // en ninguna pantalla.
+  const conSaldo = {};
+  LIQUIDACIONES.forEach((x) => { if (x.vendedor) conSaldo[x.vendedor] = 1; });
+  const gente = Object.keys(porQuien).concat(Object.keys(conSaldo))
+    .filter((k, i, todos) => todos.indexOf(k) === i)
+    .filter((k) => (porQuien[k] && porQuien[k].comision > 0) || conSaldo[k])
+    .sort((a, b) => ((porQuien[b] && porQuien[b].comision) || 0) -
+      ((porQuien[a] && porQuien[a].comision) || 0));
 
   $("bloqueComisiones").hidden = !gente.length;
   if (!gente.length) return;
@@ -3635,7 +3646,8 @@ function pintarComisiones() {
     "<table><thead><tr><th>Vendedor</th><th>Facturado</th><th>Se lleva</th>" +
     "<th>Para la casa</th><th>Debe</th><th></th></tr></thead><tbody>" +
     gente.map((k) => {
-      const m = porQuien[k];
+      const m = porQuien[k] ||
+        { piezas: 0, facturado: 0, comision: 0, deAbajo: 0, porPago: {} };
       const d = deudaDe(k, m);
       const pagos = Object.keys(m.porPago)
         .map((p) => dinero(m.porPago[p]) + " en " + (NOMBRE_PAGO[p] || p)).join(" · ");
@@ -3645,9 +3657,14 @@ function pintarComisiones() {
         "<td class='importe'>" + dinero(m.facturado) + "</td>" +
         "<td class='importe'>" + dinero(m.comision) + "</td>" +
         "<td class='importe'>" + dinero(d.dela) + "</td>" +
-        "<td class='importe" + (d.debe > 0 ? " debe" : "") + "'><b>" +
-        (d.debe > 0 ? dinero(d.debe) : "al día") + "</b>" +
-        (d.entregado ? "<div class='fila-num'>entregó " + dinero(d.entregado) + "</div>" : "") +
+        // Un saldo a favor no es "al día": es alguien que pagó por adelantado y
+        // todavía tiene piezas por colocar. Esconderlo perdía justo el dato que
+        // dice cuánto plástico lleva alguien por delante.
+        "<td class='importe" + (d.debe > 0 ? " debe" : (d.debe < 0 ? " a-favor" : "")) + "'><b>" +
+        (d.debe > 0 ? dinero(d.debe)
+          : d.debe < 0 ? dinero(-d.debe) + " a favor"
+          : "al día") + "</b>" +
+        (d.entregado ? "<div class='fila-num'>pagó " + dinero(d.entregado) + "</div>" : "") +
         "</td>" +
         "<td><div class='acciones'><button type='button' class='accion-editar' " +
         "data-recibi='" + escHtml(k) + "'>Recibí</button></div></td></tr>";
