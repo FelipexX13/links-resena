@@ -1549,7 +1549,13 @@ tal cual, solo que al revés. Se apunta lo que pagó como una entrega normal
 El saldo a favor **es el inventario surtido, en plata**: dice cuánto plástico
 pagado le queda por colocar sin necesidad de contar acrílicos.
 
-Dos cosas se escondían y se arreglaron para esto. `deudaDe()` se salía por un
+**En la tabla salen todos los vendedores activos, hayan vendido o no.** Antes solo
+aparecía quien ya hubiera vendido, y eso era un pez mordiéndose la cola: el botón
+de *Recibí* vive en esa fila, así que a un sub nuevo no había forma de apuntarle el
+pago por adelantado —no tenía fila porque no había vendido, y no podía vender sin
+que le surtieran—.
+
+Dos cosas más se escondían y se arreglaron para esto. `deudaDe()` se salía por un
 atajo cuando alguien no tenía ventas, y se comía lo que hubiera pagado. Y la
 tabla solo listaba a quien hubiera vendido, así que un sub recién surtido no
 salía en ninguna pantalla —justo el momento en que más dinero suyo hay en juego—.

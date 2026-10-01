@@ -3628,14 +3628,19 @@ function pintarTope() {
 // mientras vendan los dos socios, esta tabla no tiene nada que contar.
 function pintarComisiones() {
   const porQuien = ventasPorVendedor();
-  // Tambien los que pagaron por adelantado y todavia no han colocado nada: si
-  // solo salen los que vendieron, el dinero de un sub recien surtido no aparece
-  // en ninguna pantalla.
+  // Salen TODOS los vendedores activos, hayan vendido o no.
+  //
+  // Antes solo aparecia quien ya hubiera vendido, y eso era un pez mordiendose
+  // la cola: el boton de "Recibi" vive en esta fila, asi que a un sub nuevo no
+  // habia forma de apuntarle el pago por adelantado —no tenia fila porque no
+  // habia vendido, y no podia vender sin que le surtieran—.
   const conSaldo = {};
   LIQUIDACIONES.forEach((x) => { if (x.vendedor) conSaldo[x.vendedor] = 1; });
-  const gente = Object.keys(porQuien).concat(Object.keys(conSaldo))
+  const activos = USUARIOS.filter((u) => u.activo).map((u) => u.usuario);
+  const gente = Object.keys(porQuien).concat(Object.keys(conSaldo)).concat(activos)
     .filter((k, i, todos) => todos.indexOf(k) === i)
-    .filter((k) => (porQuien[k] && porQuien[k].comision > 0) || conSaldo[k])
+    .filter((k) => (porQuien[k] && porQuien[k].comision > 0) || conSaldo[k] ||
+      activos.indexOf(k) >= 0)
     .sort((a, b) => ((porQuien[b] && porQuien[b].comision) || 0) -
       ((porQuien[a] && porQuien[a].comision) || 0));
 
