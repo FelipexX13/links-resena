@@ -282,6 +282,19 @@ acaba filtrando.
 Y las tres guardas hablan. Un `return` mudo en un manejador se ve exactamente
 igual que un botón muerto, que fue justo como se vio.
 
+**Un lector para toda la página, no uno por operación.** El adaptador NFC del
+teléfono es uno solo; varios `NDEFReader` sobre él es justo donde Chrome se enreda.
+
+**Y un botón de Reiniciar, porque abortar no siempre basta.** Una vez que corre un
+`scan()`, Chrome deja una sesión de NFC viva que a veces no suelta ni abortándola:
+a partir de ahí ni lee ni graba, y el código de aquí no puede hacer nada, porque el
+adaptador no es suyo. Lo único que lo suelta de verdad es recargar la página.
+
+*Reiniciar* recarga con `#nfc` y la ventana se reabre sola, así que no hay que
+volver a navegar. Y si una espera se agota **después** de haber leído algo en esa
+sesión, el aviso nombra ese caso primero en vez de mandar a revisar los ajustes de
+Android.
+
 **Los tres pasos están siempre disponibles.** Encadenarlos —leer solo si grabó,
 sellar solo si leyó— daba por hecho que el NFC nunca falla, y falla: una lectura
 que no sale dejaba el resto del flujo muerto sin motivo. Grabar dos veces, o leer

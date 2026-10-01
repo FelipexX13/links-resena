@@ -1177,6 +1177,8 @@ function mostrar(dentro, quien) {
     // los manda vacíos. Los puntos sí, aunque no vea el mapa: sin ellos, aceptar
     // una orden de un local que ya tenía punto crearía uno repetido.
     arrancarCarga();
+    // se vuelve de un "Reiniciar": se reabre donde estaba
+    if (location.hash === "#nfc" && SESION.dueno) abrirNFC();
   }
   else { cerrarQR(); cerrarTarjeta(); $("clave").focus(); }
 }
@@ -4483,6 +4485,17 @@ let cortarNFC = null;
 let NFC_OCUPADO = false;
 // cual de los tres esta en marcha, para que su propio boton sirva de cancelar
 let NFC_PASO = "";
+// Un lector para toda la pagina, no uno por operacion. Varios NDEFReader sobre
+// el mismo adaptador es justo donde Chrome se enreda, y el adaptador es uno.
+let LECTOR_NFC = null;
+// si se llego a escanear, Chrome deja una sesion de NFC viva que a veces no
+// suelta ni abortandola. Se apunta para poder decirlo cuando algo se cuelga.
+let NFC_ESCANEADO = false;
+
+function lectorNFC() {
+  if (!LECTOR_NFC) LECTOR_NFC = new window.NDEFReader();
+  return LECTOR_NFC;
+}
 const ETIQUETA_NFC = { grabar: "Grabar", leer: "Leer", sellar: "Bloquear" };
 
 function hayWebNFC() {
@@ -4648,6 +4661,12 @@ async function porQueNoAparecio() {
     return "Le negaste el NFC a esta página. Entra al candado de la barra de " +
       "direcciones y vuelve a darle permiso.";
   }
+  if (NFC_ESCANEADO) {
+    return "Pasaron 25 segundos sin ver ningún chip. Como ya leíste uno en esta " +
+      "sesión, lo más probable es que Chrome haya dejado el NFC trabado: toca " +
+      "«Reiniciar» aquí abajo. Si no, mira que el NFC de Android esté encendido y " +
+      "que el chip no esté ya sellado.";
+  }
   return "Pasaron 25 segundos sin ver ningún chip. Tres cosas, en este orden: " +
     "que el NFC del teléfono esté encendido en los ajustes de Android; que el " +
     "chip NO esté ya sellado —uno sellado no se deja reescribir nunca más—; y " +
@@ -4664,7 +4683,7 @@ $("grabarNFC").onclick = async () => {
   const url = NFC_PIEZA && NFC_PIEZA.url;
   const bien = await operacionNFC("grabar", "diceGrabar",
     "Acerca el chip por detrás… o toca Cancelar", async (signal) => {
-    await new window.NDEFReader().write(
+    await lectorNFC().write(
       { records: [{ recordType: "url", data: url }] }, { signal: signal });
   });
   if (!bien || !NFC_PIEZA) return;
@@ -4682,7 +4701,8 @@ $("leerNFC").onclick = async () => {
   const bien = await operacionNFC("leer", "diceLeer",
     "Acerca el chip para leerlo… o toca Cancelar",
     async (signal) => {
-      const nfc = new window.NDEFReader();
+      const nfc = lectorNFC();
+      NFC_ESCANEADO = true;
       leido = await new Promise((listo, falla) => {
         nfc.onreading = (e) => {
           for (const r of e.message.records) {
@@ -4729,7 +4749,7 @@ $("sellarNFC").onclick = async () => {
 
   const bien = await operacionNFC("sellar", "diceSellar",
     "Acerca el chip para sellarlo… o toca Cancelar",
-    async (signal) => { await new window.NDEFReader().makeReadOnly({ signal: signal }); });
+    async (signal) => { await lectorNFC().makeReadOnly({ signal: signal }); });
   if (!bien || !NFC_PIEZA) return;
 
   NFC_PIEZA.sellada = true;
@@ -4752,6 +4772,15 @@ async function apuntarNFCPuesto() {
     avisar("avisoPanel", "El chip quedó, pero no se pudo marcar: " + e.message, false);
   }
 }
+
+// Recargar es lo unico que suelta de verdad la sesion de NFC de Chrome cuando se
+// traba. Abortar desde aqui no basta: el adaptador no es nuestro. Se vuelve a
+// esta misma ventana para no tener que navegar otra vez.
+$("reiniciarNFC").onclick = () => {
+  pararNFC();
+  location.hash = "#nfc";
+  location.reload();
+};
 
 $("saltarSello").onclick = async () => { await apuntarNFCPuesto(); nuevaPiezaNFC(); };
 $("siguienteNFC").onclick = nuevaPiezaNFC;
@@ -6806,6 +6835,7 @@ export function vistaAdmin(origen) {
     </ol>
 
     <div class="modal-acciones">
+      <button type="button" class="fantasma" id="reiniciarNFC">Reiniciar</button>
       <button type="button" class="fantasma" id="saltarSello" hidden>Sin sellar, siguiente</button>
       <button type="button" id="siguienteNFC" disabled>Siguiente pieza</button>
     </div>
