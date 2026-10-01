@@ -347,6 +347,20 @@ const ESTILOS = `
      y no se confunde con el buscador de locales que tiene encima. */
   #puntoLink{background:var(--azul-piel);border-color:var(--azul);font-weight:500}
   #puntoLink::placeholder{color:var(--tinta-2);font-weight:400}
+  /* ---------- lo que lleva vendido un vendedor ---------- */
+  /* El unico sitio del panel con relleno de color solido: es lo primero que ve
+     al entrar y lo unico que le interesa de un vistazo. El resto de la pagina
+     usa superficies tintadas, asi que esto destaca sin competir con nada. */
+  .cartel-vendido{margin:0 0 18px;padding:20px 22px;border-radius:var(--r-l);
+    background:linear-gradient(135deg,var(--azul) 0%,var(--azul-fuerte) 100%);
+    color:#fff;box-shadow:0 10px 26px -14px rgba(26,115,232,.75)}
+  .cartel-vendido .rotulo{display:block;font-size:12.5px;font-weight:600;
+    letter-spacing:.02em;opacity:.82}
+  .cartel-vendido .cifra{display:block;margin-top:5px;font-size:clamp(32px,9vw,42px);
+    font-weight:700;letter-spacing:-.035em;line-height:1}
+  .cartel-vendido .detalle{display:block;margin-top:9px;font-size:13px;opacity:.86}
+  .cartel-vendido .detalle b{font-weight:600}
+
   /* ---------- ruleta ---------- */
   /* Se juega con la paleta de PRODUCTO, no con la del logo. La franja de cuatro
      colores de arriba es el momento de marca de la pagina; si la rueda tambien
@@ -1056,7 +1070,7 @@ let FILTRO_TIPO = "";
 let MODO = "una";
 let ORIGEN_RANGO = "numero";
 let VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "", pct: 0, pago: "efectivo",
-  jefe: "" };
+  jefe: "", padrino: "", pctPadrino: 0 };
 // dónde está el local del link que se acaba de leer
 let DONDE_QUEDA = { lat: null, lng: null };
 let COMO_PAGO = "efectivo";
@@ -1725,7 +1739,8 @@ function porVenta(codigos) {
     const t = TARJETAS.filter((x) => x.codigo === c)[0] || {};
     const venta = { vendida: t.vendida || "", precio: Number(t.precio) || 0,
       vendedor: t.vendedor || "", pct: Number(t.pct) || 0, pago: t.pago || "efectivo",
-      jefe: t.jefe || "" };
+      jefe: t.jefe || "", padrino: t.padrino || "",
+      pctPadrino: Number(t.pctPadrino) || 0 };
     const llave = venta.vendida + "|" + venta.precio + "|" + venta.vendedor + "|" +
       venta.pct + "|" + venta.pago + "|" + venta.jefe;
     if (!grupos[llave]) grupos[llave] = { venta: venta, codigos: [] };
@@ -1991,6 +2006,8 @@ $("formTarjeta").onsubmit = async (e) => {
         precio: VENTA_EDITADA.precio,
         vendedor: VENTA_EDITADA.vendedor,
         pct: VENTA_EDITADA.pct,
+        padrino: VENTA_EDITADA.padrino,
+        pctPadrino: VENTA_EDITADA.pctPadrino,
         pago: VENTA_EDITADA.pago,
         jefe: VENTA_EDITADA.jefe,
       }),
@@ -2029,7 +2046,8 @@ function editar(codigo) {
   pintarTipo(tipoDe(t));
   VENTA_EDITADA = { vendida: t.vendida || "", precio: t.precio || 0,
     vendedor: t.vendedor || "", pct: Number(t.pct) || 0, pago: t.pago || "efectivo",
-    jefe: t.jefe || "" };
+    jefe: t.jefe || "", padrino: t.padrino || "",
+    pctPadrino: Number(t.pctPadrino) || 0 };
   llenarLocales();
   $("localExistente").value = t.negocio || "";
   pintarModo("una");
@@ -2471,7 +2489,7 @@ function salirDeEdicion() {
   if ($("localExistente").options.length) $("localExistente").value = "";
   if ($("ordenRango").options.length) $("ordenRango").value = "";
   VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "", pct: 0, pago: "efectivo",
-    jefe: "" };
+    jefe: "", padrino: "", pctPadrino: 0 };
 }
 
 function prepararNuevaTarjeta() {
@@ -2962,11 +2980,22 @@ const NOMBRE_PAGO = { efectivo: "efectivo", transferencia: "transferencia", otro
 // Todo lo vendido, agrupado por quién lo vendió, con sus líneas por local y día.
 function ventasPorVendedor() {
   const mapa = {};
+  // Lo que se lleva alguien por haber enganchado a otro. No es facturacion suya
+  // —la venta no es suya—, así que va en su propia cuenta y no se suma a piezas
+  // ni a facturado, que si no la casa se contaria el dinero dos veces.
+  const meterArriba = (padrino, precio, pctPadrino) => {
+    if (!padrino || !pctPadrino) return;
+    if (!mapa[padrino]) {
+      mapa[padrino] = { quien: padrino, piezas: 0, facturado: 0, comision: 0,
+        deAbajo: 0, porPago: {}, lineas: {} };
+    }
+    mapa[padrino].deAbajo += comisionDe(precio, pctPadrino);
+  };
   const meter = (quien, precio, pct, fecha, negocio, cuantas, pago) => {
     if (!quien || !fecha) return;
     if (!mapa[quien]) {
       mapa[quien] = { quien: quien, piezas: 0, facturado: 0, comision: 0,
-        porPago: {}, lineas: {} };
+        deAbajo: 0, porPago: {}, lineas: {} };
     }
     const m = mapa[quien];
     const com = comisionDe(precio, pct);
@@ -2988,11 +3017,13 @@ function ventasPorVendedor() {
     if (!t.vendida) return;
     meter(t.vendedor, Number(t.precio) || 0, t.pct, t.vendida, t.negocio || "", 1,
       t.pago || "efectivo");
+    meterArriba(t.padrino, Number(t.precio) || 0, t.pctPadrino);
   });
   SERVICIOS.forEach((x) => {
     if (!x.fecha) return;
     meter(x.vendedor, Number(x.precio) || 0, x.pct, x.fecha, x.negocio || "", 0,
       x.pago || "efectivo");
+    meterArriba(x.padrino, Number(x.precio) || 0, x.pctPadrino);
   });
   return mapa;
 }
@@ -3333,6 +3364,7 @@ function repintarTodo() {
   pintarTabla();
   pintarVentas();
   pintarCuentas();
+  pintarCartel();
 }
 
 function parchearTarjetas(codigos, cambios) {
@@ -3748,6 +3780,35 @@ function pintarRol() {
   $("filaQuienVende").hidden = !dueno;
 }
 
+// Lo suyo, en plata, antes que nada. Suma los dos caminos por los que le entra:
+// lo que vende el mismo y el 20% de lo que venda quien cuelgue de el.
+function pintarCartel() {
+  const caja = $("cartelVendido");
+  if (SESION.dueno) { caja.hidden = true; return; }
+
+  const m = ventasPorVendedor()[SESION.usuario] ||
+    { piezas: 0, facturado: 0, comision: 0, deAbajo: 0 };
+  const suyo = (m.comision || 0) + (m.deAbajo || 0);
+  const d = deudaDe(SESION.usuario, m);
+
+  const trozos = [];
+  if (m.piezas) trozos.push(plural(m.piezas, "pieza vendida", "piezas vendidas"));
+  // repetir la cifra cuando todo viene de abajo quedaba raro: "59.880 · 59.880
+  // de tu gente". Si no vendió él, basta con decir de dónde sale
+  if (m.deAbajo && m.comision) {
+    trozos.push("<b>" + dinero(m.deAbajo) + "</b> de tu gente");
+  } else if (m.deAbajo) {
+    trozos.push("todo de lo que vendió tu gente");
+  }
+  if (d.debe > 0) trozos.push("debes entregar <b>" + dinero(d.debe) + "</b>");
+  else if (m.facturado) trozos.push("al d\u00eda con la casa");
+
+  caja.hidden = false;
+  caja.innerHTML = "<span class='rotulo'>Has vendido</span>" +
+    "<span class='cifra'>" + dinero(suyo) + "</span>" +
+    (trozos.length ? "<span class='detalle'>" + trozos.join(" \u00b7 ") + "</span>" : "");
+}
+
 function pintarMio() {
   const m = ventasPorVendedor()[SESION.usuario] ||
     { piezas: 0, facturado: 0, comision: 0, lineas: {} };
@@ -3801,7 +3862,7 @@ function pintarVista(valor) {
   $("abrirNFC").hidden = !SESION.dueno || VISTA !== "inventario";
   $("abrirAjustes").hidden = !SESION.dueno || VISTA !== "cuentas";
   $("abrirUsuarios").hidden = !SESION.dueno || VISTA !== "cuentas";
-  if (VISTA === "locales") pintarVentas();
+  if (VISTA === "locales") { pintarVentas(); pintarCartel(); }
   if (VISTA === "cuentas" || VISTA === "inventario") pintarCuentas();
   if (VISTA === "mio") pintarMio();
   if (VISTA === "ruleta") armarRuleta();
@@ -5502,7 +5563,7 @@ function ponerUsuarioEnForm(u) {
   $("verClave").textContent = "ver";
   JEFE_USUARIO = u && u.jefe === "nicolas" ? "nicolas" : "felipe";
   marcarSegmento("usuarioJefe", JEFE_USUARIO);
-  $("usuarioPct").value = u ? u.pct : 50;
+  llenarPadrinos(u ? u.padrino : "", u ? u.usuario : "");
   $("usuarioActivo").checked = u ? Boolean(u.activo) : true;
   $("ayudaClave").textContent = u
     ? "Déjala vacía para no cambiarla. Si la escribes, la de antes deja de servir."
@@ -5511,13 +5572,34 @@ function ponerUsuarioEnForm(u) {
   pintarEjemploPct();
 }
 
-// El porcentaje en plata, que es como se entiende: un acrílico de la lista.
+// El reparto ya no es una cifra que se escribe: lo decide la posición. Lo que
+// hace falta enseñar es en cuánto se traduce, que es como se entiende.
 function pintarEjemploPct() {
-  const pct = Math.max(0, Math.min(100, Number($("usuarioPct").value) || 0));
+  const padrino = $("usuarioPadrino").value;
+  const pct = padrino ? CORTE.vende : CORTE.vende + CORTE.engancha;
   const suyo = Math.round(PRECIOS.acrilico * pct / 100);
-  const casa = PRECIOS.acrilico - suyo;
-  $("pctEjemplo").textContent = "de un acrílico de " + dinero(PRECIOS.acrilico) +
-    ": él " + dinero(suyo) + ", la casa " + dinero(casa);
+  const arriba = padrino ? Math.round(PRECIOS.acrilico * CORTE.engancha / 100) : 0;
+  const casa = PRECIOS.acrilico - suyo - arriba;
+  $("pctEjemplo").textContent = "De un acrílico de " + dinero(PRECIOS.acrilico) + ": él " +
+    dinero(suyo) + " (" + pct + "%)" +
+    (padrino ? ", " + nombreDe(padrino) + " " + dinero(arriba) + " (" + CORTE.engancha + "%)" : "") +
+    ", la casa " + dinero(casa) + " (" + CORTE.casa + "%).";
+}
+
+function nombreDe(usuario) {
+  const u = USUARIOS.filter((x) => x.usuario === usuario)[0];
+  return u ? u.nombre : usuario;
+}
+
+// Solo pueden enganchar los que no cuelgan de nadie, y nadie se engancha a si
+// mismo: dos niveles. El Worker lo vuelve a comprobar, esto es para no ofrecerlo.
+function llenarPadrinos(elegido, propio) {
+  const libres = USUARIOS.filter((u) => u.activo && !u.padrino && u.usuario !== propio);
+  $("usuarioPadrino").innerHTML =
+    "<option value=''>De nadie — vende por su cuenta</option>" +
+    libres.map((u) => "<option value='" + escHtml(u.usuario) + "'>" +
+      escHtml(u.nombre) + "</option>").join("");
+  $("usuarioPadrino").value = elegido || "";
 }
 
 $("verClave").onclick = () => {
@@ -5527,7 +5609,7 @@ $("verClave").onclick = () => {
   $("verClave").textContent = tapada ? "tapar" : "ver";
 };
 
-$("usuarioPct").addEventListener("input", pintarEjemploPct);
+$("usuarioPadrino").addEventListener("change", pintarEjemploPct);
 $("usuarioNuevo").onclick = () => { verFicha(null); $("usuarioNombre").focus(); };
 
 function abrirUsuarios() {
@@ -5566,7 +5648,9 @@ $("formUsuario").onsubmit = async (e) => {
         nombre: $("usuarioNombre").value,
         cedula: $("usuarioCedula").value,
         telefono: $("usuarioTelefono").value,
-        pct: Number($("usuarioPct").value),
+        // el % lo calcula el Worker de la posicion; se manda por compatibilidad
+        pct: $("usuarioPadrino").value ? CORTE.vende : CORTE.vende + CORTE.engancha,
+        padrino: $("usuarioPadrino").value,
         jefe: JEFE_USUARIO,
         activo: $("usuarioActivo").checked,
         clave: $("usuarioClave").value,
@@ -5738,7 +5822,11 @@ function abrirVenta(negocio) {
 // tramo lo elige la propia orden: para eso ya sabe cuántos lleva.
 // Lo que vale sin la promoción. Va tachado en el comprobante, para que el
 // cliente vea lo que se ahorró.
-const LISTA = { acrilico: 70000, sticker: 35000, ficha: 60000 };
+const LISTA = { acrilico: 70000, sticker: 20000, ficha: 60000 };
+
+// 50 la casa, 20 el que enganchó, 30 el que vendió. El que no cuelga de nadie se
+// lleva los dos cortes de abajo. El Worker manda: esto es para pintar.
+const CORTE = { casa: 50, engancha: 20, vende: 30 };
 
 const PRECIOS = {
   acrilico: 49900,
@@ -6635,6 +6723,7 @@ export function vistaAdmin(origen) {
       </div>
 
       <div id="vistaLocales" hidden>
+      <div class="cartel-vendido" id="cartelVendido" hidden></div>
       <div class="grafica" aria-label="Ventas por día" data-dueno hidden>
         <div class="grafica-alto">
           <div>
@@ -7083,13 +7172,9 @@ export function vistaAdmin(origen) {
       <p class="ayuda">El papel sale con su nombre y su cédula, y ese ingreso cuenta
         para él en el tope de renta.</p>
 
-      <label class="paso" for="usuarioPct"><span class="n n4">4</span>Cuánto se queda</label>
-      <div class="pct-fila">
-        <input class="c3" id="usuarioPct" type="number" min="0" max="100" step="1" value="50"
-               required>
-        <span class="pct-signo">%</span>
-        <span class="mini2" id="pctEjemplo"></span>
-      </div>
+      <label class="paso" for="usuarioPadrino"><span class="n n4">4</span>De quién cuelga</label>
+      <select id="usuarioPadrino"></select>
+      <p class="ayuda" id="pctEjemplo"></p>
 
       <label class="casilla"><input type="checkbox" id="usuarioActivo" checked>
         Puede entrar</label>

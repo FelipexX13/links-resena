@@ -1500,6 +1500,53 @@ grados una frase de una tirada se pisa con la de al lado.
 
 Quien tenga puesto *reducir movimiento* se salta la animación y ve el resultado.
 
+## La cadena: 50 / 20 / 30
+
+Un vendedor puede **colgar de otro**. Harrison vende al local, Alexander lo
+engancho, y la casa está encima de los dos. Una sola venta, tres cortes:
+
+| | % | De seis acrílicos a 49.900 |
+|---|---|---|
+| La casa | 50 | 149.700 |
+| El que engancha | 20 | 59.880 |
+| El que vende | 30 | 89.820 |
+
+**El reparto lo decide la posición, no una cifra por usuario.** El `%` editable
+que hubo antes desaparece: quien no cuelga de nadie se lleva los dos cortes de
+abajo —20 + 30 = 50—, que es exactamente lo que cobraba un vendedor cuando no
+había escalones. Así nadie tiene que acordarse de bajarle el porcentaje a
+Alexander el día que le enganchan a alguien.
+
+**Dos niveles, y el Worker lo hace cumplir.** No se puede colgar de alguien que ya
+cuelga, ni de uno mismo, ni colgarse teniendo gente debajo. Con tres niveles
+habría que repartir el 50 de abajo entre más gente, y eso es otro trato, no una
+variante de este.
+
+**Se congela en la venta**, como el `pct` y el `jefe`: la tarjeta guarda de quién
+colgaba y cuánto se llevó. Si mañana Harrison deja de colgar de Alexander, lo
+vendido ayer no se mueve. Y al reeditar una orden vieja el superadmin reenvía lo
+congelado, así que reeditarla no la reescribe con el organigrama de hoy.
+
+**La comisión del de arriba no es facturación suya.** Va en su propia cuenta
+(`deAbajo`) y no se suma ni a sus piezas ni a su facturado: la venta no es suya.
+Sumarla sería contar el mismo dinero dos veces.
+
+### El cartel
+
+Al entrar, un vendedor ve lo suyo antes que nada:
+
+```
+Has vendido
+$89.820
+6 piezas vendidas · debes entregar $209.580
+```
+
+Suma los dos caminos por los que le entra dinero: lo que vende él y el 20% de lo
+que venda quien cuelgue de él. Alexander, que en este ejemplo no vendió nada,
+ve *«$59.880 · todo de lo que vendió tu gente»*.
+
+El superadmin no lo ve: para él la cifra está en Cuentas, desglosada.
+
 ## Cómo pagó, y quién le debe a quién
 
 Al aceptar una orden se marca **Efectivo · Transferencia · Otro**. Va escrito en

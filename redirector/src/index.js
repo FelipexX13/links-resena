@@ -74,6 +74,40 @@ const SOCIOS = new Set(["felipe", "nicolas", "ambos"]);
 // dos dueños —que firman desde la cuenta del superadmin— o cualquier usuario.
 // No se comprueba contra KV a propósito: sería una lectura por tarjeta, y quien
 // manda el dato o es el superadmin o ya lo tiene forzado a su propio nombre.
+// El reparto de una venta: 50 la casa, 20 el que engancho, 30 el que vendio.
+// Es fijo y lo decide la POSICION, no una cifra por usuario: quien no cuelga de
+// nadie se lleva los dos cortes de abajo —el 20 y el 30—, que es justo lo que
+// cobraba un vendedor antes de que existieran los escalones.
+const CORTE = { casa: 50, engancha: 20, vende: 30 };
+
+// Se congela en cada venta. Si manana Harrison deja de colgar de Alexander, lo
+// vendido ayer sigue repartido como se vendio.
+async function repartoDe(env, vendedor) {
+  if (!vendedor) return { pct: 0, padrino: "", pctPadrino: 0 };
+  const u = await leerUsuario(env, vendedor);
+  const padrino = u && u.padrino ? u.padrino : "";
+  if (!padrino) return { pct: CORTE.vende + CORTE.engancha, padrino: "", pctPadrino: 0 };
+  return { pct: CORTE.vende, padrino: padrino, pctPadrino: CORTE.engancha };
+}
+
+// Dos niveles y no mas. Con tres habria que repartir el 50 de abajo entre mas
+// gente, y eso es otro trato, no una variante de este.
+async function revisarPadrino(env, pedido, deQuien) {
+  const v = vendedorValido(pedido);
+  if (!v) return { padrino: "" };
+  if (v === deQuien) return { error: "Un vendedor no puede colgar de s\u00ed mismo" };
+  const u = await leerUsuario(env, v);
+  if (!u) return { error: "Ese vendedor no existe: " + v };
+  if (u.padrino) {
+    return { error: v + " ya cuelga de " + u.padrino + ", y solo hay dos niveles" };
+  }
+  const { keys } = await env.TARJETAS.list({ prefix: "u:" });
+  if (keys.some((k) => (k.metadata || {}).padrino === deQuien)) {
+    return { error: "De " + deQuien + " ya cuelga alguien, as\u00ed que no puede colgar de otro" };
+  }
+  return { padrino: v };
+}
+
 function vendedorValido(valor) {
   const v = String(valor || "").trim().toLowerCase();
   return FORMATO_USUARIO.test(v) ? v : "";
@@ -200,7 +234,7 @@ function precioValido(valor) {
   return Number.isFinite(n) && n >= 0 ? Math.round(n) : 0;
 }
 
-function registroDe(cuerpo, vendedor, pct, pago, jefe) {
+function registroDe(cuerpo, vendedor, reparto, pago, jefe) {
   const destino = urlDestino(cuerpo.destino);
   if (!destino) return { error: "El destino debe ser una URL http:// o https://" };
   const negocio = String(cuerpo.negocio || "").trim().slice(0, 120);
@@ -213,7 +247,11 @@ function registroDe(cuerpo, vendedor, pct, pago, jefe) {
       vendida: fechaValida(cuerpo.vendida),
       precio: precioValido(cuerpo.precio),
       vendedor: vendedor,
-      pct: pct,
+      pct: reparto.pct,
+      // de quien colgaba al vender, y cuanto se llevo. Va congelado con la
+      // venta: si manana deja de colgar de el, lo de ayer no se mueve.
+      padrino: reparto.padrino,
+      pctPadrino: reparto.pctPadrino,
       pago: pago,
       jefe: jefe,
       // de dónde: salen del "@lat,lng" del link de Maps que se pegó al crear la
@@ -275,7 +313,7 @@ function gastoDe(cuerpo) {
 // El sitio en Google Maps se cobra aparte y no cuelga de ninguna tarjeta: un local
 // puede pedirla sin comprar un solo acrílico. Por eso vive en su propia clave y
 // se une a la orden por el nombre del negocio.
-function servicioDe(cuerpo, vendedor, pct, pago, jefe) {
+function servicioDe(cuerpo, vendedor, reparto, pago, jefe) {
   const negocio = String(cuerpo.negocio || "").trim().slice(0, 60);
   if (!negocio) return { error: "Falta el nombre del local" };
 
@@ -292,7 +330,9 @@ function servicioDe(cuerpo, vendedor, pct, pago, jefe) {
       precio: Math.round(precio),
       fecha: fecha,
       vendedor: vendedor,
-      pct: pct,
+      pct: reparto.pct,
+      padrino: reparto.padrino,
+      pctPadrino: reparto.pctPadrino,
       pago: pago,
       jefe: jefe,
       hecha: Boolean(cuerpo.hecha),
@@ -507,6 +547,9 @@ const SOLO_DUENO = new Set(["gastos", "gasto", "gasto-borrar", "usuarios", "usua
       return json({ error: "El porcentaje va de 0 a 100" }, 400);
     }
 
+    const quienCuelga = await revisarPadrino(env, cuerpo.padrino, nombreUsuario);
+    if (quienCuelga.error) return json({ error: quienCuelga.error }, 400);
+
     const antes = await leerUsuario(env, nombreUsuario);
     const clave = String(cuerpo.clave || "");
     // al crear hace falta clave; al editar solo si se quiere cambiar
@@ -526,6 +569,7 @@ const SOLO_DUENO = new Set(["gastos", "gasto", "gasto-borrar", "usuarios", "usua
       telefono: String(cuerpo.telefono || "").trim().slice(0, 30),
       nota: String(cuerpo.nota || "").trim().slice(0, 120),
       pct: Math.round(pct),
+      padrino: quienCuelga.padrino,
       jefe: jefeValido(cuerpo.jefe),
       activo: cuerpo.activo === undefined ? true : Boolean(cuerpo.activo),
       creado: antes ? antes.creado : new Date().toISOString(),
@@ -678,10 +722,22 @@ const SOLO_DUENO = new Set(["gastos", "gasto", "gasto-borrar", "usuarios", "usua
   // comprobantes que ya firmó Felipe siguen siendo ingreso de Felipe.
   const suJefe = (pedido) => quien.dueno ? jefeValido(pedido) : jefeValido(quien.jefe);
 
-  const suPct = (pedido) => {
-    if (!quien.dueno) return quien.pct;
-    const n = Number(pedido);
-    return Number.isFinite(n) && n >= 0 && n <= 100 ? Math.round(n) : 0;
+  // El superadmin reenvia el reparto congelado cuando reedita una venta vieja:
+  // asi reeditarla no la reescribe con el organigrama de hoy. En una venta nueva
+  // no manda nada y se calcula de quien vende.
+  const enRango = (n) => {
+    const v = Number(n);
+    return Number.isFinite(v) && v >= 0 && v <= 100 ? Math.round(v) : 0;
+  };
+  const suReparto = async (cuerpo) => {
+    if (quien.dueno && cuerpo.pct !== undefined) {
+      return {
+        pct: enRango(cuerpo.pct),
+        padrino: vendedorValido(cuerpo.padrino),
+        pctPadrino: enRango(cuerpo.pctPadrino),
+      };
+    }
+    return await repartoDe(env, deQuienEs(cuerpo.vendedor));
   };
 
   if (accion === "modo" && request.method === "POST") {
@@ -735,7 +791,7 @@ const SOLO_DUENO = new Set(["gastos", "gasto", "gasto-borrar", "usuarios", "usua
       return json({ error: "Ese código está reservado por el sistema" }, 400);
     }
 
-    const hecho = registroDe(cuerpo, deQuienEs(cuerpo.vendedor), suPct(cuerpo.pct),
+    const hecho = registroDe(cuerpo, deQuienEs(cuerpo.vendedor), await suReparto(cuerpo),
       pagoValido(cuerpo.pago), suJefe(cuerpo.jefe));
     if (hecho.error) return json({ error: hecho.error }, 400);
 
@@ -763,7 +819,7 @@ const SOLO_DUENO = new Set(["gastos", "gasto", "gasto-borrar", "usuarios", "usua
       return json({ error: "Máximo " + MAX_RANGO + " tarjetas por tanda" }, 400);
     }
 
-    const hecho = registroDe(cuerpo, deQuienEs(cuerpo.vendedor), suPct(cuerpo.pct),
+    const hecho = registroDe(cuerpo, deQuienEs(cuerpo.vendedor), await suReparto(cuerpo),
       pagoValido(cuerpo.pago), suJefe(cuerpo.jefe));
     if (hecho.error) return json({ error: hecho.error }, 400);
 
@@ -811,7 +867,7 @@ const SOLO_DUENO = new Set(["gastos", "gasto", "gasto-borrar", "usuarios", "usua
 
   if (accion === "servicio" && request.method === "POST") {
     const cuerpo = await request.json().catch(() => ({}));
-    const hecho = servicioDe(cuerpo, deQuienEs(cuerpo.vendedor), suPct(cuerpo.pct),
+    const hecho = servicioDe(cuerpo, deQuienEs(cuerpo.vendedor), await suReparto(cuerpo),
       pagoValido(cuerpo.pago), suJefe(cuerpo.jefe));
     if (hecho.error) return json({ error: hecho.error }, 400);
     if (await ordenCerrada(env, hecho.servicio.negocio)) {
@@ -1371,6 +1427,7 @@ async function sesionValida(request, env) {
   const u = await leerUsuario(env, usuario);
   if (!u || !u.activo) return null;
   return { usuario: usuario, dueno: false, nombre: u.nombre, pct: u.pct,
+    padrino: u.padrino || "",
     jefe: jefeValido(u.jefe), cedula: u.cedula, telefono: u.telefono, nota: u.nota };
 }
 
@@ -1433,7 +1490,8 @@ async function leerUsuario(env, usuario) {
 function usuarioPublico(u) {
   return {
     usuario: u.usuario, nombre: u.nombre, cedula: u.cedula, telefono: u.telefono,
-    nota: u.nota, pct: u.pct, jefe: u.jefe, activo: u.activo, creado: u.creado,
+    nota: u.nota, pct: u.pct, padrino: u.padrino || "", jefe: u.jefe,
+    activo: u.activo, creado: u.creado,
   };
 }
 
