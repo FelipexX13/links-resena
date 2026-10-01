@@ -4561,16 +4561,30 @@ function pararNFC() {
 // El chip tarda lo que tarde en acercarse, asi que hay segundos de espera en los
 // que se puede tocar otra vez. Aqui se cierra esa puerta.
 async function operacionNFC(id, esperando, hacer) {
-  if (NFC_OCUPADO || !NFC_PIEZA) return false;
+  // Ninguna de estas tres se va callada. Un "return" mudo aqui se ve igual que
+  // un boton muerto: se toca y no pasa nada, sin una sola pista de por que.
+  if (!NFC_PIEZA) {
+    decirPaso(id, "Primero escanea el QR de la pieza, ahi arriba.", "mal");
+    return false;
+  }
+  if (NFC_OCUPADO) {
+    decirPaso(id, "Hay algo en curso. Espera, o toca «Siguiente pieza» para soltarlo.", "mal");
+    return false;
+  }
   if (!hayWebNFC()) { sinWebNFC(id); return false; }
 
   pararNFC();
   const mio = new AbortController();
   cortarNFC = mio;
   NFC_OCUPADO = true;
-  decirPaso(id, esperando);
-  pintarPasosNFC();
+  // El cerrojo se coge JUSTO antes del try, y todo lo demas va dentro. Estaba
+  // fuera, y cualquier fallo entre cogerlo y entrar lo dejaba cogido para
+  // siempre: los botones pintados como activos y cada toque entrando por el
+  // return de arriba. Un cerrojo que se coge fuera del try es un cerrojo que se
+  // acaba filtrando.
   try {
+    decirPaso(id, esperando);
+    pintarPasosNFC();
     await hacer(mio.signal);
     return true;
   } catch (e) {

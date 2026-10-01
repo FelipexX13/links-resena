@@ -272,6 +272,16 @@ Ahora todo pasa por `operacionNFC()`: hay un cerrojo —`NFC_OCUPADO`— que apa
 tres botones mientras algo está en vuelo, y cada operación solo limpia su propio
 abortador. Una operación abortada tampoco pisa el mensaje de la que la sustituyó.
 
+**El cerrojo se coge dentro del `try`.** La primera version lo cogía justo antes,
+con un `decirPaso()` y un `pintarPasosNFC()` por medio: cualquier fallo ahí lo
+dejaba cogido para siempre, con los botones ya pintados como activos. A partir de
+ese momento, cada toque entraba por el `return` de la guarda y **no pasaba nada**,
+sin un solo mensaje. Un cerrojo que se coge fuera del `try` es un cerrojo que se
+acaba filtrando.
+
+Y las tres guardas hablan. Un `return` mudo en un manejador se ve exactamente
+igual que un botón muerto, que fue justo como se vio.
+
 **Un chip sellado se marca como tal.** Antes se quedaba con *Bloquear* encendido,
 y `makeReadOnly` sobre un chip que ya es de solo lectura es otro error. Ahora
 *Grabar* y *Bloquear* se apagan y lo único que queda vivo es *Siguiente pieza*.
