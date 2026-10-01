@@ -516,7 +516,8 @@ async function api(request, env, accion, url, ctx) {
   // Las liquidaciones entran aquí desde que un vendedor dejó de ver sus ingresos:
 // esconder la pestaña y seguir sirviendo el dato no esconde nada.
 const SOLO_DUENO = new Set(["gastos", "gasto", "gasto-borrar", "usuarios", "usuario",
-  "liquidaciones", "liquidacion", "liquidacion-borrar"]);
+  "liquidaciones", "liquidacion", "liquidacion-borrar",
+  "surtido", "surtido-borrar"]);
   if (SOLO_DUENO.has(accion) && !quien.dueno) {
     return json({ error: "Eso es del superadmin" }, 403);
   }
@@ -1030,7 +1031,7 @@ const SOLO_DUENO = new Set(["gastos", "gasto", "gasto-borrar", "usuarios", "usua
   // no de diez en diez.
   if (accion === "todo" && request.method === "GET") {
     const por = { "c:": [], "n:": [], "s:": [], "p:": [], "g:": [], "u:": [],
-      "l:": [], "r:": [], "b:": [] };
+      "l:": [], "r:": [], "b:": [], "x:": [] };
     let cursor = "";
     for (;;) {
       const r = await env.TARJETAS.list(cursor ? { cursor: cursor } : {});
@@ -1095,6 +1096,14 @@ const SOLO_DUENO = new Set(["gastos", "gasto", "gasto-borrar", "usuarios", "usua
       ? por["l:"].map((k) => Object.assign({ id: k.name.slice(2) }, k.metadata || {}))
           .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""))
       : [];
+    // Un sub necesita los suyos para saber cuanto lleva ganado; de los demas no
+    // ve nada, igual que con las tarjetas.
+    let surtidos = por["x:"].map((k) => Object.assign({ id: k.name.slice(2) }, k.metadata || {}));
+    if (!quien.dueno) {
+      surtidos = surtidos.filter((x) => x.vendedor === quien.usuario ||
+        x.padrino === quien.usuario);
+    }
+    surtidos.sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
 
     let comprobantes = por["r:"].map((k) =>
       Object.assign({ negocio: k.name.slice(2) }, k.metadata || {}));
@@ -1119,7 +1128,58 @@ const SOLO_DUENO = new Set(["gastos", "gasto", "gasto-borrar", "usuarios", "usua
     return json({ tarjetas: tarjetas, nfc: nfc, servicios: servicios, puntos: puntos,
       gastos: gastos, usuarios: usuarios, liquidaciones: liquidaciones,
       comprobantes: comprobantes, compradores: compradores, vendedores: vendedores,
-      prueba: prueba });
+      surtidos: surtidos, prueba: prueba });
+  }
+
+  // Surtir a un sub ES la venta de la casa: el paga por adelantado y lo que
+  // cobre en la calle despues es suyo. Por eso el dinero se cuenta aqui y no
+  // cuando coloca cada pieza —contarlo en los dos sitios seria contarlo dos
+  // veces—.
+  if (accion === "surtido" && request.method === "POST") {
+    const cuerpo = await request.json().catch(() => ({}));
+    const vendedor = vendedorValido(cuerpo.vendedor);
+    if (!vendedor) return json({ error: "Falta a qui\u00e9n se le surti\u00f3" }, 400);
+
+    const piezas = Math.round(Number(cuerpo.piezas));
+    if (!Number.isFinite(piezas) || piezas < 1 || piezas > 2000) {
+      return json({ error: "Las piezas van de 1 a 2000" }, 400);
+    }
+    const precio = Math.round(Number(cuerpo.precio));
+    if (!Number.isFinite(precio) || precio < 0) {
+      return json({ error: "El precio por pieza no es v\u00e1lido" }, 400);
+    }
+    const fecha = fechaValida(cuerpo.fecha) || hoyDelServidor();
+
+    // el reparto se congela aqui, igual que en una venta
+    const reparto = await repartoDe(env, vendedor);
+    const surtido = {
+      vendedor: vendedor,
+      piezas: piezas,
+      tipo: tipoValido(cuerpo.tipo),
+      precio: precio,
+      total: piezas * precio,
+      padrino: reparto.padrino,
+      pctPadrino: reparto.pctPadrino,
+      pctVendedor: reparto.pct,
+      pagado: cuerpo.pagado === undefined ? true : Boolean(cuerpo.pagado),
+      recibio: jefeValido(cuerpo.recibio),
+      nota: String(cuerpo.nota || "").trim().slice(0, 120),
+      fecha: fecha,
+      actualizado: new Date().toISOString(),
+    };
+    const id = FORMATO_ID.test(String(cuerpo.id || ""))
+      ? String(cuerpo.id)
+      : Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    await env.TARJETAS.put("x:" + id, JSON.stringify(surtido), { metadata: surtido });
+    return json(Object.assign({ ok: true, id: id }, surtido));
+  }
+
+  if (accion === "surtido-borrar" && request.method === "POST") {
+    const cuerpo = await request.json().catch(() => ({}));
+    const id = String(cuerpo.id || "");
+    if (!FORMATO_ID.test(id)) return json({ error: "Id inv\u00e1lido" }, 400);
+    await env.TARJETAS.delete("x:" + id);
+    return json({ ok: true });
   }
 
   if (accion === "ajustes" && request.method === "GET") {

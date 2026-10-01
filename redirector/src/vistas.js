@@ -347,6 +347,13 @@ const ESTILOS = `
      y no se confunde con el buscador de locales que tiene encima. */
   #puntoLink{background:var(--azul-piel);border-color:var(--azul);font-weight:500}
   #puntoLink::placeholder{color:var(--tinta-2);font-weight:400}
+  .reparto{margin:14px 0 4px;padding:13px 15px;border-radius:var(--r-m);
+    background:var(--papel-2);box-shadow:0 0 0 1px var(--linea);font-size:13.5px}
+  .reparto div{display:flex;justify-content:space-between;gap:12px;padding:4px 0}
+  .reparto b{font-weight:600;font-variant-numeric:tabular-nums}
+  .reparto .suma{margin-top:5px;padding-top:8px;border-top:1px solid var(--linea);
+    color:var(--tinta)}
+
   /* ---------- lo que lleva vendido un vendedor ---------- */
   /* El unico sitio del panel con relleno de color solido: es lo primero que ve
      al entrar y lo unico que le interesa de un vistazo. El resto de la pagina
@@ -1077,6 +1084,7 @@ let VENTA_EDITADA = { vendida: "", precio: 0, vendedor: "", pct: 0, pago: "efect
 let DONDE_QUEDA = { lat: null, lng: null };
 let COMO_PAGO = "efectivo";
 let LIQUIDACIONES = [];
+let SURTIDOS = [];
 let VISTA = "locales";
 let PRUEBAS = false;
 let GASTOS = [];
@@ -2598,6 +2606,7 @@ async function cargarTodo() {
   GASTOS = t.gastos || [];
   USUARIOS = t.usuarios || [];
   LIQUIDACIONES = t.liquidaciones || [];
+  SURTIDOS = t.surtidos || [];
   COMPROBANTES = {};
   (t.comprobantes || []).forEach((x) => { COMPROBANTES[x.negocio] = x; });
   COMPRADORES = {};
@@ -3024,13 +3033,17 @@ function ventasPorVendedor() {
     if (!t.vendida) return;
     meter(t.vendedor, Number(t.precio) || 0, t.pct, t.vendida, t.negocio || "", 1,
       t.pago || "efectivo");
-    meterArriba(t.vendedor, t.padrino, Number(t.precio) || 0, t.pctPadrino);
+
   });
   SERVICIOS.forEach((x) => {
     if (!x.fecha) return;
     meter(x.vendedor, Number(x.precio) || 0, x.pct, x.fecha, x.negocio || "", 0,
       x.pago || "efectivo");
-    meterArriba(x.vendedor, x.padrino, Number(x.precio) || 0, x.pctPadrino);
+
+  });
+  // El corte del que engancha nace en el surtido, no en cada pieza colocada.
+  SURTIDOS.forEach((x) => {
+    meterArriba(x.vendedor, x.padrino, Number(x.total) || 0, x.pctPadrino);
   });
   return mapa;
 }
@@ -3461,14 +3474,30 @@ function cuentas() {
     else if (g.paga === "nicolas") puesto.nicolas += m;
     else { puesto.felipe += m / 2; puesto.nicolas += m / 2; }
   });
-  const ingresos = TARJETAS.reduce((a, t) => a + (t.vendida ? Number(t.precio) || 0 : 0), 0) +
-    ingresoFichas();
+  // Lo que coloca un sub no es ingreso nuevo: ya se cobro al surtirlo, y el
+  // surtido es la venta de la casa. Contarlo en los dos sitios seria contar el
+  // mismo dinero dos veces. Se reconocen por el padrino congelado en la tarjeta.
+  const ingresos =
+    TARJETAS.reduce((a, t) => a + (t.vendida && !t.padrino ? Number(t.precio) || 0 : 0), 0) +
+    ingresoFichas() +
+    SURTIDOS.reduce((a, x) => a + (Number(x.total) || 0), 0);
 
   // La comisión sale de arriba, antes que el costo: de un acrílico de $49.900 al
   // 50%, la casa se queda $24.950 y de ahí todavía tiene que pagar el plástico y
   // el chip. Por eso resta en la utilidad y no solo en el reparto de la venta.
+  // De un surtido salen DOS comisiones y la casa no se queda ninguna: la del sub
+  // —que se la gana colocando, pero ya salio del precio que pago— y la del que lo
+  // engancho. Por eso las dos restan aqui.
+  //
+  // Y las tarjetas de un sub no suman comision aparte: su parte ya esta contada
+  // en el surtido. Se reconocen por el padrino congelado, igual que en ingresos.
   const porQuien = ventasPorVendedor();
-  const comisiones = Object.keys(porQuien).reduce((a, k) => a + porQuien[k].comision, 0);
+  const deSubs = {};
+  TARJETAS.forEach((t) => { if (t.vendida && t.padrino) deSubs[t.vendedor] = 1; });
+  const comisiones =
+    Object.keys(porQuien).reduce((a, k) => a + (deSubs[k] ? 0 : porQuien[k].comision), 0) +
+    SURTIDOS.reduce((a, x) =>
+      a + comisionDe(x.total, x.pctPadrino) + comisionDe(x.total, x.pctVendedor), 0);
 
   const justo = gastos / 2;
   return {
@@ -3671,8 +3700,11 @@ function pintarComisiones() {
           : "al día") + "</b>" +
         (d.entregado ? "<div class='fila-num'>pagó " + dinero(d.entregado) + "</div>" : "") +
         "</td>" +
-        "<td><div class='acciones'><button type='button' class='accion-editar' " +
-        "data-recibi='" + escHtml(k) + "'>Recibí</button></div></td></tr>";
+        "<td><div class='acciones'>" +
+        "<button type='button' class='accion-editar' data-surtir='" + escHtml(k) +
+        "'>Surtir</button>" +
+        "<button type='button' class='accion-editar' data-recibi='" + escHtml(k) +
+        "'>Recibí</button></div></td></tr>";
     }).join("") + "</tbody></table>";
 }
 
@@ -5397,6 +5429,8 @@ let RECIBI_DE = "";
 let focoRecibi = null;
 
 $("tablaComisiones").addEventListener("click", (e) => {
+  const sur = e.target.closest("[data-surtir]");
+  if (sur) { abrirSurtir(sur.dataset.surtir); return; }
   const b = e.target.closest("[data-recibi]");
   if (b) abrirRecibi(b.dataset.recibi);
 });
@@ -5664,6 +5698,124 @@ function cerrarUsuarios() {
 }
 
 $("abrirUsuarios").onclick = abrirUsuarios;
+/* ---------- surtir a un sub ---------- */
+
+// Surtir ES la venta de la casa: el sub paga por adelantado y lo que cobre en la
+// calle luego es suyo. Por eso el dinero se cuenta aqui y no cuando coloca cada
+// pieza; contarlo en los dos sitios seria contarlo dos veces.
+let SURTIENDO = "";
+let TIPO_SURTIDO = "acrilico";
+let RECIBIO_SURTIDO = "felipe";
+let focoSurtir = null;
+
+function padrinoDe(usuario) {
+  const u = USUARIOS.filter((x) => x.usuario === usuario)[0];
+  return u && u.padrino ? u.padrino : "";
+}
+
+function pintarRepartoSurtido() {
+  const piezas = Math.max(0, Number($("surtirPiezas").value) || 0);
+  const precio = Math.max(0, Number($("surtirPrecio").value) || 0);
+  const total = piezas * precio;
+  const padrino = padrinoDe(SURTIENDO);
+  const delSub = Math.round(total * (padrino ? CORTE.vende : CORTE.vende + CORTE.engancha) / 100);
+  const delPadrino = padrino ? Math.round(total * CORTE.engancha / 100) : 0;
+  const deLaCasa = total - delSub - delPadrino;
+
+  $("surtirReparto").innerHTML =
+    "<div><span>Paga ahora</span><b>" + dinero(total - delSub) + "</b></div>" +
+    "<div><span>" + escHtml(nombreDeVendedor(SURTIENDO)) + " se gana al colocarlos</span><b>" +
+      dinero(delSub) + "</b></div>" +
+    (padrino ? "<div><span>" + escHtml(nombreDeVendedor(padrino)) + " (" + CORTE.engancha +
+      "%)</span><b>" + dinero(delPadrino) + "</b></div>" : "") +
+    "<div class='suma'><span>La casa</span><b>" + dinero(deLaCasa) + "</b></div>";
+}
+
+function abrirSurtir(quien) {
+  SURTIENDO = quien;
+  TIPO_SURTIDO = "acrilico";
+  RECIBIO_SURTIDO = "felipe";
+  marcarSegmento("surtirTipo", TIPO_SURTIDO);
+  marcarSegmento("surtirRecibio", RECIBIO_SURTIDO);
+  $("surtirTitulo").textContent = "Surtir a " + nombreDeVendedor(quien);
+  const padrino = padrinoDe(quien);
+  $("surtirSubtitulo").textContent = padrino
+    ? "Paga por adelantado. " + nombreDeVendedor(padrino) + " se lleva su " +
+      CORTE.engancha + "% aquí mismo."
+    : "Paga por adelantado lo que no es suyo.";
+  $("surtirPiezas").value = 6;
+  $("surtirPrecio").value = PRECIOS.acrilico;
+  $("surtirFecha").value = hoyISO();
+  pintarRepartoSurtido();
+  limpiarAviso();
+  focoSurtir = document.activeElement;
+  $("modalSurtir").hidden = false;
+  document.body.style.overflow = "hidden";
+  $("surtirPiezas").focus();
+}
+
+function cerrarSurtir() {
+  if ($("modalSurtir").hidden) return;
+  $("modalSurtir").hidden = true;
+  document.body.style.overflow = "";
+  if (focoSurtir && focoSurtir.focus) focoSurtir.focus();
+  focoSurtir = null;
+}
+
+$("cerrarSurtir").onclick = cerrarSurtir;
+$("cancelarSurtir").onclick = cerrarSurtir;
+$("surtirPiezas").addEventListener("input", pintarRepartoSurtido);
+$("surtirPrecio").addEventListener("input", pintarRepartoSurtido);
+
+$("surtirTipo").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-valor]");
+  if (!b) return;
+  TIPO_SURTIDO = b.dataset.valor;
+  marcarSegmento("surtirTipo", TIPO_SURTIDO);
+  // el sticker baja por cantidad, asi que el sugerido depende de cuantos lleva
+  $("surtirPrecio").value = TIPO_SURTIDO === "acrilico"
+    ? PRECIOS.acrilico
+    : precioSticker(Math.max(1, Number($("surtirPiezas").value) || 1));
+  pintarRepartoSurtido();
+});
+
+$("surtirRecibio").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-valor]");
+  if (!b) return;
+  RECIBIO_SURTIDO = b.dataset.valor;
+  marcarSegmento("surtirRecibio", RECIBIO_SURTIDO);
+});
+
+$("formSurtir").onsubmit = async (e) => {
+  e.preventDefault();
+  const boton = $("guardarSurtir");
+  boton.disabled = true;
+  try {
+    const r = await llamar("surtido", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vendedor: SURTIENDO,
+        piezas: Number($("surtirPiezas").value),
+        precio: Number($("surtirPrecio").value),
+        tipo: TIPO_SURTIDO,
+        fecha: $("surtirFecha").value,
+        recibio: RECIBIO_SURTIDO,
+        pagado: true,
+      }),
+    });
+    SURTIDOS.push(r);
+    cerrarSurtir();
+    repintarTodo();
+    avisar("avisoPanel", "Surtido de " + nombreDeVendedor(SURTIENDO) + " registrado · " +
+      dinero(r.total), true);
+  } catch (err) {
+    avisar("aviso", err.message, false);
+  } finally {
+    boton.disabled = false;
+  }
+};
+
 $("cerrarUsuarios").onclick = cerrarUsuarios;
 $("formUsuario").onsubmit = async (e) => {
   e.preventDefault();
@@ -7106,6 +7258,48 @@ export function vistaAdmin(origen) {
         <button type="button" class="alerta" id="borrarPunto" hidden>Borrar</button>
         <button type="button" class="fantasma" id="cancelarPunto">Cancelar</button>
         <button type="submit" id="guardarPunto">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="modalSurtir" hidden>
+  <div class="modal-fondo"></div>
+  <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="surtirTitulo">
+    <button type="button" class="modal-cerrar" id="cerrarSurtir" aria-label="Cerrar">✕</button>
+    <div class="modal-kicker">Surtido</div>
+    <h1 id="surtirTitulo">Surtir</h1>
+    <p class="modal-subtitulo" id="surtirSubtitulo"></p>
+
+    <form id="formSurtir">
+      <div class="rango-fila">
+        <div><label class="mini" for="surtirPiezas">Cuántas piezas</label>
+          <input class="c1" id="surtirPiezas" type="number" min="1" step="1" value="6"
+                 autocomplete="off" required></div>
+        <div><label class="mini" for="surtirPrecio">Precio por pieza</label>
+          <input class="c1" id="surtirPrecio" type="number" min="0" step="1"
+                 autocomplete="off" required></div>
+      </div>
+
+      <div class="segmento" id="surtirTipo" role="group" aria-label="Qué se le surte">
+        <button type="button" class="activa" data-valor="acrilico">Acrílicos</button>
+        <button type="button" data-valor="sticker">Stickers</button>
+      </div>
+
+      <div class="reparto" id="surtirReparto"></div>
+
+      <label class="mini" for="surtirFecha">Cuándo</label>
+      <input id="surtirFecha" type="date">
+
+      <label class="mini">Quién recibió la plata</label>
+      <div class="segmento" id="surtirRecibio" role="group" aria-label="Quién recibió">
+        <button type="button" class="activa" data-valor="felipe">Felipe</button>
+        <button type="button" data-valor="nicolas">Nicolás</button>
+      </div>
+
+      <div class="modal-acciones">
+        <button type="button" class="fantasma" id="cancelarSurtir">Cancelar</button>
+        <button type="submit" id="guardarSurtir">Registrar</button>
       </div>
     </form>
   </div>

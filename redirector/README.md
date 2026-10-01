@@ -1531,6 +1531,33 @@ congelado, así que reeditarla no la reescribe con el organigrama de hoy.
 (`deAbajo`) y no se suma ni a sus piezas ni a su facturado: la venta no es suya.
 Sumarla sería contar el mismo dinero dos veces.
 
+### Surtir es la venta de la casa
+
+Esto se construyó al revés la primera vez y vale la pena dejar escrito por qué.
+
+La primera versión contaba el dinero cuando el sub **colocaba** cada pieza. Es lo
+natural si piensas en el acrílico; es falso si piensas en el negocio. **El sub
+compra**: paga por adelantado lo que no es suyo, y lo que cobre en la calle
+después es asunto suyo. La venta de la casa ocurre al surtir.
+
+De seis acrílicos a 49.900:
+
+```
+Harrison paga ahora   209.580   (el 70%)
+   de ahí la casa     149.700   (50%)  → ingreso, ya
+   y Alexander          59.880   (20%)  → su cartel sube, ya
+Harrison se gana        89.820   (30%)  → colocando, pieza a pieza
+```
+
+**Colocar una pieza de un surtido no suma plata nueva.** Se apunta el local y ya.
+Si sumara, el mismo dinero se contaría dos veces: una al surtir y otra al
+colocar. Las tarjetas de un sub se reconocen por el `padrino` congelado, y por
+eso quedan fuera de `ingresos` y de `comisiones`.
+
+Medido en los tres momentos —surtido sin colocar, tres colocadas, las seis— la
+utilidad de la casa se queda clavada en 149.700. Si se moviera, habría doble
+conteo.
+
 ### Los sub pagan por adelantado
 
 Harrison no debe: **compra**. Paga los seis acrílicos antes de salir a venderlos,
