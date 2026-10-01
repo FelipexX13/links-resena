@@ -2553,10 +2553,6 @@ $("abrirLocal").onclick = () => {
 };
 
 $("cerrarTarjeta").onclick = cerrarTarjeta;
-$("modalTarjeta").addEventListener("click", (e) => {
-  if (e.target.hasAttribute("data-cerrar-tarjeta")) cerrarTarjeta();
-});
-
 /* ---------- listado, resumen y buscador ---------- */
 
 function sinTildes(s) {
@@ -3915,10 +3911,6 @@ function cerrarCancelar() {
 }
 
 $("cerrarCancelar").onclick = cerrarCancelar;
-$("modalCancelar").addEventListener("click", (e) => {
-  if (e.target.hasAttribute("data-cerrar-cancelar")) cerrarCancelar();
-});
-
 $("modalCancelar").addEventListener("click", async (e) => {
   const b = e.target.closest("[data-salida]");
   if (!b || !CANCELANDO) return;
@@ -4481,6 +4473,14 @@ let NFC_PIEZA = null;
 let TIPO_NFC = "acrilico";
 let focoNFC = null;
 let cortarNFC = null;
+// Una operacion a la vez, y cada una duena de su abortador.
+//
+// Sin esto, dos toques seguidos a "Bloquear" dejaban dos makeReadOnly en vuelo y
+// Chrome contestaba "make read only is cancelled due to a new make read only
+// request". Y era peor de lo que parece: el finally de la primera hacia
+// cortarNFC = null sin mirar si era el suyo, asi que al terminar se llevaba por
+// delante el abortador de la segunda y ya no habia forma de pararla.
+let NFC_OCUPADO = false;
 
 function hayWebNFC() {
   return typeof window.NDEFReader === "function";
@@ -4495,14 +4495,18 @@ function decirPaso(id, texto, estado) {
 
 function pintarPasosNFC() {
   const hay = Boolean(NFC_PIEZA);
-  $("grabarNFC").disabled = !hay;
-  $("leerNFC").disabled = !hay || !NFC_PIEZA.grabada;
-  $("sellarNFC").disabled = !hay || !NFC_PIEZA.revisada;
+  // un chip sellado ya no se graba ni se vuelve a sellar: makeReadOnly sobre uno
+  // que ya es de solo lectura es un error, y el boton invitaba a pedirlo
+  const sellada = hay && NFC_PIEZA.sellada;
+  $("grabarNFC").disabled = !hay || sellada || NFC_OCUPADO;
+  $("leerNFC").disabled = !hay || !NFC_PIEZA.grabada || NFC_OCUPADO;
+  $("sellarNFC").disabled = !hay || !NFC_PIEZA.revisada || sellada || NFC_OCUPADO;
+  $("escanearNFC").disabled = NFC_OCUPADO;
   $("siguienteNFC").disabled = !hay;
-  $("saltarSello").hidden = !hay || !NFC_PIEZA.revisada;
-  $("pasoGrabar").classList.toggle("apagado", !hay);
+  $("saltarSello").hidden = !hay || !NFC_PIEZA.revisada || sellada;
+  $("pasoGrabar").classList.toggle("apagado", !hay || sellada);
   $("pasoLeer").classList.toggle("apagado", !hay || !NFC_PIEZA.grabada);
-  $("pasoSellar").classList.toggle("apagado", !hay || !NFC_PIEZA.revisada);
+  $("pasoSellar").classList.toggle("apagado", !hay || !NFC_PIEZA.revisada || sellada);
 }
 
 function nuevaPiezaNFC() {
@@ -4543,7 +4547,7 @@ function tomarPiezaDelQR(crudo) {
   }
 
   NFC_PIEZA = { codigo: codigo, tipo: tipo, numero: numero, url: url,
-    grabada: false, revisada: false };
+    grabada: false, revisada: false, sellada: false };
   decirQR(codigo + " · nº " + numero + " · " + url +
     (NFC[codigo] ? "  ·  ojo, ya estaba marcada como grabada" : ""), "bien");
   pintarPasosNFC();
@@ -4551,6 +4555,34 @@ function tomarPiezaDelQR(crudo) {
 
 function pararNFC() {
   if (cortarNFC) { cortarNFC.abort(); cortarNFC = null; }
+  NFC_OCUPADO = false;
+}
+
+// El chip tarda lo que tarde en acercarse, asi que hay segundos de espera en los
+// que se puede tocar otra vez. Aqui se cierra esa puerta.
+async function operacionNFC(id, esperando, hacer) {
+  if (NFC_OCUPADO || !NFC_PIEZA) return false;
+  if (!hayWebNFC()) { sinWebNFC(id); return false; }
+
+  pararNFC();
+  const mio = new AbortController();
+  cortarNFC = mio;
+  NFC_OCUPADO = true;
+  decirPaso(id, esperando);
+  pintarPasosNFC();
+  try {
+    await hacer(mio.signal);
+    return true;
+  } catch (e) {
+    // si a esta la abortaron para dar paso a otra, manda la otra: no se le pisa
+    // el mensaje con el error de esta
+    if (cortarNFC === mio) decirPaso(id, "No se pudo: " + e.message, "mal");
+    return false;
+  } finally {
+    // solo se limpia lo propio. Limpiar a ciegas era el bug
+    if (cortarNFC === mio) { cortarNFC = null; NFC_OCUPADO = false; }
+    pintarPasosNFC();
+  }
 }
 
 function sinWebNFC(id) {
@@ -4558,90 +4590,71 @@ function sinWebNFC(id) {
 }
 
 $("grabarNFC").onclick = async () => {
-  if (!NFC_PIEZA) return;
-  if (!hayWebNFC()) { sinWebNFC("diceGrabar"); return; }
-
-  pararNFC();
-  cortarNFC = new AbortController();
-  decirPaso("diceGrabar", "Acerca el chip…");
-  try {
-    const nfc = new window.NDEFReader();
-    await nfc.write({ records: [{ recordType: "url", data: NFC_PIEZA.url }] },
-      { signal: cortarNFC.signal });
-    NFC_PIEZA.grabada = true;
-    NFC_PIEZA.revisada = false;
-    decirPaso("diceGrabar", "Grabado con " + NFC_PIEZA.url, "bien");
-  } catch (e) {
-    decirPaso("diceGrabar", "No se grabó: " + e.message, "mal");
-  } finally {
-    cortarNFC = null;
-    pintarPasosNFC();
-  }
+  const url = NFC_PIEZA && NFC_PIEZA.url;
+  const bien = await operacionNFC("diceGrabar", "Acerca el chip…", async (signal) => {
+    await new window.NDEFReader().write(
+      { records: [{ recordType: "url", data: url }] }, { signal: signal });
+  });
+  if (!bien || !NFC_PIEZA) return;
+  NFC_PIEZA.grabada = true;
+  // se regrabo: lo que se habia comprobado antes ya no vale
+  NFC_PIEZA.revisada = false;
+  decirPaso("diceGrabar", "Grabado con " + url, "bien");
+  pintarPasosNFC();
 };
 
 $("leerNFC").onclick = async () => {
-  if (!NFC_PIEZA) return;
-  if (!hayWebNFC()) { sinWebNFC("diceLeer"); return; }
-
-  pararNFC();
-  cortarNFC = new AbortController();
-  decirPaso("diceLeer", "Acerca el chip para leerlo…");
-  try {
-    const nfc = new window.NDEFReader();
-    const leido = await new Promise(async (listo, falla) => {
-      nfc.onreading = (e) => {
-        for (const r of e.message.records) {
-          if (r.recordType === "url" || r.recordType === "absolute-url") {
-            listo(new TextDecoder().decode(r.data));
-            return;
+  const url = NFC_PIEZA && NFC_PIEZA.url;
+  let leido = null;
+  const bien = await operacionNFC("diceLeer", "Acerca el chip para leerlo…",
+    async (signal) => {
+      const nfc = new window.NDEFReader();
+      leido = await new Promise((listo, falla) => {
+        nfc.onreading = (e) => {
+          for (const r of e.message.records) {
+            if (r.recordType === "url" || r.recordType === "absolute-url") {
+              listo(new TextDecoder().decode(r.data));
+              return;
+            }
           }
-        }
-        listo("");
-      };
-      nfc.onreadingerror = () => falla(new Error("el chip no se dejó leer"));
-      try { await nfc.scan({ signal: cortarNFC.signal }); } catch (err) { falla(err); }
+          listo("");
+        };
+        nfc.onreadingerror = () => falla(new Error("el chip no se dejó leer"));
+        nfc.scan({ signal: signal }).catch(falla);
+      });
+      // el scan sigue escuchando despues de la primera lectura
+      pararNFC();
     });
+  if (!bien || !NFC_PIEZA) return;
 
-    if (leido.toUpperCase() === NFC_PIEZA.url.toUpperCase()) {
-      NFC_PIEZA.revisada = true;
-      decirPaso("diceLeer", "Dice " + leido + " — coincide con el QR.", "bien");
-    } else {
-      NFC_PIEZA.revisada = false;
-      decirPaso("diceLeer", "Dice " + (leido || "nada") + ", que no es lo del QR. " +
-        "Vuelve a grabarlo.", "mal");
-    }
-  } catch (e) {
-    decirPaso("diceLeer", "No se pudo leer: " + e.message, "mal");
-  } finally {
-    pararNFC();
-    pintarPasosNFC();
+  if (String(leido).toUpperCase() === String(url).toUpperCase()) {
+    NFC_PIEZA.revisada = true;
+    decirPaso("diceLeer", "Dice " + leido + " — coincide con el QR.", "bien");
+  } else {
+    NFC_PIEZA.revisada = false;
+    decirPaso("diceLeer", "Dice " + (leido || "nada") + ", que no es lo del QR. " +
+      "Vuelve a grabarlo.", "mal");
   }
+  pintarPasosNFC();
 };
 
 $("sellarNFC").onclick = async () => {
-  if (!NFC_PIEZA || !NFC_PIEZA.revisada) return;
-  if (!hayWebNFC()) { sinWebNFC("diceSellar"); return; }
+  if (!NFC_PIEZA || !NFC_PIEZA.revisada || NFC_PIEZA.sellada || NFC_OCUPADO) return;
   if (CONFIRMANDO !== "sellar") {
     pedirConfirmacion($("sellarNFC"), "sellar");
     decirPaso("diceSellar", "Es para siempre. Toca otra vez para sellarlo.", "mal");
     return;
   }
-
   olvidarConfirmacion();
-  pararNFC();
-  cortarNFC = new AbortController();
-  decirPaso("diceSellar", "Acerca el chip para sellarlo…");
-  try {
-    const nfc = new window.NDEFReader();
-    await nfc.makeReadOnly({ signal: cortarNFC.signal });
-    decirPaso("diceSellar", "Sellado. Ya nadie puede reescribirlo.", "bien");
-    await apuntarNFCPuesto();
-  } catch (e) {
-    decirPaso("diceSellar", "No se selló: " + e.message, "mal");
-  } finally {
-    cortarNFC = null;
-    pintarPasosNFC();
-  }
+
+  const bien = await operacionNFC("diceSellar", "Acerca el chip para sellarlo…",
+    async (signal) => { await new window.NDEFReader().makeReadOnly({ signal: signal }); });
+  if (!bien || !NFC_PIEZA) return;
+
+  NFC_PIEZA.sellada = true;
+  decirPaso("diceSellar", "Sellado. Ya nadie puede reescribirlo.", "bien");
+  pintarPasosNFC();
+  await apuntarNFCPuesto();
 };
 
 async function apuntarNFCPuesto() {
@@ -4704,10 +4717,6 @@ function cerrarNFC() {
 
 $("abrirNFC").onclick = abrirNFC;
 $("cerrarNFCModal").onclick = cerrarNFC;
-$("modalNFC").addEventListener("click", (e) => {
-  if (e.target.hasAttribute("data-cerrar-nfc")) cerrarNFC();
-});
-
 /* ---------- el mapa de visitas ---------- */
 
 // Cobrar una orden es la definición de un punto verde, así que no hay por qué
@@ -5016,10 +5025,6 @@ $("puntoLink").addEventListener("change", leerLinkDelPunto);
 
 $("cerrarPunto").onclick = cerrarPunto;
 $("cancelarPunto").onclick = cerrarPunto;
-$("modalPunto").addEventListener("click", (e) => {
-  if (e.target.hasAttribute("data-cerrar-punto")) cerrarPunto();
-});
-
 // El caso de verdad: sales del local y lo marcas ahí mismo, sin buscarlo en el
 // mapa ni saber en qué calle estás.
 $("marcarAqui").onclick = () => {
@@ -5187,10 +5192,6 @@ function cerrarRecibi() {
 
 $("cerrarRecibi").onclick = cerrarRecibi;
 $("cancelarRecibi").onclick = cerrarRecibi;
-$("modalRecibi").addEventListener("click", (e) => {
-  if (e.target.hasAttribute("data-cerrar-recibi")) cerrarRecibi();
-});
-
 $("formRecibi").onsubmit = async (e) => {
   e.preventDefault();
   const boton = $("guardarRecibi");
@@ -5367,10 +5368,6 @@ function cerrarUsuarios() {
 
 $("abrirUsuarios").onclick = abrirUsuarios;
 $("cerrarUsuarios").onclick = cerrarUsuarios;
-$("modalUsuarios").addEventListener("click", (e) => {
-  if (e.target.hasAttribute("data-cerrar-usuarios")) cerrarUsuarios();
-});
-
 $("formUsuario").onsubmit = async (e) => {
   e.preventDefault();
   const boton = $("guardarUsuario");
@@ -5466,10 +5463,6 @@ function cerrarAjustes() {
 $("abrirAjustes").onclick = () => abrirAjustes(QUIEN_VENDE);
 $("cerrarAjustes").onclick = cerrarAjustes;
 $("cancelarAjustes").onclick = cerrarAjustes;
-$("modalAjustes").addEventListener("click", (e) => {
-  if (e.target.hasAttribute("data-cerrar-ajustes")) cerrarAjustes();
-});
-
 $("formAjustes").onsubmit = async (e) => {
   e.preventDefault();
   BORRADOR_VENDEDORES[SOCIO_AJUSTES] = leerFormAjustes();
@@ -5749,10 +5742,6 @@ function cerrarVenta() {
 
 $("cerrarVenta").onclick = cerrarVenta;
 $("cancelarVenta").onclick = cerrarVenta;
-$("modalVenta").addEventListener("click", (e) => {
-  if (e.target.hasAttribute("data-cerrar-venta")) cerrarVenta();
-});
-
 $("formVenta").onsubmit = async (e) => {
   e.preventDefault();
   if (!LOCAL_VENTA) return;
@@ -5990,10 +5979,6 @@ function cerrarGasto() {
 $("abrirGasto").onclick = () => abrirGasto("");
 $("cerrarGasto").onclick = cerrarGasto;
 $("cancelarGasto").onclick = cerrarGasto;
-$("modalGasto").addEventListener("click", (e) => {
-  if (e.target.hasAttribute("data-cerrar-gasto")) cerrarGasto();
-});
-
 $("formGasto").onsubmit = async (e) => {
   e.preventDefault();
   const boton = $("guardarGasto");
@@ -6122,10 +6107,6 @@ $("abrirActivar").onclick = abrirActivar;
 $("cerrarActivar").onclick = cerrarActivar;
 $("cancelarActivar").onclick = cerrarActivar;
 $("cuantasNuevas").addEventListener("input", pintarResumenActivar);
-$("modalActivar").addEventListener("click", (e) => {
-  if (e.target.hasAttribute("data-cerrar-activar")) cerrarActivar();
-});
-
 $("formActivar").onsubmit = async (e) => {
   e.preventDefault();
   const cuantas = Math.min(MAX_NUEVAS, parseInt($("cuantasNuevas").value, 10) || 0);
@@ -6285,7 +6266,6 @@ $("copiarNfc").onclick = async () => {
 
 $("cerrarQR").onclick = cerrarQR;
 $("modalQR").addEventListener("click", (e) => {
-  if (e.target.hasAttribute("data-cerrar")) { cerrarQR(); return; }
 
   // Un toque encima copia la imagen, que es lo que se hacía con clic derecho y
   // "copiar imagen". El ClipboardItem lleva la promesa dentro a propósito: si se
@@ -6549,7 +6529,7 @@ export function vistaAdmin(origen) {
 </div>
 
 <div class="modal" id="modalTarjeta" hidden>
-  <div class="modal-fondo" data-cerrar-tarjeta></div>
+  <div class="modal-fondo"></div>
   <div class="modal-caja modal-tarjeta" role="dialog" aria-modal="true" aria-labelledby="tarjetaModalTitulo">
     <form id="formTarjeta">
       <div class="orden-alto">
@@ -6672,7 +6652,7 @@ export function vistaAdmin(origen) {
 </div>
 
 <div class="modal" id="modalActivar" hidden>
-  <div class="modal-fondo" data-cerrar-activar></div>
+  <div class="modal-fondo"></div>
   <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="activarTitulo">
     <button type="button" class="modal-cerrar" id="cerrarActivar" aria-label="Cerrar">✕</button>
     <div class="modal-kicker">Tarjetas</div>
@@ -6693,7 +6673,7 @@ export function vistaAdmin(origen) {
 </div>
 
 <div class="modal" id="modalNFC" hidden>
-  <div class="modal-fondo" data-cerrar-nfc></div>
+  <div class="modal-fondo"></div>
   <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="nfcTitulo">
     <button type="button" class="modal-cerrar" id="cerrarNFCModal" aria-label="Cerrar">✕</button>
     <div class="modal-kicker">Chips</div>
@@ -6752,7 +6732,7 @@ export function vistaAdmin(origen) {
 </div>
 
 <div class="modal" id="modalCancelar" hidden>
-  <div class="modal-fondo" data-cerrar-cancelar></div>
+  <div class="modal-fondo"></div>
   <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="cancelarTitulo">
     <button type="button" class="modal-cerrar" id="cerrarCancelar" aria-label="Cerrar">✕</button>
     <div class="modal-kicker">Orden</div>
@@ -6779,7 +6759,7 @@ export function vistaAdmin(origen) {
 </div>
 
 <div class="modal" id="modalPunto" hidden>
-  <div class="modal-fondo" data-cerrar-punto></div>
+  <div class="modal-fondo"></div>
   <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="puntoTitulo">
     <button type="button" class="modal-cerrar" id="cerrarPunto" aria-label="Cerrar">✕</button>
     <div class="modal-kicker" id="puntoKicker">Visita</div>
@@ -6820,7 +6800,7 @@ export function vistaAdmin(origen) {
 </div>
 
 <div class="modal" id="modalRecibi" hidden>
-  <div class="modal-fondo" data-cerrar-recibi></div>
+  <div class="modal-fondo"></div>
   <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="recibiTitulo">
     <button type="button" class="modal-cerrar" id="cerrarRecibi" aria-label="Cerrar">✕</button>
     <div class="modal-kicker">Entrega</div>
@@ -6856,7 +6836,7 @@ export function vistaAdmin(origen) {
 </div>
 
 <div class="modal" id="modalUsuarios" hidden>
-  <div class="modal-fondo" data-cerrar-usuarios></div>
+  <div class="modal-fondo"></div>
   <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="usuariosTitulo">
     <button type="button" class="modal-cerrar" id="cerrarUsuarios" aria-label="Cerrar">✕</button>
     <div class="modal-kicker" id="usuariosKicker">Equipo</div>
@@ -6931,7 +6911,7 @@ export function vistaAdmin(origen) {
 </div>
 
 <div class="modal" id="modalAjustes" hidden>
-  <div class="modal-fondo" data-cerrar-ajustes></div>
+  <div class="modal-fondo"></div>
   <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="ajustesTitulo">
     <button type="button" class="modal-cerrar" id="cerrarAjustes" aria-label="Cerrar">✕</button>
     <div class="modal-kicker">Comprobantes</div>
@@ -6971,7 +6951,7 @@ export function vistaAdmin(origen) {
   </div>
 </div>
 <div class="modal" id="modalGasto" hidden>
-  <div class="modal-fondo" data-cerrar-gasto></div>
+  <div class="modal-fondo"></div>
   <div class="modal-caja modal-tarjeta franja" role="dialog" aria-modal="true" aria-labelledby="gastoTitulo">
     <button type="button" class="modal-cerrar" id="cerrarGasto" aria-label="Cerrar">✕</button>
     <div class="modal-kicker" id="gastoKicker">Nuevo gasto</div>
@@ -7045,7 +7025,7 @@ export function vistaAdmin(origen) {
 </div>
 
 <div class="modal" id="modalVenta" hidden>
-  <div class="modal-fondo" data-cerrar-venta></div>
+  <div class="modal-fondo"></div>
   <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="ventaTitulo">
     <button type="button" class="modal-cerrar" id="cerrarVenta" aria-label="Cerrar">✕</button>
     <div class="modal-kicker">Venta</div>
@@ -7116,7 +7096,7 @@ export function vistaAdmin(origen) {
 </div>
 
 <div class="modal" id="modalQR" hidden>
-  <div class="modal-fondo" data-cerrar></div>
+  <div class="modal-fondo"></div>
   <div class="modal-caja franja" role="dialog" aria-modal="true" aria-labelledby="qrNegocio">
     <button class="modal-cerrar" id="cerrarQR" aria-label="Cerrar">✕</button>
     <h1 id="qrNegocio" class="qr-negocio">Nombre del negocio</h1>

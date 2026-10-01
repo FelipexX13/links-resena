@@ -253,6 +253,40 @@ que usa el panel.
 > imágenes una por una no era opción. El camino es su **Bulk Create** con un CSV
 > de estas URLs.
 
+### Una operación de NFC a la vez
+
+El chip tarda lo que tarde en acercarse, así que hay segundos de espera en los
+que se puede volver a tocar el botón. Nada lo impedía, y Chrome contestaba:
+
+```
+make read only is cancelled due to a new make read only request
+```
+
+Y el fallo de fondo era peor que el toque de más. Cada operación creaba su
+`AbortController` en `cortarNFC`, pero el `finally` hacía `cortarNFC = null` **sin
+mirar si era el suyo**. Cuando la primera terminaba, se llevaba por delante el
+abortador de la segunda: a partir de ahí ya no había forma de pararla, y el
+siguiente toque lanzaba un `makeReadOnly` con el anterior vivo.
+
+Ahora todo pasa por `operacionNFC()`: hay un cerrojo —`NFC_OCUPADO`— que apaga los
+tres botones mientras algo está en vuelo, y cada operación solo limpia su propio
+abortador. Una operación abortada tampoco pisa el mensaje de la que la sustituyó.
+
+**Un chip sellado se marca como tal.** Antes se quedaba con *Bloquear* encendido,
+y `makeReadOnly` sobre un chip que ya es de solo lectura es otro error. Ahora
+*Grabar* y *Bloquear* se apagan y lo único que queda vivo es *Siguiente pieza*.
+
+Comprobado con un `NDEFReader` de mentira: cuatro toques seguidos a *Bloquear*
+mientras sella dan **un** sello, tres a *Grabar* dan **una** escritura, e insistir
+sobre un chip ya sellado no hace nada.
+
+## Los modales se cierran por la X
+
+Tocar el fondo ya no cierra ninguno. El panel se usa de pie, con una mano, en la
+calle: un roce en el borde tiraba una orden a medio llenar sin preguntar nada.
+
+Escape se queda —en el computador el gesto es deliberado, no un roce—.
+
 ## Modo pruebas
 
 Para revisar un lote impreso hace falta lo contrario de lo normal: que el QR **no**
