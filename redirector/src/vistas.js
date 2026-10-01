@@ -545,6 +545,10 @@ const ESTILOS = `
   .pieza-codigo{width:auto;flex:0 1 150px;text-transform:uppercase;
     font-family:"Geist Mono",ui-monospace,monospace;letter-spacing:.06em}
   /* los cuatro pasos de grabar un chip, cada uno con su botón y su respuesta */
+  .nfc-prueba{margin-top:16px;padding:12px 14px;border-radius:var(--r-m);
+    background:var(--papel-2);box-shadow:0 0 0 1px var(--linea)}
+  .nfc-prueba button{width:100%}
+  .nfc-prueba .paso-nfc-dice{margin:9px 0 0}
   .pasos-nfc{list-style:none;margin:18px 0 0;padding:0}
   .paso-nfc{padding:13px 0;border-top:1px solid var(--linea-suave)}
   .paso-nfc:first-child{border-top:0}
@@ -4540,6 +4544,7 @@ function nuevaPiezaNFC() {
   decirPaso("diceGrabar", "Acerca el chip por detrás del teléfono.");
   decirPaso("diceLeer", "Vuelve a acercarlo y comprueba el link.");
   decirPaso("diceSellar", "No tiene vuelta atrás: nadie podrá reescribirlo.");
+  decirPaso("diceProbar", "Sin grabar nada: solo mira si el teléfono lo ve.");
   pintarPasosNFC();
 }
 
@@ -4801,6 +4806,75 @@ $("tipoNFC").addEventListener("click", (e) => {
   TIPO_NFC = b.dataset.valor;
   marcarSegmento("tipoNFC", TIPO_NFC);
 });
+
+// El instrumento que faltaba. No graba, no sella, no compara: solo escucha y
+// cuenta lo que llegue. Distingue las dos causas que desde fuera se ven igual:
+// que el telefono no vea el chip, o que lo vea y no lo deje escribir.
+$("probarNFC").onclick = async () => {
+  if (NFC_PASO === "probar") { cancelarNFC("diceProbar"); return; }
+  if (NFC_OCUPADO) {
+    decirPaso("diceProbar", "Hay algo en curso. C\u00e1ncelalo primero.", "mal");
+    return;
+  }
+  if (!hayWebNFC()) { sinWebNFC("diceProbar"); return; }
+
+  pararNFC();
+  const mio = new AbortController();
+  cortarNFC = mio;
+  NFC_OCUPADO = true;
+  NFC_PASO = "probar";
+  let porTiempo = false;
+  const reloj = setTimeout(() => { porTiempo = true; mio.abort(); }, ESPERA_NFC);
+
+  try {
+    $("probarNFC").textContent = "Cancelar";
+    decirPaso("diceProbar", "Acerca cualquier chip por detr\u00e1s\u2026");
+    pintarPasosNFC();
+
+    const visto = await new Promise((listo, falla) => {
+      const nfc = lectorNFC();
+      NFC_ESCANEADO = true;
+      nfc.onreading = (e) => {
+        const tipos = [];
+        let texto = "";
+        for (const r of e.message.records) {
+          tipos.push(r.recordType);
+          if (!texto && (r.recordType === "url" || r.recordType === "absolute-url" ||
+              r.recordType === "text")) {
+            try { texto = new TextDecoder().decode(r.data); } catch (err) { texto = "?"; }
+          }
+        }
+        listo({ serie: e.serialNumber || "sin serie", tipos: tipos, texto: texto });
+      };
+      nfc.onreadingerror = () => falla(new Error("aparece algo, pero no se deja leer"));
+      nfc.scan({ signal: mio.signal }).catch(falla);
+    });
+    pararNFC();
+
+    const quien = "Lo veo. Serie " + visto.serie + ". ";
+    if (!visto.tipos.length) {
+      decirPaso("diceProbar", quien + "Est\u00e1 vac\u00edo, sin nada grabado. El tel\u00e9fono y el " +
+        "chip est\u00e1n bien: si Grabar no funciona con este, el chip est\u00e1 sellado.", "bien");
+    } else {
+      decirPaso("diceProbar", quien + "Lleva " + visto.tipos.join(", ") +
+        (visto.texto ? " y dice " + visto.texto : "") +
+        ". El tel\u00e9fono lo lee sin problema.", "bien");
+    }
+  } catch (e) {
+    if (cortarNFC === mio) {
+      decirPaso("diceProbar", porTiempo
+        ? "No vi ning\u00fan chip en 25 segundos. Entonces no es el software: o el NFC de " +
+          "Android est\u00e1 apagado, o el chip no responde, o no diste con la antena \u2014no " +
+          "est\u00e1 en el centro, prueba por la parte de arriba de la espalda\u2014."
+        : "No se pudo: " + e.message, "mal");
+    }
+  } finally {
+    clearTimeout(reloj);
+    if (cortarNFC === mio) { cortarNFC = null; NFC_OCUPADO = false; NFC_PASO = ""; }
+    $("probarNFC").textContent = "Probar el chip";
+    pintarPasosNFC();
+  }
+};
 
 function abrirNFC() {
   marcarSegmento("tipoNFC", TIPO_NFC);
@@ -6793,6 +6867,12 @@ export function vistaAdmin(origen) {
     <div class="segmento" id="tipoNFC" role="group" aria-label="Con qué estás trabajando">
       <button type="button" class="activa" data-valor="acrilico">Acrílicos</button>
       <button type="button" data-valor="sticker">Stickers</button>
+    </div>
+
+    <div class="nfc-prueba">
+      <button type="button" class="fantasma" id="probarNFC">Probar el chip</button>
+      <p class="paso-nfc-dice" id="diceProbar">Sin grabar nada: solo mira si el teléfono
+        lo ve.</p>
     </div>
 
     <ol class="pasos-nfc">

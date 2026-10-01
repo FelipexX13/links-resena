@@ -282,6 +282,26 @@ acaba filtrando.
 Y las tres guardas hablan. Un `return` mudo en un manejador se ve exactamente
 igual que un botón muerto, que fue justo como se vio.
 
+### Probar el chip
+
+Hubo una tarde entera de diagnósticos equivocados: el cerrojo, la sesión de
+Chrome, el tope de espera. Todos plausibles, ninguno el bueno. El problema no era
+que faltara una hipótesis más, era que **desde fuera dos causas opuestas se ven
+idénticas**: que el teléfono no vea el chip, y que lo vea y no lo deje escribir.
+En las dos, el botón dice «Acerca el chip» y no pasa nada.
+
+Así que hay un botón que no graba, no sella y no compara: solo escucha y cuenta lo
+que llegue.
+
+| Lo que contesta | Lo que significa |
+|---|---|
+| *Lo veo. Serie … lleva url y dice …* | el teléfono está bien y el chip responde |
+| *Lo veo … está vacío* | los dos bien; si Grabar falla, el chip está **sellado** |
+| *Aparece algo, pero no se deja leer* | el chip responde a medias: está dañado |
+| *No vi ningún chip en 25 segundos* | NFC de Android apagado, chip muerto, o la antena |
+
+Cada una manda a un sitio distinto, y ninguna necesita que nadie adivine.
+
 **Un lector para toda la página, no uno por operación.** El adaptador NFC del
 teléfono es uno solo; varios `NDEFReader` sobre él es justo donde Chrome se enreda.
 
