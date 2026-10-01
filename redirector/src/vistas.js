@@ -4481,6 +4481,9 @@ let cortarNFC = null;
 // cortarNFC = null sin mirar si era el suyo, asi que al terminar se llevaba por
 // delante el abortador de la segunda y ya no habia forma de pararla.
 let NFC_OCUPADO = false;
+// cual de los tres esta en marcha, para que su propio boton sirva de cancelar
+let NFC_PASO = "";
+const ETIQUETA_NFC = { grabar: "Grabar", leer: "Leer", sellar: "Bloquear" };
 
 function hayWebNFC() {
   return typeof window.NDEFReader === "function";
@@ -4495,18 +4498,26 @@ function decirPaso(id, texto, estado) {
 
 function pintarPasosNFC() {
   const hay = Boolean(NFC_PIEZA);
-  // un chip sellado ya no se graba ni se vuelve a sellar: makeReadOnly sobre uno
-  // que ya es de solo lectura es un error, y el boton invitaba a pedirlo
-  const sellada = hay && NFC_PIEZA.sellada;
-  $("grabarNFC").disabled = !hay || sellada || NFC_OCUPADO;
-  $("leerNFC").disabled = !hay || !NFC_PIEZA.grabada || NFC_OCUPADO;
-  $("sellarNFC").disabled = !hay || !NFC_PIEZA.revisada || sellada || NFC_OCUPADO;
+
+  // Los tres pasos estan siempre disponibles. Encadenarlos —leer solo si grabo,
+  // sellar solo si leyo— daba por hecho que el NFC nunca falla, y falla: una
+  // lectura que no sale dejaba el resto del flujo muerto sin motivo. Grabar dos
+  // veces, o leer sin haber grabado, no rompe nada.
+  [["grabar", "grabarNFC", "diceGrabar"],
+   ["leer", "leerNFC", "diceLeer"],
+   ["sellar", "sellarNFC", "diceSellar"]].forEach((fila) => {
+    const paso = fila[0], boton = $(fila[1]);
+    const esElQueCorre = NFC_OCUPADO && NFC_PASO === paso;
+    // mientras uno espera, los otros dos se apagan y el suyo pasa a Cancelar
+    boton.disabled = !hay || (NFC_OCUPADO && !esElQueCorre);
+    boton.textContent = esElQueCorre ? "Cancelar" : ETIQUETA_NFC[paso];
+    $("paso" + paso.charAt(0).toUpperCase() + paso.slice(1)).classList
+      .toggle("apagado", !hay);
+  });
+
   $("escanearNFC").disabled = NFC_OCUPADO;
   $("siguienteNFC").disabled = !hay;
-  $("saltarSello").hidden = !hay || !NFC_PIEZA.revisada || sellada;
-  $("pasoGrabar").classList.toggle("apagado", !hay || sellada);
-  $("pasoLeer").classList.toggle("apagado", !hay || !NFC_PIEZA.grabada);
-  $("pasoSellar").classList.toggle("apagado", !hay || !NFC_PIEZA.revisada || sellada);
+  $("saltarSello").hidden = !hay;
 }
 
 function nuevaPiezaNFC() {
@@ -4556,11 +4567,19 @@ function tomarPiezaDelQR(crudo) {
 function pararNFC() {
   if (cortarNFC) { cortarNFC.abort(); cortarNFC = null; }
   NFC_OCUPADO = false;
+  NFC_PASO = "";
+}
+
+// El boton que lanzo la espera es el que la para. Es donde esta el dedo.
+function cancelarNFC(id) {
+  pararNFC();
+  decirPaso(id, "Cancelado.", "mal");
+  pintarPasosNFC();
 }
 
 // El chip tarda lo que tarde en acercarse, asi que hay segundos de espera en los
 // que se puede tocar otra vez. Aqui se cierra esa puerta.
-async function operacionNFC(id, esperando, hacer) {
+async function operacionNFC(paso, id, esperando, hacer) {
   // Ninguna de estas tres se va callada. Un "return" mudo aqui se ve igual que
   // un boton muerto: se toca y no pasa nada, sin una sola pista de por que.
   if (!NFC_PIEZA) {
@@ -4577,6 +4596,7 @@ async function operacionNFC(id, esperando, hacer) {
   const mio = new AbortController();
   cortarNFC = mio;
   NFC_OCUPADO = true;
+  NFC_PASO = paso;
 
   // Web NFC espera al chip sin limite: si no aparece, write() ni resuelve ni
   // falla, y desde fuera eso se ve como "el boton no hace nada". Se le pone un
@@ -4604,7 +4624,7 @@ async function operacionNFC(id, esperando, hacer) {
   } finally {
     clearTimeout(reloj);
     // solo se limpia lo propio. Limpiar a ciegas era el bug
-    if (cortarNFC === mio) { cortarNFC = null; NFC_OCUPADO = false; }
+    if (cortarNFC === mio) { cortarNFC = null; NFC_OCUPADO = false; NFC_PASO = ""; }
     pintarPasosNFC();
   }
 }
@@ -4640,8 +4660,10 @@ function sinWebNFC(id) {
 }
 
 $("grabarNFC").onclick = async () => {
+  if (NFC_PASO === "grabar") { cancelarNFC("diceGrabar"); return; }
   const url = NFC_PIEZA && NFC_PIEZA.url;
-  const bien = await operacionNFC("diceGrabar", "Acerca el chip por detrás… (para salir, «Siguiente pieza»)", async (signal) => {
+  const bien = await operacionNFC("grabar", "diceGrabar",
+    "Acerca el chip por detrás… o toca Cancelar", async (signal) => {
     await new window.NDEFReader().write(
       { records: [{ recordType: "url", data: url }] }, { signal: signal });
   });
@@ -4654,9 +4676,11 @@ $("grabarNFC").onclick = async () => {
 };
 
 $("leerNFC").onclick = async () => {
+  if (NFC_PASO === "leer") { cancelarNFC("diceLeer"); return; }
   const url = NFC_PIEZA && NFC_PIEZA.url;
   let leido = null;
-  const bien = await operacionNFC("diceLeer", "Acerca el chip para leerlo… (para salir, «Siguiente pieza»)",
+  const bien = await operacionNFC("leer", "diceLeer",
+    "Acerca el chip para leerlo… o toca Cancelar",
     async (signal) => {
       const nfc = new window.NDEFReader();
       leido = await new Promise((listo, falla) => {
@@ -4689,15 +4713,22 @@ $("leerNFC").onclick = async () => {
 };
 
 $("sellarNFC").onclick = async () => {
-  if (!NFC_PIEZA || !NFC_PIEZA.revisada || NFC_PIEZA.sellada || NFC_OCUPADO) return;
+  if (NFC_PASO === "sellar") { cancelarNFC("diceSellar"); return; }
+  if (!NFC_PIEZA) return;
   if (CONFIRMANDO !== "sellar") {
     pedirConfirmacion($("sellarNFC"), "sellar");
-    decirPaso("diceSellar", "Es para siempre. Toca otra vez para sellarlo.", "mal");
+    // El aviso ya no es un muro: deja pasar, pero dice la verdad de lo que hay.
+    // Sellar un chip en blanco lo deja inservible para siempre.
+    decirPaso("diceSellar", NFC_PIEZA.revisada
+      ? "Es para siempre. Toca otra vez para sellarlo."
+      : "No has comprobado que este chip lleve el link. Si lo sellas vacío queda " +
+        "inservible. Toca otra vez si estás seguro.", "mal");
     return;
   }
   olvidarConfirmacion();
 
-  const bien = await operacionNFC("diceSellar", "Acerca el chip para sellarlo… (para salir, «Siguiente pieza»)",
+  const bien = await operacionNFC("sellar", "diceSellar",
+    "Acerca el chip para sellarlo… o toca Cancelar",
     async (signal) => { await new window.NDEFReader().makeReadOnly({ signal: signal }); });
   if (!bien || !NFC_PIEZA) return;
 

@@ -282,6 +282,20 @@ acaba filtrando.
 Y las tres guardas hablan. Un `return` mudo en un manejador se ve exactamente
 igual que un botón muerto, que fue justo como se vio.
 
+**Los tres pasos están siempre disponibles.** Encadenarlos —leer solo si grabó,
+sellar solo si leyó— daba por hecho que el NFC nunca falla, y falla: una lectura
+que no sale dejaba el resto del flujo muerto sin motivo. Grabar dos veces, o leer
+sin haber grabado, no rompe nada.
+
+**El botón que lanzó la espera es el que la para.** Mientras uno espera, pasa a
+decir *Cancelar* y los otros dos se apagan. Es donde está el dedo, y cancelar
+conserva la pieza escaneada.
+
+Sellar sigue pidiendo dos toques, pero el aviso ya no es un muro: si el chip no
+se ha comprobado lo dice —*«si lo sellas vacío queda inservible»*— y deja pasar.
+Un muro que no se puede saltar en una pantalla donde el hardware falla a ratos
+acaba siendo peor que el riesgo que evita.
+
 **La espera tiene tope.** `write()` de Web NFC espera un chip **sin límite**: si no
 aparece, ni resuelve ni falla. Desde fuera eso se ve exactamente igual que un
 botón roto —sale «Acerca el chip» y de ahí no pasa nada más, para siempre—, y es lo
