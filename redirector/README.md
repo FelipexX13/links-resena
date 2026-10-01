@@ -1531,6 +1531,25 @@ congelado, así que reeditarla no la reescribe con el organigrama de hoy.
 (`deAbajo`) y no se suma ni a sus piezas ni a su facturado: la venta no es suya.
 Sumarla sería contar el mismo dinero dos veces.
 
+### Ingreso es lo que entra a la casa, no lo que pasa por sus manos
+
+Durante mucho tiempo `ingresos` fue la suma de los precios finales. Con un solo
+vendedor al 50% ya engañaba; con una cadena se volvió absurdo: decía **738.300**
+cuando por el bolsillo de la casa habían pasado 588.600, y la diferencia eran
+comisiones que nunca fueron suyas.
+
+Lo delató una cuenta de servilleta: *«debe ser como 220 + 75 cada uno»* —unos
+295.000 por cabeza, o sea 590.000 entre los dos—. El panel decía otra cosa.
+
+Ahora `ingresos` llega ya neto y `utilidad = ingresos − gastos`. La utilidad final
+no cambia —restar antes o después da lo mismo—, pero el número que se lee sí, y
+es el que la gente usa para decidir. El bruto y las comisiones siguen dichos al
+pie, como contexto y no como parte de la resta.
+
+**Y por eso se quitó la barra azul** que acababa de entrar. Las comisiones no son
+una salida que haya que dibujar: son dinero que nunca llegó. Dibujarlas saliendo
+obligaba a dibujarlas entrando primero, que es justo el error.
+
 ### Las comisiones, en la gráfica
 
 El «dinero por día» tenía verde arriba —lo que entra— y rojo abajo —lo que sale—,

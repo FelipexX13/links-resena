@@ -520,7 +520,6 @@ const ESTILOS = `
   .leyenda span::before{content:"";width:9px;height:9px;border-radius:3px;flex:0 0 auto}
   .leyenda .marca-entra::before{background:var(--verde)}
   .leyenda .marca-sale::before{background:var(--rojo)}
-  .leyenda .marca-comision::before{background:var(--azul)}
 
   .estado{display:inline-block;font-size:11px;font-weight:500;border-radius:999px;
     padding:2px 9px;border:1px solid transparent}
@@ -3115,9 +3114,8 @@ function ventasPorDia(dias) {
 function svgFlujo(serie) {
   const ancho = 660, medio = 78, pieAlto = 18;
   const alto = medio * 2;
-  // lo que sale son dos cosas apiladas, asi que el tope mira la suma
   const tope = Math.max(1, Math.max.apply(null,
-    serie.map((p) => Math.max(p.ingresos, p.gastos + (p.comisiones || 0)))));
+    serie.map((p) => Math.max(p.ingresos, p.gastos))));
   const paso = ancho / serie.length;
   const grosor = Math.max(6, Math.min(16, paso - 7));
   let piezas = "";
@@ -3148,16 +3146,6 @@ function svgFlujo(serie) {
         "' rx='3' fill='var(--rojo)'><title>" + p.fecha + " · sale " +
         dinero(p.gastos) + "</title></rect>";
     }
-    // Las comisiones tambien salen de la casa, asi que van abajo con los gastos
-    // y no arriba: arriba es lo que entra. Apiladas, no superpuestas.
-    if (p.comisiones > 0) {
-      const hg = p.gastos > 0 ? Math.max(3, (p.gastos / tope) * (medio - 6)) : 0;
-      const h = Math.max(3, (p.comisiones / tope) * (medio - 6));
-      piezas += "<rect x='" + x.toFixed(1) + "' y='" + (medio + hg).toFixed(1) +
-        "' width='" + grosor.toFixed(1) + "' height='" + h.toFixed(1) +
-        "' rx='3' fill='var(--azul)'><title>" + p.fecha + " · comisiones " +
-        dinero(p.comisiones) + "</title></rect>";
-    }
     const cada = serie.length > 20 ? 5 : (serie.length > 10 ? 2 : 1);
     if (i % cada === 0 || i === serie.length - 1) {
       piezas += "<text x='" + (i * paso + paso / 2).toFixed(1) + "' y='" + (alto + 13) +
@@ -3166,8 +3154,7 @@ function svgFlujo(serie) {
   });
 
   return "<svg viewBox='0 0 " + ancho + " " + (alto + pieAlto) + "' role='img' " +
-    "aria-label='Lo que entra, lo que sale y las comisiones de cada día'>" +
-    piezas + "</svg>";
+    "aria-label='Lo que entra y lo que sale cada día'>" + piezas + "</svg>";
 }
 
 // Las unidades se cuentan por día: una barra por día responde bien. La plata no
@@ -3512,12 +3499,19 @@ function cuentas() {
     SURTIDOS.reduce((a, x) =>
       a + comisionDe(x.total, x.pctPadrino) + comisionDe(x.total, x.pctVendedor), 0);
 
+  // Ingreso es lo que entra a la casa, no lo que pasa por sus manos. El corte
+  // del vendedor y el del que engancha nunca fueron suyos, asi que se restan
+  // aqui y no mas abajo: ensenarlos como ingreso y descontarlos despues daba un
+  // numero grande que no se parecia a nada que estuviera en la cuenta.
+  const neto = ingresos - comisiones;
+
   const justo = gastos / 2;
   return {
     gastos: gastos,
-    ingresos: ingresos,
+    ingresos: neto,
+    bruto: ingresos,
     comisiones: comisiones,
-    utilidad: ingresos - gastos - comisiones,
+    utilidad: neto - gastos,
     puesto: puesto,
     justo: justo,
     // positivo = Felipe puso de más y Nicolás le debe
@@ -3534,7 +3528,7 @@ function dineroPorDia(dias) {
     d.setDate(d.getDate() - i);
     const clave = d.toISOString().slice(0, 10);
     indice[clave] = serie.length;
-    serie.push({ fecha: clave, dia: d.getDate(), gastos: 0, ingresos: 0, comisiones: 0 });
+    serie.push({ fecha: clave, dia: d.getDate(), gastos: 0, ingresos: 0 });
   }
   GASTOS.forEach((g) => {
     const i = indice[g.fecha];
@@ -3545,22 +3539,19 @@ function dineroPorDia(dias) {
   TARJETAS.forEach((t) => {
     const i = indice[t.vendida];
     if (i === undefined || t.padrino) return;
-    serie[i].ingresos += Number(t.precio) || 0;
-    serie[i].comisiones += comisionDe(t.precio, t.pct);
+    serie[i].ingresos += (Number(t.precio) || 0) - comisionDe(t.precio, t.pct);
   });
   SERVICIOS.forEach((x) => {
     const i = indice[x.fecha];
     if (i === undefined || x.padrino) return;
-    serie[i].ingresos += Number(x.precio) || 0;
-    serie[i].comisiones += comisionDe(x.precio, x.pct);
+    serie[i].ingresos += (Number(x.precio) || 0) - comisionDe(x.precio, x.pct);
   });
   // El surtido es la venta de la casa: entra el total y salen las dos comisiones
   SURTIDOS.forEach((x) => {
     const i = indice[x.fecha];
     if (i === undefined) return;
-    serie[i].ingresos += Number(x.total) || 0;
-    serie[i].comisiones += comisionDe(x.total, x.pctPadrino) +
-      comisionDe(x.total, x.pctVendedor);
+    serie[i].ingresos += (Number(x.total) || 0) -
+      comisionDe(x.total, x.pctPadrino) - comisionDe(x.total, x.pctVendedor);
   });
   return serie;
 }
@@ -3740,10 +3731,7 @@ function pintarCuentas() {
   const serie = dineroPorDia(DIAS_DINERO);
   const entra = serie.reduce((a, punto) => a + punto.ingresos, 0);
   const sale = serie.reduce((a, punto) => a + punto.gastos, 0);
-  const comis = serie.reduce((a, punto) => a + (punto.comisiones || 0), 0);
-  // las comisiones tambien salen, asi que entran en el neto: si no, el numero
-  // grande diria una cosa y el pie otra
-  const neto = entra - sale - comis;
+  const neto = entra - sale;
 
   $("dineroMetrica").innerHTML = dinero(Math.abs(neto)) +
     "<span class='unidad'>" + (neto >= 0 ? "de más" : "de menos") +
@@ -3751,11 +3739,13 @@ function pintarCuentas() {
   $("pozoDinero").innerHTML = svgFlujo(serie);
   $("dineroLeyenda").innerHTML =
     "<span class='marca-entra'>Entra " + dinero(entra) + "</span>" +
-    "<span class='marca-sale'>Sale " + dinero(sale) + "</span>" +
-    (comis ? "<span class='marca-comision'>Comisiones " + dinero(comis) + "</span>" : "");
+    "<span class='marca-sale'>Sale " + dinero(sale) + "</span>";
+  // el bruto y la comision se dicen como contexto, no como parte de la resta: la
+  // resta ya esta hecha dentro de "ingresos"
   $("dineroPie").innerHTML = "<span>Ingresos <b>" + dinero(c.ingresos) +
     "</b> · Gastos <b>" + dinero(c.gastos) + "</b>" +
-    (c.comisiones ? " · Comisiones <b>" + dinero(c.comisiones) + "</b>" : "") +
+    (c.comisiones ? " <span class='suave'>(de " + dinero(c.bruto) +
+      " vendidos, " + dinero(c.comisiones) + " en comisiones)</span>" : "") +
     "</span><span>" +
     (c.utilidad >= 0 ? "Utilidad " : "Va perdiendo ") + "<b>" +
     dinero(Math.abs(c.utilidad)) + "</b></span>";
