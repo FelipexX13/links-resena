@@ -1367,8 +1367,7 @@ function placeIdDeDestino(destino) {
 // El botón de compartir de la app de Maps da uno de estos, y por dentro no
 // traen nada: el identificador aparece al seguirlos, que lo hace el Worker.
 function esLinkCorto(url) {
-  return /^https?:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps|g\.co\/kgs|g\.page\/)/i
-    .test(String(url).trim());
+  return /^https?:\/\/(maps\.app\.goo\.gl|goo\.gl\/maps|g\.co\/kgs)/i.test(String(url).trim());
 }
 
 // Google mete "Nombre, Dirección" en la URL del sitio, y la dirección empieza
@@ -2404,7 +2403,7 @@ $("maps").addEventListener("change", leerElLink);
 //
 // El navegador manda: puede negar el permiso o enseñar su propio botón de pegar
 // —en iOS siempre—. Si no deja, no pasa nada y se pega a mano.
-const HUELE_A_MAPS = /^https?:\/\/[^\s]*(goo\.gl|google\.[a-z.]+\/maps|maps\.app|g\.page\/)/i;
+const HUELE_A_MAPS = /^https?:\/\/[^\s]*(goo\.gl|google\.[a-z.]+\/maps|maps\.app)/i;
 const HUELE_A_PLACEID = /^Ch[A-Za-z0-9_-]{15,}$/;
 
 $("maps").addEventListener("click", async () => {
