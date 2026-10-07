@@ -760,6 +760,27 @@ La lista de sitios a los que el Worker sigue un enlace va cerrada —los acortad
 de Google y nada más—: si no, esto sería un proxy para pedir lo que sea desde
 nuestra IP.
 
+#### El link de "pide reseñas" del dueño
+
+Google le da al dueño de una ficha un link corto para repartir entre sus clientes:
+
+```
+https://g.page/r/CRV4q2B8WdrAEBM/review
+```
+
+Es **lo mismo** que se usa aquí, solo que envuelto: siguiendo las redirecciones
+sale `search.google.com/local/writereview?placeid=ChIJ…`, que es exactamente el
+destino que el panel construye. Se acepta igual que los otros links cortos —el
+Worker lo abre y `analizarMaps()` saca el Place ID del parámetro `continue`—.
+
+Lo que **no** trae es el nombre del negocio: hay que escribirlo a mano. Las
+coordenadas tampoco, pero esas ya se piden por el Place ID, así que el punto del
+mapa sale igual.
+
+Entre los dos, el link de Maps es algo mejor porque llega con el nombre puesto.
+El de `g.page` tiene la otra ventaja: sale de la ficha del propio dueño, así que
+no hay forma de apuntarle a otro negocio por equivocación.
+
 #### Y la URL larga tampoco trae coordenadas
 
 El link que sale del botón de compartir llega con `?g_st=ac`, y ese resuelve a

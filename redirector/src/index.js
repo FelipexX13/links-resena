@@ -155,8 +155,11 @@ function pagoValido(valor) {
 }
 // Los únicos sitios a los que el Worker sigue un enlace por su cuenta. La lista
 // va cerrada a propósito: si no, esto sería un proxy para pedir lo que sea.
-const ACORTADORES = new Set(["maps.app.goo.gl", "goo.gl", "g.co", "maps.google.com",
-  "www.google.com", "google.com"]);
+// "g.page" es el link de pedir reseñas que Google le da al dueño desde su ficha
+// —el de "comparte este enlace con tus clientes"—. Lleva al mismo
+// search.google.com/local/writereview que ya se usa, solo que envuelto.
+const ACORTADORES = new Set(["maps.app.goo.gl", "goo.gl", "g.co", "g.page",
+  "maps.google.com", "www.google.com", "google.com"]);
 const ESTADOS_GASTO = new Set(["pendiente", "entregado"]);
 const MAX_ITEMS = 8;
 const FORMATO_ID = /^[a-z0-9]{1,24}$/;
