@@ -573,6 +573,9 @@ const SOLO_DUENO = new Set(["gastos", "gasto", "gasto-borrar", "usuarios", "usua
       padrino: quienCuelga.padrino,
       jefe: jefeValido(cuerpo.jefe),
       activo: cuerpo.activo === undefined ? true : Boolean(cuerpo.activo),
+      // El mapa es de la casa, así que se da de a uno. No abre ningún dato
+      // nuevo: los puntos ajenos le llegan grises y sin nota, como a todos.
+      mapa: Boolean(cuerpo.mapa),
       creado: antes ? antes.creado : new Date().toISOString(),
       sal: sal,
       hash: hash,
@@ -1487,7 +1490,7 @@ async function sesionValida(request, env) {
   const u = await leerUsuario(env, usuario);
   if (!u || !u.activo) return null;
   return { usuario: usuario, dueno: false, nombre: u.nombre, pct: u.pct,
-    padrino: u.padrino || "",
+    padrino: u.padrino || "", mapa: Boolean(u.mapa),
     jefe: jefeValido(u.jefe), cedula: u.cedula, telefono: u.telefono, nota: u.nota };
 }
 
@@ -1551,7 +1554,7 @@ function usuarioPublico(u) {
   return {
     usuario: u.usuario, nombre: u.nombre, cedula: u.cedula, telefono: u.telefono,
     nota: u.nota, pct: u.pct, padrino: u.padrino || "", jefe: u.jefe,
-    activo: u.activo, creado: u.creado,
+    activo: u.activo, mapa: Boolean(u.mapa), creado: u.creado,
   };
 }
 

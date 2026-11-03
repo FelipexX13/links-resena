@@ -1091,7 +1091,7 @@ let GASTOS = [];
 let SERVICIOS = [];
 // Quién entró. Hasta que el Worker conteste, lo más prudente es suponer que no
 // es el dueño: así nada de la casa se pinta por error mientras carga.
-let SESION = { usuario: "", dueno: false, nombre: "", pct: 100 };
+let SESION = { usuario: "", dueno: false, mapa: false, nombre: "", pct: 100 };
 let USUARIOS = [];
 
 let VENDEDORES = { felipe: null, nicolas: null, alexander: null };
@@ -3841,15 +3841,22 @@ function pintarCuentas() {
     "<th>En camino</th></tr></thead><tbody>" + invFilas + "</tbody></table>";
 }
 
-// Un vendedor entra a vender: ve sus órdenes y nada más. La plata de la casa, el
-// plástico y la gente son del superadmin. Esto es el reparto de la pantalla; el
-// que de verdad manda es el Worker, que contesta 403 aunque el botón aparezca.
+// Qué pestañas tiene un vendedor. Órdenes y ruleta las tienen todos; el mapa se
+// da de a uno desde su ficha, porque es la ruta de toda la calle y no solo la
+// suya. Sus ingresos no los ve nadie: lo que se le debe se lo dice quien paga.
+function vistasSuyas() {
+  const suyas = { locales: 1, ruleta: 1 };
+  if (SESION.mapa) suyas.mapa = 1;
+  return suyas;
+}
+
+// Un vendedor entra a vender: ve sus órdenes y lo que se le haya abierto. La
+// plata de la casa, el plástico y la gente son del superadmin. Esto es el reparto
+// de la pantalla; el que manda es el Worker, que contesta 403 aunque haya botón.
 function pintarRol() {
   const dueno = SESION.dueno;
   document.querySelectorAll("[data-dueno]").forEach((e) => { e.hidden = !dueno; });
-  // Un vendedor solo tiene Órdenes. Ni el mapa ni sus ingresos: lo que se le debe
-  // se lo dice quien le paga, y el mapa es de la casa.
-  const SUYAS = { locales: 1, ruleta: 1 };
+  const SUYAS = vistasSuyas();
   document.querySelectorAll("#vistaPanel [data-valor]").forEach((b) => {
     b.hidden = dueno ? b.dataset.valor === "mio" : !SUYAS[b.dataset.valor];
   });
@@ -3920,8 +3927,7 @@ function pintarVista(valor) {
   const conocidas = { locales: 1, cuentas: 1, inventario: 1, mio: 1, mapa: 1, ruleta: 1 };
   VISTA = conocidas[valor] ? valor : "tarjetas";
   // no basta con esconder el botón: la vista tampoco se abre por otro camino
-  const SUYAS = { locales: 1, ruleta: 1 };
-  if (!SESION.dueno && !SUYAS[VISTA]) VISTA = "locales";
+  if (!SESION.dueno && !vistasSuyas()[VISTA]) VISTA = "locales";
   marcarSegmento("vistaPanel", VISTA);
   $("vistaTarjetas").hidden = VISTA !== "tarjetas";
   $("vistaLocales").hidden = VISTA !== "locales";
@@ -5122,8 +5128,10 @@ function faltanEnElMapa() {
 function pintarFaltan() {
   const faltan = faltanEnElMapa();
   const caja = $("faltanEnMapa");
-  // solo tiene sentido ofrecerlo si hay alguno al que preguntárselo a Google
-  $("buscarSitios").hidden =
+  // solo tiene sentido ofrecerlo si hay alguno al que preguntárselo a Google.
+  // Y la tanda entera es de la casa: cada local que busca es una consulta que
+  // se paga, así que un vendedor marca de a uno.
+  $("buscarSitios").hidden = !SESION.dueno ||
     !faltan.some((l) => !l.lat && placeIdDeDestino(l.destino));
   if (!faltan.length) { caja.innerHTML = ""; return; }
   caja.innerHTML = "<div class='faltan'><span class='rotulo'>Sin marcar:</span>" +
@@ -5641,6 +5649,7 @@ function ponerUsuarioEnForm(u) {
   marcarSegmento("usuarioJefe", JEFE_USUARIO);
   llenarPadrinos(u ? u.padrino : "", u ? u.usuario : "");
   $("usuarioActivo").checked = u ? Boolean(u.activo) : true;
+  $("usuarioMapa").checked = u ? Boolean(u.mapa) : false;
   $("ayudaClave").textContent = u
     ? "Déjala vacía para no cambiarla. Si la escribes, la de antes deja de servir."
     : "Se la dictas a él. Mínimo 8 caracteres.";
@@ -5847,6 +5856,7 @@ $("formUsuario").onsubmit = async (e) => {
         padrino: $("usuarioPadrino").value,
         jefe: JEFE_USUARIO,
         activo: $("usuarioActivo").checked,
+        mapa: $("usuarioMapa").checked,
         clave: $("usuarioClave").value,
       }),
     });
@@ -7414,6 +7424,12 @@ export function vistaAdmin(origen) {
 
       <label class="casilla"><input type="checkbox" id="usuarioActivo" checked>
         Puede entrar</label>
+
+      <label class="casilla"><input type="checkbox" id="usuarioMapa">
+        Ve el mapa de la calle</label>
+      <p class="ayuda">Sus locales en stand by, en amarillo y con su nota. Los del
+        resto del equipo los ve grises y sin nota: para no volver a tocar la misma
+        puerta, no para saber con quién habla otro.</p>
 
       <div class="modal-acciones">
         <button type="button" class="fantasma" id="cancelarUsuario">Cancelar</button>
