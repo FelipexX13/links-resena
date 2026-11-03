@@ -716,6 +716,25 @@ const ESTILOS = `
   .faltan button:hover{background:var(--papel);border-color:var(--tinta-3);color:var(--tinta)}
   .faltan button.esperando{background:var(--azul-piel);border-color:var(--azul);
     color:var(--azul-fuerte)}
+  /* la lista de los que quedaron hablados. Lleva la misma bolita amarilla del
+     mapa: es la misma cosa contada de dos maneras */
+  .standby{margin:0 0 12px;padding:13px 15px;border-radius:var(--r-m);
+    background:var(--papel-2);border:1px solid var(--linea)}
+  .standby .cejilla{margin-bottom:9px}
+  .standby ul{list-style:none;margin:0;padding:0;max-height:186px;
+    overflow-y:auto;overflow-x:hidden}
+  .standby li+li{margin-top:3px}
+  .standby button{display:flex;width:100%;align-items:center;gap:10px;text-align:left;
+    background:transparent;border:1px solid transparent;border-radius:var(--r-s);
+    padding:7px 9px;color:var(--tinta)}
+  .standby button:hover{background:var(--papel);border-color:var(--linea)}
+  .standby-texto{flex:1 1 auto;min-width:0}
+  .standby-local{display:block;font-size:13px;font-weight:500}
+  .standby-nota{display:block;font-size:12px;color:var(--tinta-2);margin-top:1px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .standby-fecha{flex:0 0 auto;font-size:11.5px;color:var(--tinta-3);
+    font-variant-numeric:tabular-nums}
+  .standby-vacio{margin:0;font-size:12.5px;color:var(--tinta-2)}
   .mapa-barra{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin:18px 0 10px}
   #mapa{height:62vh;min-height:340px;border-radius:var(--r-l);border:1px solid var(--linea);
     overflow:hidden;background:var(--papel-2);z-index:0}
@@ -3950,6 +3969,8 @@ function pintarVista(valor) {
     // ya está a la vista: ahora sí tiene tamaño que medir
     armarMapa();
     if (MAPA) { MAPA.invalidateSize(); pintarPuntos(); }
+    // también sin mapa: si Leaflet no cargó, la lista sigue siendo útil
+    pintarStandBy();
     pintarFaltan();
   }
 }
@@ -4335,6 +4356,14 @@ function fechaLarga(iso) {
   const p = String(iso || "").split("-");
   if (p.length !== 3) return String(iso || "");
   return Number(p[2]) + " de " + MESES[Number(p[1]) - 1] + " de " + p[0];
+}
+
+// "28 oct". En una lista la fecha es una referencia de reojo, no algo que se lee
+// entero: la larga ocuparía más que el nombre del local.
+function fechaCorta(iso) {
+  const p = String(iso || "").split("-");
+  if (p.length !== 3) return String(iso || "");
+  return Number(p[2]) + " " + MESES[Number(p[1]) - 1].slice(0, 3);
 }
 
 function itemsDelLocal(l, precios) {
@@ -5224,7 +5253,45 @@ function armarMapa() {
   pintarPuntos();
 }
 
+// En el mapa un stand by es una bolita entre otras treinta, y lo que uno quiere
+// al final del día es la lista: a quién vuelvo y qué le dije. Son los amarillos
+// propios, que es justo lo único que el Worker deja ver en amarillo.
+function pintarStandBy() {
+  const caja = $("standBy");
+  if (!caja) return;
+  const mios = PUNTOS.filter((p) => p.mio && p.estado === "amarillo")
+    .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+  if (!mios.length) {
+    caja.innerHTML = "<div class='standby'><p class='standby-vacio'>Nada en stand by. " +
+      "Los locales que dejes hablados salen aquí.</p></div>";
+    return;
+  }
+  caja.innerHTML = "<div class='standby'><p class='cejilla'>En stand by · " +
+    mios.length + "</p><ul>" + mios.map((p) =>
+      "<li><button type='button' data-standby='" + escHtml(p.id) + "'>" +
+      "<i class='bolita amarillo'></i><span class='standby-texto'>" +
+      "<span class='standby-local'>" + escHtml(p.nombre) + "</span>" +
+      (p.nota ? "<span class='standby-nota'>" + escHtml(p.nota) + "</span>" : "") +
+      "</span>" + (p.fecha ? "<span class='standby-fecha'>" + escHtml(fechaCorta(p.fecha)) +
+      "</span>" : "") + "</button></li>").join("") + "</ul></div>";
+}
+
+// Tocar uno lleva el mapa hasta él y abre su ficha: de ahí se le cambia el color
+// cuando por fin compra, o cuando dice que no.
+$("standBy").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-standby]");
+  if (!b) return;
+  const p = PUNTOS.filter((x) => String(x.id) === b.dataset.standby)[0];
+  if (!p) return;
+  // sin animate:false no se mueve: pintarPuntos acaba en un fitBounds y Leaflet
+  // se come cualquier movimiento que llegue mientras aquello está animando
+  if (MAPA) MAPA.setView([p.lat, p.lng], 17, { animate: false });
+  abrirPunto(p);
+});
+
 function pintarPuntos() {
+  // va antes de la salida de arriba: la lista no necesita que el mapa esté armado
+  pintarStandBy();
   if (!CAPA_PUNTOS) return;
   CAPA_PUNTOS.clearLayers();
   PUNTOS.forEach((p) => {
@@ -6960,6 +7027,7 @@ export function vistaAdmin(origen) {
           <span class="mini2" id="mapaDicho">O toca el mapa donde quieras poner uno.</span>
         </div>
         <div id="faltanEnMapa"></div>
+        <div id="standBy"></div>
         <div id="mapa"></div>
         <div class="mapa-clave">
           <span><i class="bolita verde"></i>Compraron</span>
